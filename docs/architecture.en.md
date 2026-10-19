@@ -10,7 +10,7 @@ A condensed overview of how the application is built. There is no code yet: this
 
 - **Storage** (remote): the cloud the tool works with, a WebDAV server or Yandex Disk. "Cloud" in the text means the same thing.
 - **Item**: a Photos entry, that is a photo, a video, a Live Photo or a RAW pair.
-- **Snapshot**: the state of the Photos catalog read into memory for the duration of a run.
+- **Snapshot**: the state of the Photos library (items and albums) read into memory for the duration of a run.
 - **Link**: a record that an item corresponds to a file in a storage (path, size, hashes).
 - **Event**: a Photos album of the form `MM/DD Title` inside a year folder; it corresponds to the directory `MM-DD - Title`. **Thematic album**: any other album.
 - **Quarantine**: the `.photosync/quarantine` directory in the cloud; instead of being deleted, a file is moved there.
@@ -30,7 +30,7 @@ cmd ──► config, i18n             (state, report, clock, config, i18n are c
 
 The code layout follows [bxcodec/go-clean-arch](https://github.com/bxcodec/go-clean-arch): `app` is the service layer, `adapters` the repository layer, `cmd` the delivery layer; interfaces are declared by their consumer, there is no separate interfaces package, and dependencies point inward, to `domain`.
 
-- **`domain`**: pure rules with no I/O (the only external imports are `x/text` and the library's pure `template` and `export` packages): file names, dates, layout into folders and albums, matching, the plan. The plan is a pure function, so it is checked with table tests per `R-*` rule and with property tests.
+- **`domain`**: pure rules with no I/O (the only external imports are `x/text` and the pure `template` and `export` packages of the osxphotos library): file names, dates, layout into folders and albums, matching, the plan. The plan is a pure function, so it is checked with table tests per `R-*` rule and with property tests.
 - **`app`**: use cases (`init`, `doctor`, `plan`, `sync`, `conflicts`, `albums diff`, `undo`, `explain`, `relink`, `import-state`, ...) that drive I/O through their own interfaces; worker pools.
 - **`adapters`**: implementations of the interfaces that `app` declares; they make no decisions.
 - **Concrete packages** (no interfaces: tests use the real ones, including SQLite; `clock` has a controllable test implementation): `state` (SQLite), `report` (`json/md/csv`), `clock`, `config`, `i18n` (ru/en).
@@ -59,16 +59,16 @@ Utility commands (configuration check, viewing storages and the log, version) ar
 
 `state_dir` holds `state.db` (SQLite), `lock`, `tmp/` and per-run reports in `runs/<run_id>/` (plan, journal, result; kept for 90 days). Migrations only go forward; a copy `state.db.bak-<version>` is made before one, and a database newer than the binary is refused. Configuration lives in `~/.config/photosync/config.yaml`, secrets in the Keychain.
 
-- `assets`, `asset_resources`, `asset_history`: the last applied snapshot of Photos and the previous identifiers after replacements.
+- `assets`, `asset_resources`, `asset_history`: a copy of the snapshot from the last applied run and the previous identifiers after replacements.
 - `albums`, `asset_albums`, `album_map`: albums, folders, membership, and "album or folder <-> directory" pairs that are never recomputed.
 - **`links` is the base of the three-way comparison:** for an "item, storage" pair it holds the path, size, hashes, `etag`, role, match level and status (`active`, `quarantined_*`, `detached`).
 - `conflicts`, `runs`, `journal` (with prior values for undo), `probe_cache`.
 
-Only five commands change the registry of items and links: `sync --apply`, `undo --apply`, `import-state --apply`, `relink` and `conflicts resolve`. The cloud scan is not stored: it lives in memory for one run. `plan`, `status`, `explain`, `doctor` and `albums diff` write only a `runs` row, report files and the cloud-metadata cache `probe_cache`. Whatever is derived from the snapshot is written in phase 0 of `sync --apply` in a single transaction (the phases are described in section 4). An item is identified by its cloud GUID (whether it is unique and stable is for stage 0 to establish; if not, the key becomes the master GUID plus the original's fingerprint), then its UUID, then the replacement history; an album by its cloud GUID, `PHCloudIdentifier`, or path plus title (which of these work is also for stage 0 to establish).
+Only five commands change the state tables other than `runs` and `probe_cache`: `sync --apply`, `undo --apply`, `import-state --apply`, `relink` and `conflicts resolve`; `plan`, `status`, `explain`, `doctor` and `albums diff` write only a `runs` row, report files and the cloud-metadata cache `probe_cache`. The cloud scan is not stored in the state: it lives in memory for one run. Whatever is derived from the snapshot is written in phase 0 of `sync --apply` in a single transaction (the phases are described in section 4). An item is identified by its cloud GUID (whether it is unique and stable is for stage 0 to establish; if not, the key becomes the master GUID plus the original's fingerprint), then its UUID, then the replacement history; an album by its cloud GUID, `PHCloudIdentifier`, or path plus title (which of these work is also for stage 0 to establish).
 
 ## 4. How synchronization works
 
-Cloud layout: `Year/MM-DD - Title` for events, `Year/MM-DD` for items without an event. The event format is fixed; the "untitled" text comes from the `sync.untitled_event` key written by `init`. Other (thematic) albums are synchronized where an item has a link in the album's directory. Multi-valued template fields yield a single value (the primary placement). Changing `path_template` affects new files only. The iCloud Shared Library and the personal library are laid out under different storage roots (`targets.shared` and `targets.personal`). Importing directly into the Shared Library is unconfirmed (stage 0): if it does not work, the item lands in the personal library and waits for a manual move based on the report.
+Cloud layout: `Year/MM-DD - Title` for events, `Year/MM-DD` for items without an event. The event name format is fixed; an event without a title gets the text from the `sync.untitled_event` key (written by `init`). Other (thematic) albums are synchronized where an item has a link in the album's directory. Multi-valued template fields yield a single value (the primary placement). Changing `path_template` affects new files only. The iCloud Shared Library and the personal library are laid out under different storage roots (`targets.shared` and `targets.personal`). Importing directly into the Shared Library is unconfirmed (stage 0): if it does not work, the item lands in the personal library and waits for a manual move based on the report.
 
 A single `plan` or `sync` run has seven steps:
 
@@ -80,7 +80,7 @@ A single `plan` or `sync` run has seven steps:
 6. **Report:** a summary, plan files, `plan_digest` in `runs`. The snapshot and links are not modified.
 7. **Apply** (`--apply` only): the plan is rebuilt and compared by `plan_digest` with the one that was reviewed. It runs in phases 0-6.
 
-Apply phases: **0** write the snapshot and links, `owner.json` in the cloud; **1** directories, moves, copies, quarantine, deleting files and empty directories in the cloud (under `deletes: propagate`), folders and albums in Photos; **2** Photos to cloud (original to disk, hash, atomic upload to each storage); **3** cloud to Photos (download, parse, convert if needed, import with albums; the MP4 from `convert_mp4`, which converts unsupported video formats to MP4 with `ffmpeg`, also goes to the other storages); **4** album membership, item updates; **5** deleting Photos items in one batch through the macOS system dialog (whether it appears from a console program and whether deletion goes through as one batch is for stage 0 to establish), replacements; **6** cleanup.
+Apply phases: **0** write the snapshot and links, `owner.json` in the cloud; **1** directories, moves, copies, quarantine, deleting files and empty directories in the cloud (under `deletes: propagate`), folders and albums in Photos; **2** Photos to cloud (original to disk, hash, atomic upload to each storage); **3** cloud to Photos (download, parse, convert if needed, import with albums; the MP4 produced by the `convert_mp4` policy, which converts unsupported video formats with `ffmpeg`, also goes to the other storages); **4** album membership, item updates; **5** deleting Photos items in one batch through the macOS system dialog (whether it appears from a console program and whether deletion goes through as one batch is for stage 0 to establish), replacements; **6** cleanup.
 
 **First sync** of populated libraries: album pairs are matched by name, then by contents, and the rest are created; membership differences are settled by the `conflict` policy, and `photosync albums diff` shows the outcome before anything is applied. Files already in the cloud are linked to items rather than uploaded again.
 
@@ -124,7 +124,7 @@ The cgo binary (PhotoKit, Keychain, network monitoring) is built on macOS only: 
 
 Versions: pre-releases `v0.x.0-alpha.N` and `v0.x.0-beta.N`, then `v1.0.0`; a release's `go.mod` points at a published library tag, with no pseudo-version and no `replace`. The maintainer's script creates the tag after checks (clean `main`, green CI); the tag workflow re-verifies the commit, builds the release and creates a **draft** GitHub Release.
 
-Contents: `photosync_<version>_darwin_universal.tar.gz` (the binary, `LICENSE`, README), `checksums.txt` and a build provenance attestation. There are no per-architecture archives, SBOM or Homebrew in the first version. Release notes carry verification instructions in two languages and a changelog built from PR titles (the squash commits between tags). Before publishing, a manual checklist runs on a clean account (arm64, and amd64 on Intel or under Rosetta; macOS 13 and the latest).
+Contents: `photosync_<version>_darwin_universal.tar.gz` (the binary, `LICENSE`, README), `checksums.txt` and a build provenance attestation. There are no per-architecture archives, SBOM or Homebrew in the first version. Release notes carry verification instructions in two languages and an English-only changelog built from PR titles (the squash commits between tags). Before publishing, a manual checklist runs on a clean account (arm64 on Apple Silicon, amd64 on Intel or under Rosetta; macOS 13 and the latest).
 
 ## 9. Installation and updates
 
