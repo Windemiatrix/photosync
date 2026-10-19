@@ -1,0 +1,30 @@
+# Binaries and build output
+/photosync
+/dist/
+*.exe
+*.test
+*.out
+
+# Test and coverage output
+coverage.*
+*.prof
+
+# Go workspace (local only, never committed)
+go.work
+go.work.sum
+
+# Personal data: never commit Photos libraries, databases or run reports
+*.photoslibrary
+*.sqlite*
+state.db*
+runs/
+_sync/
+# run journals contain file and album names; only test data may be committed
+*.jsonl
+!testdata/**/*.jsonl
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
