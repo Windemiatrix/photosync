@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.windemiatrix.photosync</string>
+	<key>CFBundleName</key>
+	<string>photosync</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>photosync reads your Photos library to compare it with your cloud storage.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>photosync adds photos and videos from your cloud storage to your Photos library.</string>
+</dict>
+</plist>
