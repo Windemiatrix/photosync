@@ -32,9 +32,13 @@ Reaching the same result another way (a direct GitHub API request, another clien
 1. Branch from an up-to-date `main`: `<type>/<topic>`; types `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`. One topic, one PR.
 2. Test first (TDD): the test fails for the right reason, then the code. A bug fix starts with a test that reproduces it.
 3. `make test lint` is green locally → push the branch (with the maintainer's confirmation) → `gh pr create --head <branch>`.
-4. The PR title becomes the commit title on `main`: `<type>(<scope>): <description>`, English, printable ASCII only, at most 70 characters, no `#<number>`.
+4. The PR title becomes the commit title on `main`: `<type>(<scope>)[!]: <description>`, English, printable ASCII only, at most 70 characters, no `#<number>`. Mark an incompatible change (commands, flags, config keys, the state schema) with `!` after the scope: `feat(config)!: rename remotes key`; the next version depends on the marker. The scope is required with `!` too.
 5. Code, comments, commits and PR titles are in English; documents are in Russian and English at the same time, with the same meaning.
-6. A new direct dependency, and any change to `.github/`, `scripts/`, `Makefile`, `go.mod`, `go.sum`, goes in its own PR with an explanation in the description: the maintainer checks that the CI checks are not weakened.
+6. A new direct dependency, and any change to `.github/`, `scripts/`, `Makefile`, `.goreleaser.yaml`, `docs/release-notes-header*.md`, `go.mod`, `go.sum`, goes in its own PR with an explanation in the description: the maintainer checks that the CI and release checks are not weakened (`.goreleaser.yaml` and the release-notes header run inside the release job).
+
+## Releases
+
+Only the maintainer creates the tag: `scripts/release.sh [--major]` on their machine. Agents do not run the script, create tags or call `gh release` (see "Boundaries"). Agents do not choose a version: `scripts/next-version.sh` computes it from PR titles, so a title must describe the change accurately and every incompatible change carries `!`. There is no `CHANGELOG.md`: the change list is built from PR titles. The version rules and the release steps are in [CONTRIBUTING.en.md](CONTRIBUTING.en.md).
 
 ## Code structure
 

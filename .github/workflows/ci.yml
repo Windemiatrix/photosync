@@ -95,18 +95,18 @@ jobs:
         run: make lint
       - name: Test with cgo
         run: go test -race -shuffle=on ./...
-      - name: Build for arm64
-        run: go build ./...
-      # Catches a broken cgo cross-compilation before a release does.
-      - name: Cross-build for amd64
-        env:
-          GOARCH: amd64
-          CC: clang -arch x86_64
-        run: go build ./...
+      # The release pipeline on every pull request: both slices (the amd64 one
+      # is a cgo cross-compilation), lipo, the ad-hoc signature and the archive,
+      # without publishing. A broken release is found here, not after a tag is
+      # pushed. The checkout is shallow and has no tags; if GoReleaser does not
+      # work on it, add fetch-depth: 0 to the checkout above.
+      - name: Build the release archive (snapshot)
+        run: make release-snapshot
 
   repo-checks:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    # GoReleaser and actionlint are compiled from source (no cache).
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
@@ -119,6 +119,10 @@ jobs:
           cache: false
       - name: Repository checks
         run: bash scripts/check-repo.sh
+      # A broken .goreleaser.yaml must show up on the pull request: a tag is
+      # immutable, so a failed release cannot be repeated on it.
+      - name: Validate .goreleaser.yaml
+        run: make release-check
       # Built from source at a fixed version; the module checksum database
       # verifies the download.
       - name: actionlint

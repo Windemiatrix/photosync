@@ -19,7 +19,8 @@ The path is the same for everyone: the maintainer, AI agents acting on the maint
 
 The PR title becomes the commit title on `main`, and the release-notes change list is built from these titles.
 
-- Format `<type>(<scope>): <description>`, for example `feat(schema): add photos12 schema`. The scope is required: lowercase letters, digits, `._/-`.
+- Format `<type>(<scope>)[!]: <description>`, for example `feat(schema): add photos12 schema`. The scope is required: lowercase letters, digits, `._/-`.
+- An incompatible change (commands, flags, config keys, the state schema) is marked with `!` right after the scope: `feat(config)!: rename remotes key`. It is the only marker: it decides the next version (see "Releases") and puts the title into the "Breaking changes" group of the release notes. `BREAKING CHANGE:` in the body is not recognized: the squash commit body is empty. Without a scope (`feat!: …`) the title is rejected.
 - English, printable ASCII only, at most 70 characters, no `#<number>`: GitHub appends ` (#<PR number>)` itself.
 - The `pr-title` job checks it; editing the title re-runs the check.
 - **Do not edit the title or body in the squash-merge dialog.** The only place to fix a title is the PR itself; otherwise `main` gets a title the check never saw.
@@ -55,9 +56,23 @@ Tests tagged `photokit_live` import, change and delete objects in a real library
 ## External contributors
 
 - CI for a PR from a fork runs after the maintainer approves it.
-- Explain in the description any PR that changes `.github/`, `scripts/`, `Makefile`, `go.mod` or `go.sum`: the maintainer checks that it does not weaken the checks.
+- Explain in the description any PR that changes `.github/`, `scripts/`, `Makefile`, `.goreleaser.yaml`, `docs/release-notes-header*.md`, `go.mod` or `go.sum`: the maintainer checks that it does not weaken the checks. The last two of the named files run inside the release job with write access.
 - Building on macOS is needed for the cgo adapters; the rest of the code builds and is checked on Linux too.
 
 ## Releases
 
-Only the maintainer creates tags and releases, with `scripts/release.sh`. A published tag is never moved; a faulty version is superseded by the next one.
+Only the maintainer creates the tag, with `scripts/release.sh [--major]` on their own machine. The script checks that `main` is up to date, the work tree is clean, CI on this commit is green and the tag does not exist yet; then it shows the computed version and the class of every title and, after confirmation, creates a signed tag and pushes it to `origin`. Workflows do not create tags.
+
+Nobody assigns a version: `scripts/next-version.sh` computes it from the PR titles since the last tag.
+
+| Titles since the last tag | before `1.0.0` | from `1.0.0` |
+|---|---|---|
+| there is `type(scope)!:` | minor | major |
+| otherwise there is `feat(…)` | minor | minor |
+| otherwise any others | patch | patch |
+
+A title outside the rule counts as a patch change. Version `1.0.0` is not inferred from titles: it is released by `scripts/release.sh --major`. No commits since the last tag means no release.
+
+The tag starts `release.yml`: it builds the universal binary, signs it ad hoc, packs the archive, computes `checksums.txt`, attests the provenance and creates a draft GitHub Release. The notes are built from PR titles; there is no `CHANGELOG.md`. The maintainer reads the draft and publishes it.
+
+A published tag is never moved; a faulty version is superseded by the next one.

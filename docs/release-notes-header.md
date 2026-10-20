@@ -1,4 +1,4 @@
-<!-- release.yml подставляет {{TAG}} (тег релиза) и {{ARCHIVE}} (имя архива: photosync_<версия>_darwin_universal.tar.gz) -->
+<!-- Шапка заметок к релизу: GoReleaser исполняет файл как шаблон Go (make release склеивает его с английской версией). Допустимы только поля Tag и Version, другой логики шаблонов нет. -->
 
 ## Как проверить и запустить
 
@@ -7,32 +7,32 @@
 1. Скачайте архив и `checksums.txt` в терминале (так macOS не ставит атрибут карантина):
 
    ```sh
-   gh release download {{TAG}} -R Windemiatrix/photosync -p '{{ARCHIVE}}' -p checksums.txt
+   gh release download {{ .Tag }} -R Windemiatrix/photosync -p 'photosync_{{ .Version }}_darwin_universal.tar.gz' -p checksums.txt
    ```
 
    Без `gh`:
 
    ```sh
-   curl -LO https://github.com/Windemiatrix/photosync/releases/download/{{TAG}}/{{ARCHIVE}}
-   curl -LO https://github.com/Windemiatrix/photosync/releases/download/{{TAG}}/checksums.txt
+   curl -LO https://github.com/Windemiatrix/photosync/releases/download/{{ .Tag }}/photosync_{{ .Version }}_darwin_universal.tar.gz
+   curl -LO https://github.com/Windemiatrix/photosync/releases/download/{{ .Tag }}/checksums.txt
    ```
 
 2. Проверьте контрольную сумму. Она защищает только от порчи при скачивании:
 
    ```sh
-   grep '{{ARCHIVE}}' checksums.txt | shasum -a 256 -c -
+   grep 'photosync_{{ .Version }}_darwin_universal.tar.gz' checksums.txt | shasum -a 256 -c -
    ```
 
 3. Проверьте происхождение: подтверждает, что архив собран из этого репозитория workflow релиза. Нужен `gh`; без него подлинность проверить нельзя.
 
    ```sh
-   gh attestation verify '{{ARCHIVE}}' --repo Windemiatrix/photosync
+   gh attestation verify 'photosync_{{ .Version }}_darwin_universal.tar.gz' --repo Windemiatrix/photosync
    ```
 
 4. Распакуйте и положите бинарник в `~/bin`:
 
    ```sh
-   tar xzf '{{ARCHIVE}}'
+   tar xzf 'photosync_{{ .Version }}_darwin_universal.tar.gz'
    mkdir -p ~/bin && install -m 755 photosync ~/bin/photosync
    ```
 

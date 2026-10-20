@@ -1,4 +1,4 @@
-<!-- release.yml substitutes {{TAG}} (the release tag) and {{ARCHIVE}} (the archive name: photosync_<version>_darwin_universal.tar.gz) -->
+<!-- Release-notes header: GoReleaser runs this file as a Go template (make release joins it with the Russian version). Only the Tag and Version fields are allowed, there is no other template logic. -->
 
 ## How to verify and run
 
@@ -7,32 +7,32 @@ Requires macOS 13 or newer; the archive is universal, for Apple Silicon and Inte
 1. Download the archive and `checksums.txt` in a terminal (macOS then does not set the quarantine attribute):
 
    ```sh
-   gh release download {{TAG}} -R Windemiatrix/photosync -p '{{ARCHIVE}}' -p checksums.txt
+   gh release download {{ .Tag }} -R Windemiatrix/photosync -p 'photosync_{{ .Version }}_darwin_universal.tar.gz' -p checksums.txt
    ```
 
    Without `gh`:
 
    ```sh
-   curl -LO https://github.com/Windemiatrix/photosync/releases/download/{{TAG}}/{{ARCHIVE}}
-   curl -LO https://github.com/Windemiatrix/photosync/releases/download/{{TAG}}/checksums.txt
+   curl -LO https://github.com/Windemiatrix/photosync/releases/download/{{ .Tag }}/photosync_{{ .Version }}_darwin_universal.tar.gz
+   curl -LO https://github.com/Windemiatrix/photosync/releases/download/{{ .Tag }}/checksums.txt
    ```
 
 2. Verify the checksum. It protects only against corruption during download:
 
    ```sh
-   grep '{{ARCHIVE}}' checksums.txt | shasum -a 256 -c -
+   grep 'photosync_{{ .Version }}_darwin_universal.tar.gz' checksums.txt | shasum -a 256 -c -
    ```
 
 3. Verify provenance: it confirms that the archive was built from this repository by the release workflow. Requires `gh`; without it authenticity cannot be verified.
 
    ```sh
-   gh attestation verify '{{ARCHIVE}}' --repo Windemiatrix/photosync
+   gh attestation verify 'photosync_{{ .Version }}_darwin_universal.tar.gz' --repo Windemiatrix/photosync
    ```
 
 4. Unpack and put the binary in `~/bin`:
 
    ```sh
-   tar xzf '{{ARCHIVE}}'
+   tar xzf 'photosync_{{ .Version }}_darwin_universal.tar.gz'
    mkdir -p ~/bin && install -m 755 photosync ~/bin/photosync
    ```
 
