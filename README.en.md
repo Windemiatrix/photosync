@@ -61,7 +61,7 @@ The checksum protects only against corruption in transit: it sits next to the ar
 
 The binary carries only an ad-hoc signature: it is not signed by Apple and not notarized, so macOS may block it, and after an update it may ask again for Photos and Keychain access. `photosync doctor` and the release notes warn about it.
 
-Installing with `go install` will be documented only if stage 0 confirms that it produces a working binary.
+Installing with `go install` is not recommended: such a binary is signed by the Go linker with the name `a.out`, and macOS shows "a.out" in the access prompt and in settings. The release binary is signed with the identifier `io.github.windemiatrix.photosync`.
 
 **Updates** are manual, through the same channels: there is no self-update and no network version check. A binary older than the state database refuses to run; rolling the binary back is possible while no migration has been applied, or from the database backup copy.
 

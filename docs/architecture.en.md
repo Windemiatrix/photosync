@@ -114,7 +114,7 @@ Coverage: the domain at least 95% per package, the rest at least 80%, except for
 
 ## 7. Build
 
-The cgo binary (PhotoKit, Keychain, network monitoring) is built on macOS only: `MACOSX_DEPLOYMENT_TARGET=13.0`, `-trimpath`. The arm64 and amd64 slices are merged with `lipo` into a universal binary, then a mandatory ad-hoc signature `codesign -s -` is applied (not an Apple signature and no notarization; no certificates needed); the archive and checksums are computed after it. The `Info.plist` with the Photos usage description is embedded through a directive in `cmd/photosync`. The build is identical locally and in CI (`make release`); bit-for-bit reproducibility is not promised, and provenance is covered by an attestation.
+The cgo binary (PhotoKit, Keychain, network monitoring) is built on macOS only: `MACOSX_DEPLOYMENT_TARGET=13.0`, `-trimpath`. The arm64 and amd64 slices are merged with `lipo` into a universal binary, then a mandatory ad-hoc signature `codesign -s - --identifier io.github.windemiatrix.photosync` is applied (without the identifier macOS sees the binary as `a.out`; not an Apple signature and no notarization; no certificates needed); the archive and checksums are computed after it. The `Info.plist` with the Photos usage description is embedded through a directive in `cmd/photosync`. The build is identical locally and in CI (`make release`); bit-for-bit reproducibility is not promised, and provenance is covered by an attestation.
 
 **Unconfirmed (stage 0):** cross-compiling cgo for amd64 on an arm64 runner; compatibility of the ad-hoc signature with the hardened runtime, cgo and an embedded plist; whether cgo allows the plist-embedding flag; running on macOS 13.
 
@@ -128,4 +128,4 @@ Contents: `photosync_<version>_darwin_universal.tar.gz` (the binary, `LICENSE`, 
 
 ## 9. Installation and updates
 
-Step-by-step instructions (download, verification, installation, updates, uninstall) live in the [README](../README.en.md#installation), and macOS permissions are described there under "Requirements (planned)". Additions to the README: the ad-hoc signature ties the Photos and Keychain permissions to the code hash, so macOS may ask for them again after an update (stage 0 confirms this); for `go install`, stage 0 must confirm a build without `replace` and with the embedded plist.
+Step-by-step instructions (download, verification, installation, updates, uninstall) live in the [README](../README.en.md#installation), and macOS permissions are described there under "Requirements (planned)". Additions to the README: the ad-hoc signature ties the Photos and Keychain permissions to the code hash, so macOS may ask for them again after an update (stage 0 confirms this); `go install` produces a binary with the linker's `a.out` signature and is not recommended.

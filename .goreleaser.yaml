@@ -40,14 +40,16 @@ builds:
 # after lipo (lipo invalidates it) and before the archive is packed. No
 # "--options runtime": the hardened runtime without an entitlement closes access
 # to Photos. binary_signs and signs do not fit: they write separate signature
-# files (cosign, gpg) and do not sign the binary in place.
+# files (cosign, gpg) and do not sign the binary in place. "--identifier" is
+# required: without it the ad-hoc signature carries the Go linker's identifier
+# "a.out", and macOS shows that name in the Photos prompt and settings.
 universal_binaries:
   - id: photosync
     ids: [photosync]
     replace: true
     hooks:
       post:
-        - cmd: codesign --force -s - {{ .Path }}
+        - cmd: codesign --force -s - --identifier io.github.windemiatrix.photosync {{ .Path }}
 
 archives:
   - id: photosync
