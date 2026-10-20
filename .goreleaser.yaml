@@ -1,0 +1,101 @@
+# GoReleaser OSS configuration. Run through the Makefile:
+#   make release-check      validates this file (CI, every pull request)
+#   make release-snapshot   builds the archive locally or in CI, publishes nothing
+#   make release            builds and creates a draft GitHub Release (release.yml)
+#
+# This file and docs/release-notes-header*.md run inside the release job with
+# write access, so changes to them are reviewed like changes to a workflow.
+# Only the open-source features are used: no monorepo, no changelog.paths, no
+# release.header.from_file (the header goes in with --release-header-tmpl).
+version: 2
+
+project_name: photosync
+
+builds:
+  - id: photosync
+    main: ./cmd/photosync
+    binary: photosync
+    goos: [darwin]
+    goarch: [arm64, amd64]
+    env:
+      - CGO_ENABLED=1
+      - MACOSX_DEPLOYMENT_TARGET=13.0
+    # The amd64 slice is cross-compiled with cgo on an arm64 machine.
+    overrides:
+      - goos: darwin
+        goarch: amd64
+        env:
+          - CGO_ENABLED=1
+          - MACOSX_DEPLOYMENT_TARGET=13.0
+          - CC=clang -arch x86_64
+    flags:
+      - -trimpath
+    # {{ .Tag }} keeps the "v": "photosync version" prints the same string as
+    # after "go install", where the Go toolchain records the module version.
+    ldflags:
+      - -s -w -X main.version={{ .Tag }} -X main.commit={{ .Commit }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+# lipo joins the two slices into one binary. The ad-hoc signature must be made
+# after lipo (lipo invalidates it) and before the archive is packed. No
+# "--options runtime": the hardened runtime without an entitlement closes access
+# to Photos. binary_signs and signs do not fit: they write separate signature
+# files (cosign, gpg) and do not sign the binary in place.
+universal_binaries:
+  - id: photosync
+    ids: [photosync]
+    replace: true
+    hooks:
+      post:
+        - cmd: codesign --force -s - {{ .Path }}
+
+archives:
+  - id: photosync
+    ids: [photosync]
+    # tar.gz is the default format. There is a single archive, the universal
+    # binary, so the name is fixed: photosync_<version>_darwin_universal.tar.gz.
+    name_template: "photosync_{{ .Version }}_darwin_universal"
+    builds_info:
+      mtime: "{{ .CommitDate }}"
+    files:
+      - LICENSE
+      - README.md
+      - README.en.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+# The change list is the titles of the squash commits between two tags, which
+# are the titles of the pull requests. GoReleaser matches a group's regexp
+# against "<short sha> <title>", not against the title alone, so every regexp
+# starts with "^.*?" and an anchor like "^feat" would never match. Groups are
+# tried in the order of "order"; the expressions do not overlap: after the
+# scope Features, Bug fixes and Documentation expect ":" at once, so
+# "feat(x)!:" falls only into Breaking changes. There are no exclusions:
+# dependency updates are visible to users.
+changelog:
+  use: git
+  sort: asc
+  groups:
+    - title: Breaking changes
+      regexp: '^.*?[a-z]+\([a-z0-9._/-]+\)!:'
+      order: 0
+    - title: Features
+      regexp: '^.*?feat\([a-z0-9._/-]+\):'
+      order: 1
+    - title: Bug fixes
+      regexp: '^.*?fix\([a-z0-9._/-]+\):'
+      order: 2
+    - title: Documentation
+      regexp: '^.*?docs\([a-z0-9._/-]+\):'
+      order: 3
+    - title: Other
+      order: 999
+
+# A draft: the maintainer reads the notes, checks the files and publishes.
+release:
+  draft: true
+  github:
+    owner: Windemiatrix
+    name: photosync

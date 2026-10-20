@@ -7,6 +7,8 @@
 go.mod @Windemiatrix
 go.sum @Windemiatrix
 Makefile @Windemiatrix
+/.goreleaser.yaml @Windemiatrix
+/docs/release-notes-header*.md @Windemiatrix
 /scripts/ @Windemiatrix
 *.m @Windemiatrix
 *.h @Windemiatrix
