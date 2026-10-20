@@ -1,0 +1,126 @@
+# golangci-lint v2 configuration. The version is pinned in the Makefile
+# (GOLANGCI_LINT_VERSION); CI runs "make lint" on macOS so that darwin-only
+# files are analyzed too.
+version: "2"
+
+run:
+  timeout: 10m
+  tests: true
+
+linters:
+  # standard = govet, staticcheck, errcheck, ineffassign, unused
+  default: standard
+  enable:
+    - depguard
+    - forbidigo
+    - gosec
+    - errorlint
+    - bodyclose
+    - noctx
+    - misspell
+    - revive
+  settings:
+    depguard:
+      rules:
+        # The domain does no I/O and knows nothing about the other layers.
+        domain:
+          list-mode: lax
+          files:
+            - "**/internal/domain/**"
+            - "!$test"
+          deny:
+            - {pkg: os, desc: "domain does no I/O"}
+            - {pkg: os/exec, desc: "domain does not start processes"}
+            - {pkg: io/ioutil, desc: "domain does no I/O"}
+            - {pkg: net, desc: "domain does no I/O"}
+            - {pkg: net/http, desc: "domain does no I/O"}
+            - {pkg: database/sql, desc: "domain does no I/O"}
+            - {pkg: path/filepath, desc: "cloud paths use package path; local paths belong to the adapters"}
+            - {pkg: log, desc: "domain does not log"}
+            - {pkg: log/slog, desc: "domain does not log"}
+            - {pkg: syscall, desc: "domain does not call the system"}
+            - {pkg: unsafe, desc: "domain does not use unsafe"}
+            - {pkg: math/rand, desc: "randomness comes from the clock package"}
+            - {pkg: github.com/Windemiatrix/photosync/internal/app, desc: "dependencies point inward, to domain"}
+            - {pkg: github.com/Windemiatrix/photosync/internal/adapters, desc: "dependencies point inward, to domain"}
+            - {pkg: github.com/Windemiatrix/photosync/internal/state, desc: "dependencies point inward, to domain"}
+            - {pkg: github.com/Windemiatrix/photosync/internal/report, desc: "dependencies point inward, to domain"}
+            - {pkg: github.com/Windemiatrix/photosync/internal/i18n, desc: "dependencies point inward, to domain"}
+            - {pkg: github.com/Windemiatrix/photosync/internal/config, desc: "dependencies point inward, to domain"}
+            - {pkg: github.com/Windemiatrix/photosync/internal/clock, desc: "the current time is passed in as a parameter"}
+            - {pkg: github.com/Windemiatrix/photosync/internal/testkit, desc: "test support is not production code"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/photosdb, desc: "domain uses only the pure template and export packages of the library"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/photoinfo, desc: "domain uses only the pure template and export packages of the library"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/albuminfo, desc: "domain uses only the pure template and export packages of the library"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/query, desc: "domain uses only the pure template and export packages of the library"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/photokit, desc: "domain uses only the pure template and export packages of the library"}
+        # The application layer declares the interfaces it needs; the adapters are wired in cmd.
+        app:
+          list-mode: lax
+          files:
+            - "**/internal/app/**"
+            - "!$test"
+          deny:
+            - {pkg: github.com/Windemiatrix/photosync/internal/adapters, desc: "app must not import adapters; interfaces are declared in app and implemented structurally"}
+            - {pkg: github.com/Windemiatrix/photosync/internal/testkit, desc: "testkit is used by app_test only"}
+        # Adapters and the state store implement app interfaces without importing app.
+        outer:
+          list-mode: lax
+          files:
+            - "**/internal/adapters/**"
+            - "**/internal/state/**"
+            - "!$test"
+          deny:
+            - {pkg: github.com/Windemiatrix/photosync/internal/app, desc: "adapters and state must not import app"}
+    forbidigo:
+      forbid:
+        - pattern: ^time\.(Now|Since|Until|Sleep|After|Tick|Local)$
+          msg: "use internal/clock; only cmd, internal/config and internal/clock may touch real time"
+        - pattern: ^os\.(Getenv|LookupEnv|Exit)$
+          msg: "environment access and exit belong to cmd, internal/config and internal/clock"
+        - pattern: ^fmt\.Print(f|ln)?$
+          msg: "write to an io.Writer or use log/slog; stdout belongs to the command result"
+        - pattern: ^http\.(DefaultClient|DefaultTransport|Get|Head|Post|PostForm)$
+          msg: "use a dedicated http.Client with timeouts"
+    gosec:
+      # G402 (TLS), G204 (subprocess) and G304 (file path) are not excluded;
+      # a justified //nolint:gosec comment is the only way to silence them.
+      excludes: []
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: exported
+
+  exclusions:
+    generated: lax
+    rules:
+      # forbidigo applies to library code, not to the composition root,
+      # configuration loading, the clock itself, developer tools and tests.
+      - path: (^|/)cmd/
+        linters: [forbidigo]
+      - path: (^|/)internal/(config|clock)/
+        linters: [forbidigo]
+      - path: (^|/)tools/
+        linters: [forbidigo]
+      - path: _test\.go$
+        linters: [forbidigo]
+      # Tests read their own fixtures by variable path.
+      - path: _test\.go$
+        linters: [gosec]
+        text: G304
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/Windemiatrix
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

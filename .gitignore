@@ -9,6 +9,9 @@
 coverage.*
 *.prof
 
+# Local make settings (created by make, may hold secrets)
+.env
+
 # Go workspace (local only, never committed)
 go.work
 go.work.sum
