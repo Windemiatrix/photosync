@@ -1,0 +1,16 @@
+# Code owners are requested for review on every pull request that touches
+# the matching paths. The paths below are the ones where a change can weaken
+# the checks, leak data or alter what is built and shipped.
+* @Windemiatrix
+
+/.github/ @Windemiatrix
+go.mod @Windemiatrix
+go.sum @Windemiatrix
+Makefile @Windemiatrix
+/scripts/ @Windemiatrix
+*.m @Windemiatrix
+*.h @Windemiatrix
+/internal/adapters/secrets/ @Windemiatrix
+/internal/adapters/webdav/ @Windemiatrix
+/tools/anonymize/ @Windemiatrix
+/testdata/ @Windemiatrix

@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an improvement or a new capability
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem do you want to solve?
+      description: Describe the situation and why the current behavior does not help. A problem is more useful than a ready-made solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to happen?
+      description: The behavior you expect, from the user's point of view.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Other ways you considered or work around the problem today.
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste personal data: real album or folder names, paths, UUIDs, logins. Use neutral examples such as `IMG_0001.HEIC` or `2024/05-01 - Holidays`.
