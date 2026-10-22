@@ -48,8 +48,12 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - name: The library is a tag, not a pseudo-version
         run: make release-deps
-      - name: Vet, build, test
-        run: make unit
+      - name: Vet
+        run: make vet
+      - name: Build
+        run: make build
+      - name: Test
+        run: make race
       # Blocking here, unlike the scheduled run in ci.yml: a release must not
       # ship a reachable known vulnerability.
       - name: govulncheck

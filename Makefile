@@ -23,32 +23,59 @@ export
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-17s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-# CI runs the same targets (.github/workflows/ci.yml): every check is defined
-# here once. "make test" is all of them on one machine.
+# Every command is one target. CI (.github/workflows) runs these targets, one
+# per step, so a failed step names the command. The composite targets below
+# only list other targets; "make test" is every check on one machine.
 
-##@ Development
+##@ Composite
 
 .PHONY: test
 test: mod cover lint check-repo release-check release-snapshot fixtures-check fixtures-verify ## Run every check (before a PR)
 
 .PHONY: mod
-mod: ## go.mod is tidy and the downloaded modules are verified
+mod: tidy mod-verify ## go.mod is tidy and the modules are verified
+
+.PHONY: unit
+unit: vet vet-tags build race ## Vet, build, tests with the race detector
+
+.PHONY: cover
+cover: vet vet-tags build coverage coverage-check ## Vet, build, tests with coverage and the thresholds
+
+.PHONY: check-repo
+check-repo: repo-hygiene actionlint ## Repository checks and actionlint
+
+##@ Development
+
+.PHONY: tidy
+tidy: ## go.mod and go.sum are tidy
 	go mod tidy -diff
+
+.PHONY: mod-verify
+mod-verify: ## The downloaded modules match go.sum
 	go mod verify
 
 .PHONY: vet
-vet: ## Vet (the fixtures_verify build tag too) and build
+vet: ## go vet
 	go vet ./...
+
+.PHONY: vet-tags
+vet-tags: ## go vet of the code behind the fixtures_verify build tag
 	go vet -tags fixtures_verify ./tools/anonymize
+
+.PHONY: build
+build: ## go build
 	go build ./...
 
-.PHONY: unit
-unit: vet ## Vet, build and run all tests with the race detector
+.PHONY: race
+race: ## Tests with the race detector
 	go test -race -shuffle=on -count=1 ./...
 
-.PHONY: cover
-cover: vet ## Vet, build, run tests with coverage and check the thresholds
+.PHONY: coverage
+coverage: ## Tests with the race detector and a coverage profile (coverage.out)
 	go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+
+.PHONY: coverage-check
+coverage-check: ## Coverage thresholds on coverage.out (run "make coverage" first)
 	bash scripts/check-coverage.sh coverage.out
 
 .PHONY: lint
@@ -61,9 +88,12 @@ fmt: ## Format the code
 
 ##@ Checks
 
-.PHONY: check-repo
-check-repo: ## Repository hygiene checks and actionlint
+.PHONY: repo-hygiene
+repo-hygiene: ## Repository hygiene checks (scripts/check-repo.sh)
 	bash scripts/check-repo.sh
+
+.PHONY: actionlint
+actionlint: ## Lint the GitHub workflows
 	go run github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT_VERSION)
 
 # Not part of "make test": a new vulnerability in a dependency must not turn an
