@@ -55,7 +55,7 @@ func TestImports(t *testing.T) {
 		if strings.HasSuffix(p, "_test.go") {
 			return nil
 		}
-		src, err := os.ReadFile(p)
+		src, err := os.ReadFile(p) //nolint:gosec // G122: a source file of this package
 		if err != nil {
 			return err
 		}

@@ -34,7 +34,7 @@ func TestNaNFilter(t *testing.T) {
 		{`{"t": "NaN", "u": "a\"NaN", "v": "a\\", "w": NaN, "x": "-Infinity"}`, `{"t": "NaN", "u": "a\"NaN", "v": "a\\", "w": null, "x": "-Infinity"}`},
 		// Anything else passes as it is.
 		{`[Nan, NaX, Inf, -Inf, -1, nan]`, `[Nan, NaX, Inf, -Inf, -1, nan]`},
-		{`[-Infinit`, `[-Infinit`},
+		{`[-Infinit`, `[-Infinit`}, //nolint:misspell // a truncated token on purpose
 		{`NaN`, `null`},
 	}
 	for _, tt := range tests {

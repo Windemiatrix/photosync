@@ -101,7 +101,7 @@ func readTree(t *testing.T, dir string) map[string][]byte {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		data, err := os.ReadFile(p)
+		data, err := os.ReadFile(p) //nolint:gosec // G122: a file the test wrote into t.TempDir()
 		if err != nil {
 			return err
 		}

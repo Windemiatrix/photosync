@@ -327,7 +327,7 @@ func snapshot(t *testing.T, dir string) map[string]string {
 		}
 		rec := info.Mode().String() + " " + info.ModTime().Format(time.RFC3339Nano)
 		if !d.IsDir() {
-			data, err := os.ReadFile(p)
+			data, err := os.ReadFile(p) //nolint:gosec // G122: a file the test wrote into t.TempDir()
 			if err != nil {
 				return err
 			}
