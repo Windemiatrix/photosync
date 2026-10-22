@@ -1,0 +1,455 @@
+{
+ "format": 1,
+ "provenance": {
+  "kind": "real-anon",
+  "source": "manual-sync",
+  "expected": "reference-run",
+  "category": "live"
+ },
+ "icloud": [
+  {
+   "uuid": "00000000-861D-8BE0-B77C-61019F9E525B",
+   "original_filename": "IMG_3206.HEIC",
+   "filename": "00000000-861D-8BE0-B77C-61019F9E525B.heic",
+   "date": "2055-01-15T17:00:35.661000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 1879907,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 3024,
+   "height": 4032,
+   "hasadjustments": false,
+   "live_photo": true,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-8EE0-8157-81D1-ADF005636B3E",
+   "original_filename": "IMG_7726.HEIC",
+   "filename": "00000000-8EE0-8157-81D1-ADF005636B3E.heic",
+   "date": "2055-01-18T21:16:41.340000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 1699387,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": true,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-4026-8D2E-A87E-485FD439AD00",
+   "original_filename": "IMG_3853.HEIC",
+   "filename": "00000000-4026-8D2E-A87E-485FD439AD00.heic",
+   "date": "2055-01-23T18:13:37.198000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 1933916,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": true,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-DE89-8C56-B40C-2F72ED38D181",
+   "original_filename": "IMG_1689.HEIC",
+   "filename": "00000000-DE89-8C56-B40C-2F72ED38D181.heic",
+   "date": "2055-01-23T18:13:38.823000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 2026243,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": true,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-F182-87D0-956E-7A434EB3E157",
+   "original_filename": "IMG_3922.HEIC",
+   "filename": "00000000-F182-87D0-956E-7A434EB3E157.heic",
+   "date": "2055-02-07T11:56:31.987000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 2282879,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": true,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-5CF1-8C14-9E0A-6D82C940C982",
+   "original_filename": "IMG_5797.HEIC",
+   "filename": "00000000-5CF1-8C14-9E0A-6D82C940C982.heic",
+   "date": "2055-02-07T20:56:02.982000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 1973469,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": true,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-1CB6-843B-942D-3DBF5330FF12",
+   "original_filename": "IMG_8213.HEIC",
+   "filename": "00000000-1CB6-843B-942D-3DBF5330FF12.heic",
+   "date": "2055-02-10T13:43:28.985000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 2752003,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 3024,
+   "height": 4032,
+   "hasadjustments": false,
+   "live_photo": true,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-7015-8FF2-9A87-C899406FF0F2",
+   "original_filename": "IMG_5355.HEIC",
+   "filename": "00000000-7015-8FF2-9A87-C899406FF0F2.heic",
+   "date": "2055-02-10T13:43:33.293000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 2553254,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 3024,
+   "height": 4032,
+   "hasadjustments": false,
+   "live_photo": true,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  }
+ ],
+ "cloud": [
+  {
+   "path": "2055/01-18 - Сшввнэч, Ряигз зооавнчв/IMG_830099.HEIC",
+   "kind": "photos_ok",
+   "size": 1699387,
+   "date_taken": "2055-01-18T21:16:41.340",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "00000000cd47595b00f74c1a2f2a8709499a9126"
+  },
+  {
+   "path": "2055/01-18 - Сшввнэч, Ряигз зооавнчв/IMG_830099.MOV",
+   "kind": "photos_ok",
+   "size": 5233513,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "000000005929780afd642f6244d3b929885e0a4f"
+  },
+  {
+   "path": "2055/01-23 - Сшввнэч, Ряигз с тфръ и вачзцож рюцюьдмрщст/IMG_115437.HEIC",
+   "kind": "photos_ok",
+   "size": 1933916,
+   "date_taken": "2055-01-23T18:13:37.198",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "00000000f00d81db6bb7cc0949bccf3644122640"
+  },
+  {
+   "path": "2055/01-23 - Сшввнэч, Ряигз с тфръ и вачзцож рюцюьдмрщст/IMG_115437.MOV",
+   "kind": "photos_ok",
+   "size": 5847629,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "00000000daba2b98710a219d570f6b860cc33bcc"
+  },
+  {
+   "path": "2055/01-23 - Сшввнэч, Ряигз с тфръ и вачзцож рюцюьдмрщст/IMG_245908.HEIC",
+   "kind": "photos_ok",
+   "size": 2026243,
+   "date_taken": "2055-01-23T18:13:38.823",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "00000000eb6dc235a0c4de1306edf090f2fee8c1"
+  },
+  {
+   "path": "2055/01-23 - Сшввнэч, Ряигз с тфръ и вачзцож рюцюьдмрщст/IMG_245908.MOV",
+   "kind": "photos_ok",
+   "size": 5875315,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "00000000692dd39ac8b3395857a0cc8fb7017db1"
+  },
+  {
+   "path": "2055/02-07 - Шзазгф, Ряигз угфгу ыд гатвы/IMG_856940.HEIC",
+   "kind": "photos_ok",
+   "size": 1973469,
+   "date_taken": "2055-02-07T20:56:02.982",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "00000000476d6b5cd97132e268a69d2a6a398e68"
+  },
+  {
+   "path": "2055/02-07 - Шзазгф, Ряигз угфгу ыд гатвы/IMG_856940.MOV",
+   "kind": "photos_ok",
+   "size": 5018326,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "0000000015a54de90188bdeaa78480e5a5bdce26"
+  },
+  {
+   "path": "2055/02-10 - Ряигз ыд ъшьушб/IMG_085625.HEIC",
+   "kind": "photos_ok",
+   "size": 2752003,
+   "date_taken": "2055-02-10T13:43:28.985",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "0000000053d48ae0bc324f075de06de15d7fcac9"
+  },
+  {
+   "path": "2055/02-10 - Ряигз ыд ъшьушб/IMG_085625.MOV",
+   "kind": "photos_ok",
+   "size": 4299949,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "000000007e564cfabca35a5abb067d055ad8d8f4"
+  },
+  {
+   "path": "2055/02-10 - Ряигз ыд ъшьушб/IMG_665459.HEIC",
+   "kind": "photos_ok",
+   "size": 2553254,
+   "date_taken": "2055-02-10T13:43:33.293",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "000000003c290f9ece1b1ce6e0c2bcbe2a8856c6"
+  },
+  {
+   "path": "2055/02-10 - Ряигз ыд ъшьушб/IMG_665459.MOV",
+   "kind": "photos_ok",
+   "size": 4010979,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "000000008ebf1d2a7d4f5ae4cfc1b32c420fbd49"
+  },
+  {
+   "path": "2055/xurvtnlv/IMG_012912.HEIC",
+   "kind": "photos_ok",
+   "size": 1879907,
+   "date_taken": "2055-01-15T17:00:35.661",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "00000000ef1fb9a93bba418d157fce9afd12d4e6"
+  },
+  {
+   "path": "2055/xurvtnlv/IMG_012912.MOV",
+   "kind": "photos_ok",
+   "size": 5870819,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "000000000a82b65933b742601169dac9fe6886fb"
+  },
+  {
+   "path": "2055/xurvtnlv/IMG_329446.HEIC",
+   "kind": "photos_ok",
+   "size": 2282879,
+   "date_taken": "2055-02-07T11:56:31.987",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "00000000594b5585e88c861e424051fcbf04156f"
+  },
+  {
+   "path": "2055/xurvtnlv/IMG_329446.MOV",
+   "kind": "photos_ok",
+   "size": 6462532,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "name",
+   "sha1": "000000008d36ff155164bf21e17ef46895f61b5c"
+  }
+ ],
+ "expected": [
+  {
+   "uuid": "00000000-861D-8BE0-B77C-61019F9E525B",
+   "path": "2055/xurvtnlv/IMG_012912.HEIC",
+   "level": "same_time_size",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-861D-8BE0-B77C-61019F9E525B",
+   "path": "2055/xurvtnlv/IMG_012912.MOV",
+   "level": "pair_component",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-8EE0-8157-81D1-ADF005636B3E",
+   "path": "2055/01-18 - Сшввнэч, Ряигз зооавнчв/IMG_830099.HEIC",
+   "level": "same_time_size",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-8EE0-8157-81D1-ADF005636B3E",
+   "path": "2055/01-18 - Сшввнэч, Ряигз зооавнчв/IMG_830099.MOV",
+   "level": "pair_component",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-4026-8D2E-A87E-485FD439AD00",
+   "path": "2055/01-23 - Сшввнэч, Ряигз с тфръ и вачзцож рюцюьдмрщст/IMG_115437.HEIC",
+   "level": "same_time_size",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-4026-8D2E-A87E-485FD439AD00",
+   "path": "2055/01-23 - Сшввнэч, Ряигз с тфръ и вачзцож рюцюьдмрщст/IMG_115437.MOV",
+   "level": "pair_component",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-DE89-8C56-B40C-2F72ED38D181",
+   "path": "2055/01-23 - Сшввнэч, Ряигз с тфръ и вачзцож рюцюьдмрщст/IMG_245908.HEIC",
+   "level": "same_time_size",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-DE89-8C56-B40C-2F72ED38D181",
+   "path": "2055/01-23 - Сшввнэч, Ряигз с тфръ и вачзцож рюцюьдмрщст/IMG_245908.MOV",
+   "level": "pair_component",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-F182-87D0-956E-7A434EB3E157",
+   "path": "2055/xurvtnlv/IMG_329446.HEIC",
+   "level": "same_time_size",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-F182-87D0-956E-7A434EB3E157",
+   "path": "2055/xurvtnlv/IMG_329446.MOV",
+   "level": "pair_component",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-5CF1-8C14-9E0A-6D82C940C982",
+   "path": "2055/02-07 - Шзазгф, Ряигз угфгу ыд гатвы/IMG_856940.HEIC",
+   "level": "same_time_size",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-5CF1-8C14-9E0A-6D82C940C982",
+   "path": "2055/02-07 - Шзазгф, Ряигз угфгу ыд гатвы/IMG_856940.MOV",
+   "level": "pair_component",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-1CB6-843B-942D-3DBF5330FF12",
+   "path": "2055/02-10 - Ряигз ыд ъшьушб/IMG_085625.HEIC",
+   "level": "same_time_size",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-1CB6-843B-942D-3DBF5330FF12",
+   "path": "2055/02-10 - Ряигз ыд ъшьушб/IMG_085625.MOV",
+   "level": "pair_component",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-7015-8FF2-9A87-C899406FF0F2",
+   "path": "2055/02-10 - Ряигз ыд ъшьушб/IMG_665459.HEIC",
+   "level": "same_time_size",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-7015-8FF2-9A87-C899406FF0F2",
+   "path": "2055/02-10 - Ряигз ыд ъшьушб/IMG_665459.MOV",
+   "level": "pair_component",
+   "plan": ""
+  }
+ ]
+}

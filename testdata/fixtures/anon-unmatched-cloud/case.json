@@ -1,0 +1,101 @@
+{
+ "format": 1,
+ "provenance": {
+  "kind": "real-anon",
+  "source": "manual-sync",
+  "expected": "reference-run",
+  "category": "unmatched-cloud"
+ },
+ "icloud": [],
+ "cloud": [
+  {
+   "path": "2037/07-21 - Жыццуисиá/P5612015.JPG",
+   "kind": "photos_ok",
+   "size": 142986,
+   "date_taken": "2037-06-23T22:24:51",
+   "width": 609,
+   "height": 802,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000e757d635cdf8bf22f85b1a96ad8ae1d5"
+  },
+  {
+   "path": "2041/09-26 - сл Ххшм Ъжлэеюэш/DSC15984.JPG",
+   "kind": "photos_ok",
+   "size": 853282,
+   "date_taken": "2041-09-26T21:25:45",
+   "width": 4224,
+   "height": 3168,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000b28da53a7486a38c97a3ba765c2452a4"
+  },
+  {
+   "path": "2042/08-12 - сл гфижсв/DSC83056.JPG",
+   "kind": "photos_ok",
+   "size": 2810263,
+   "date_taken": "2042-08-12T12:08:02",
+   "width": 4224,
+   "height": 3168,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000004110882dfcf3dffa0dace8cd42771f23"
+  },
+  {
+   "path": "2042/08-12 - сл гфижсв/DSC26490.JPG",
+   "kind": "photos_ok",
+   "size": 2055524,
+   "date_taken": "2042-08-12T13:32:52",
+   "width": 3168,
+   "height": 4224,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000009790cce0982aa1ae7287dc4ecf56f9c4"
+  },
+  {
+   "path": "2044/11-27 - Пиоюцб/Ыожчомц_1 клч_2.JPG",
+   "kind": "photos_ok",
+   "size": 3026133,
+   "date_taken": "2044-11-27T19:50:14",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000007fba6e28ec5e2bf89208a45255cd1c05"
+  },
+  {
+   "path": "2045/03-06 - Пешжад/DSC_1267.JPG",
+   "kind": "photos_ok",
+   "size": 1450650,
+   "date_taken": "2045-03-06T23:19:31.300",
+   "width": 4608,
+   "height": 3072,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000003fe685f004a2f461ad92b6e8229cf0c6"
+  },
+  {
+   "path": "2050/08-18 - Кюмя/IMG_20500818_152819.jpg",
+   "kind": "photos_ok",
+   "size": 1580112,
+   "date_taken": "2050-08-18T15:28:18.942",
+   "width": 4000,
+   "height": 2250,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000901f801cf91d9ae8bb3a7b34974fec2e"
+  },
+  {
+   "path": "2051/06-17 - Екгуа/IMG_20510617_014838.jpg",
+   "kind": "photos_ok",
+   "size": 5313558,
+   "date_taken": "2051-06-17T01:48:38.825",
+   "width": 4000,
+   "height": 2250,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000bc1b60d4fcb3527e5500069f639ad985"
+  }
+ ],
+ "expected": []
+}

@@ -1,0 +1,156 @@
+{
+ "format": 1,
+ "provenance": {
+  "kind": "real-anon",
+  "source": "manual-sync",
+  "expected": "reference-run",
+  "category": "sidecar"
+ },
+ "icloud": [],
+ "cloud": [
+  {
+   "path": "2037/05-25 - Зефпефжвй чьмтрм/Фвчдсс/UVVY6070.MOV",
+   "kind": "photos_ok",
+   "size": 7780097,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000004e9165675224150c333bf0170e4ecc30"
+  },
+  {
+   "path": "2037/05-25 - Зефпефжвй чьмтрм/Фвчдсс/UVVY6070.THM",
+   "kind": "sidecar",
+   "size": 6984,
+   "date_taken": "",
+   "width": 160,
+   "height": 120,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000957ea3c90bb101b6ce72e7b42f52cb4a"
+  },
+  {
+   "path": "2037/05-25 - Зефпефжвй чьмтрм/Фвчдсс/UVVY4883.MOV",
+   "kind": "photos_ok",
+   "size": 12756316,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000009d197b04ac5bf6811b270ed70e38e0b7"
+  },
+  {
+   "path": "2037/05-25 - Зефпефжвй чьмтрм/Фвчдсс/UVVY4883.THM",
+   "kind": "sidecar",
+   "size": 6698,
+   "date_taken": "",
+   "width": 160,
+   "height": 120,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000031eecb734cd47d3fca7afab18649c244"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW52558.MPG",
+   "kind": "convert",
+   "size": 20291170,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000d02fa3bcecb41ab04eb407a16223bf8b"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW52558.THM",
+   "kind": "sidecar",
+   "size": 6088,
+   "date_taken": "2041-01-06T18:31:40",
+   "width": 160,
+   "height": 120,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000035201a1b98c8d8364e637b30ef2e3e82"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW96023.MPG",
+   "kind": "convert",
+   "size": 30948627,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000bd54e17e2a15f9ffad86ec058f67a7cc"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW96023.THM",
+   "kind": "sidecar",
+   "size": 6588,
+   "date_taken": "2041-01-06T18:34:26",
+   "width": 160,
+   "height": 120,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000008b95aee09b223b272d0c97283aedc205"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW45777.MPG",
+   "kind": "convert",
+   "size": 74718723,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000e03fb2cad2eeb522c0b3ee4c1673f71b"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW45777.THM",
+   "kind": "sidecar",
+   "size": 6812,
+   "date_taken": "2041-01-06T18:36:12",
+   "width": 160,
+   "height": 120,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000009a15f2c393d5b437dda955153f4e4cda"
+  },
+  {
+   "path": "2057/09-24 Оезсвëи эдтяô/IMG_2599.RUS.XMP",
+   "kind": "sidecar",
+   "size": 3315,
+   "date_taken": "2057-09-24T13:37:34",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000001b1f96dca83055931af0f08f58e2ee10"
+  },
+  {
+   "path": "2057/09-24 Оезсвëи эдтяô/IMG_5426.RUS.XMP",
+   "kind": "sidecar",
+   "size": 3315,
+   "date_taken": "2057-09-24T14:46:03",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000078db1bc7731e5018a30c2acb5191bcac"
+  },
+  {
+   "path": "2057/10-11 Пыцнщлмзчщзб/IMG_6465.RUS.XMP",
+   "kind": "sidecar",
+   "size": 3316,
+   "date_taken": "2057-10-11T14:18:56",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000007b84d7d1e99fed6583f915b9b36b73ba"
+  }
+ ],
+ "expected": []
+}

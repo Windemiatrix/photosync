@@ -1,0 +1,101 @@
+{
+ "format": 1,
+ "provenance": {
+  "kind": "real-anon",
+  "source": "manual-sync",
+  "expected": "reference-run",
+  "category": "non-ascii"
+ },
+ "icloud": [],
+ "cloud": [
+  {
+   "path": "2042/05-13/Д-рзур-13-05_16.JPG",
+   "kind": "photos_ok",
+   "size": 2952382,
+   "date_taken": "2042-05-16T10:28:31",
+   "width": 2304,
+   "height": 3072,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000001bb2aa450293c04827730b6100b2abd5"
+  },
+  {
+   "path": "2042/06-17/Пвгиьнъ_14.JPG",
+   "kind": "photos_ok",
+   "size": 6109336,
+   "date_taken": "2042-06-17T00:22:32",
+   "width": 4224,
+   "height": 3168,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000088622fe8030b6673fbc7d1780a0eea99"
+  },
+  {
+   "path": "2042/07-17/Пгиъэио_дмтх 1-й_30.JPG",
+   "kind": "photos_ok",
+   "size": 2705614,
+   "date_taken": "2042-07-17T08:25:13",
+   "width": 2592,
+   "height": 1944,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000008050a23cf9667f27a3f353aa959f6691"
+  },
+  {
+   "path": "2044/12-08 - Пиоюцб/Ыожчомц_1.5 клч_13.JPG",
+   "kind": "photos_ok",
+   "size": 3464423,
+   "date_taken": "2044-12-08T13:53:43",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000a9a14a809dcdd83a43fd10999cafa7bf"
+  },
+  {
+   "path": "2049/05-13 - выызсé хбяы/Юлкэлшкф/1-Тп/338-20490513-М-02-Яюйпя и Ккуъв.JPG",
+   "kind": "photos_ok",
+   "size": 3027311,
+   "date_taken": "2049-05-13T05:04:30",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000ad364c6f0e87bb2cf83d4733b2650dae"
+  },
+  {
+   "path": "2049/05-13 - выызсé хбяы/Юлкэлшкф/3-Гук вмыф/035-20490513-С-10-гук чтбпаш.jpg",
+   "kind": "photos_ok",
+   "size": 1091581,
+   "date_taken": "",
+   "width": 2560,
+   "height": 1920,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000004a60dc1be75fc25f56569f3f46f5094c"
+  },
+  {
+   "path": "2049/05-13 - выызсé хбяы/Юлкэлшкф/Диеуц/236-20490513-32-диеуц.jpg",
+   "kind": "photos_ok",
+   "size": 177406,
+   "date_taken": "",
+   "width": 1024,
+   "height": 768,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000078310986f61d067a934798f7b949a5d"
+  },
+  {
+   "path": "2049/05-13 - выызсé хбяы/оэ линнкц/20490513-52-Дгоалò.jpg",
+   "kind": "photos_ok",
+   "size": 107989,
+   "date_taken": "",
+   "width": 1024,
+   "height": 768,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000c91fa20910c9e1e193458eb4e2a06644"
+  }
+ ],
+ "expected": []
+}

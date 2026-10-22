@@ -1,0 +1,209 @@
+{
+ "format": 1,
+ "provenance": {
+  "kind": "real-anon",
+  "source": "manual-sync",
+  "expected": "reference-run",
+  "category": "date-1970"
+ },
+ "icloud": [
+  {
+   "uuid": "00000000-BBDA-8071-9A67-55EB42FA06AC",
+   "original_filename": "PXL_20550913_052237587.mp4",
+   "filename": "00000000-BBDA-8071-9A67-55EB42FA06AC.mp4",
+   "date": "1970-01-01T06:00:00+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 45031712,
+   "original_width": 1920,
+   "original_height": 1080,
+   "width": 1920,
+   "height": 1080,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": true,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-0E9F-8D35-AA6A-4E9B9A87B1B5",
+   "original_filename": "PXL_20550913_065222394.HKJQOM.QX.mp4",
+   "filename": "00000000-0E9F-8D35-AA6A-4E9B9A87B1B5.mp4",
+   "date": "1970-01-01T06:00:00+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 45375299,
+   "original_width": 1920,
+   "original_height": 1080,
+   "width": 1920,
+   "height": 1080,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": true,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-48D0-85B8-AFA1-468D70FE8A3D",
+   "original_filename": "PXL_20550913_035731106.mp4",
+   "filename": "00000000-48D0-85B8-AFA1-468D70FE8A3D.mp4",
+   "date": "1970-01-01T06:00:00+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 7774428,
+   "original_width": 1920,
+   "original_height": 1080,
+   "width": 1920,
+   "height": 1080,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": true,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-9017-8EDD-B64C-059A666DC23E",
+   "original_filename": "PXL_20550913_100351678.mp4",
+   "filename": "00000000-9017-8EDD-B64C-059A666DC23E.mp4",
+   "date": "1970-01-01T06:00:00+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 18769264,
+   "original_width": 1920,
+   "original_height": 1080,
+   "width": 1920,
+   "height": 1080,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": true,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-EA15-84C0-9969-C95930438D18",
+   "original_filename": "PXL_20550913_065413473.mp4",
+   "filename": "00000000-EA15-84C0-9969-C95930438D18.mp4",
+   "date": "1970-01-01T06:00:00+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 19752795,
+   "original_width": 1920,
+   "original_height": 1080,
+   "width": 1920,
+   "height": 1080,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": true,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-ED34-8563-B5A4-2DE28FB7B15E",
+   "original_filename": "PXL_20550913_092926026.mp4",
+   "filename": "00000000-ED34-8563-B5A4-2DE28FB7B15E.mp4",
+   "date": "1970-01-01T06:00:00+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 4188340,
+   "original_width": 1920,
+   "original_height": 1080,
+   "width": 1920,
+   "height": 1080,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": true,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-4D9B-8AEA-BFA1-2E9377298610",
+   "original_filename": "PXL_20550913_072928362.mp4",
+   "filename": "00000000-4D9B-8AEA-BFA1-2E9377298610.mp4",
+   "date": "1970-01-01T06:00:00+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 22837625,
+   "original_width": 1080,
+   "original_height": 1920,
+   "width": 1080,
+   "height": 1920,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": true,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  }
+ ],
+ "cloud": [],
+ "expected": []
+}

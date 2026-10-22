@@ -1,0 +1,123 @@
+{
+ "format": 1,
+ "provenance": {
+  "kind": "real-anon",
+  "source": "manual-sync",
+  "expected": "reference-run",
+  "category": "convert"
+ },
+ "icloud": [],
+ "cloud": [
+  {
+   "path": "2039/08-18/TGW40927.MPG",
+   "kind": "convert",
+   "size": 57556935,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000a73e2e5ead8d42a72df57ef842ad8fde"
+  },
+  {
+   "path": "2039/08-18/TGW42302.MPG",
+   "kind": "convert",
+   "size": 9213457,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000005ce56e57979eddb2c5b4a3115f8abc3a"
+  },
+  {
+   "path": "2040/11-09 - у фктхждуызчьссъкщче/TGW37653.3GP",
+   "kind": "convert",
+   "size": 813707,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000b48e330bad7c59aa5c51c5896c1a39de"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW67916.MPG",
+   "kind": "convert",
+   "size": 1872721,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000b1ab9825207b6d7e2f44ae1663018de0"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW67916.THM",
+   "kind": "sidecar",
+   "size": 4875,
+   "date_taken": "2041-01-06T18:31:25",
+   "width": 160,
+   "height": 120,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000874d476418b2262e6d31b260e6a84852"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW27648.MPG",
+   "kind": "convert",
+   "size": 5553147,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000000f019a1e8ce6d74e41ce4e85763eea87"
+  },
+  {
+   "path": "2041/01-06 - Дыцэгакя/TGW27648.THM",
+   "kind": "sidecar",
+   "size": 6234,
+   "date_taken": "2041-01-06T18:34:01",
+   "width": 160,
+   "height": 120,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000034184f79884c0ebee0c9eb12f1851b0"
+  },
+  {
+   "path": "2042/06-16 - пвгиьнъ в вюляэ/TGW77284.MPG",
+   "kind": "convert",
+   "size": 2822314,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000009a8cb9889d874207351e0ceaed89d827"
+  },
+  {
+   "path": "2042/07-17/TGW60054.MPG",
+   "kind": "convert",
+   "size": 10157076,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000032640494bc95c4174d8da664888ef82c"
+  },
+  {
+   "path": "2043/08-20 - ыьфвтцфхе ыд биимитб/TGW88713.MPG",
+   "kind": "convert",
+   "size": 35725242,
+   "date_taken": "",
+   "width": 640,
+   "height": 480,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000090e56181b71196b039c730be7ca74833"
+  }
+ ],
+ "expected": []
+}
