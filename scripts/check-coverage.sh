@@ -4,7 +4,8 @@
 #   internal/domain/...  each package on its own, at least DOMAIN_MIN (95)
 #   everything else      one total for the group, at least OTHER_MIN (80)
 #
-# Packages listed in "excluded" are left out of both groups.
+# Packages listed in "excluded" are left out of both groups: an entry matches
+# that package only, an entry ending in "/..." also its subpackages.
 # If nothing is left to check (the skeleton, or a profile without statements)
 # the gate passes and says so.
 #
@@ -34,7 +35,7 @@ other_min="${OTHER_MIN:-80}"
 # runs only against real system APIs or is composition-only wiring, so a
 # percentage would say nothing about its quality.
 excluded=(
-  "cmd"                                 # composition root: wiring only
+  "cmd/..."                             # composition root: wiring only
   "tools/anonymize"                     # main package of a developer tool
   "internal/adapters/secrets/keychain"  # cgo, Security.framework
   "internal/adapters/space/macos"       # cgo, volume capacity API
@@ -42,10 +43,14 @@ excluded=(
 )
 
 awk -v module="$module" -v excl="${excluded[*]}" -v dmin="$domain_min" -v omin="$other_min" '
-function is_excluded(pkg,    i, n, parts) {
+function is_excluded(pkg,    i, n, parts, root) {
   n = split(excl, parts, " ")
   for (i = 1; i <= n; i++) {
-    if (pkg == parts[i] || index(pkg, parts[i] "/") == 1) return 1
+    if (pkg == parts[i]) return 1
+    if (parts[i] ~ /\/\.\.\.$/) {
+      root = substr(parts[i], 1, length(parts[i]) - 4)
+      if (pkg == root || index(pkg, root "/") == 1) return 1
+    }
   }
   return 0
 }
