@@ -319,6 +319,16 @@ func runSet(ss []string) lookup {
 // extension or a word of the format dictionary.
 func AllowedWord(w string) bool { return structuralSet[w] || extSet[w] || formatSet[w] }
 
+// LowerRuns returns the letter runs of s in the form words are compared in:
+// lower case NFC.
+func LowerRuns(s string) []string {
+	runs := letterRuns(s)
+	for i, r := range runs {
+		runs[i] = lowerNFC(r)
+	}
+	return runs
+}
+
 // letterRuns returns the letter runs of s: a letter followed by marks.
 func letterRuns(s string) []string {
 	var runs []string
