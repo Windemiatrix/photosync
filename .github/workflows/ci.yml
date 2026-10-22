@@ -46,7 +46,7 @@ jobs:
       - name: Check the PR title
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
-        run: bash scripts/check-pr-title.sh
+        run: make pr-title
 
   linux:
     runs-on: ubuntu-24.04

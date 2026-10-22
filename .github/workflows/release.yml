@@ -47,13 +47,13 @@ jobs:
           git fetch origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
       - name: The library is a tag, not a pseudo-version
-        run: bash scripts/check-release-deps.sh
-      - name: Test
-        run: go test -race -shuffle=on -count=1 ./...
+        run: make release-deps
+      - name: Vet, build, test
+        run: make unit
       # Blocking here, unlike the scheduled run in ci.yml: a release must not
       # ship a reachable known vulnerability.
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+        run: make vuln
 
   build:
     needs: verify

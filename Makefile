@@ -67,10 +67,20 @@ check-repo: ## Repository hygiene checks and actionlint
 	go run github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT_VERSION)
 
 # Not part of "make test": a new vulnerability in a dependency must not turn an
-# unrelated change red. CI runs it on a schedule.
+# unrelated change red. CI runs it on a schedule, the release job blocks on it.
 .PHONY: vuln
 vuln: ## Check dependencies for known vulnerabilities
 	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+
+# CI only: the title comes from the pull request event (PR_TITLE).
+.PHONY: pr-title
+pr-title: ## Check PR_TITLE against the title convention
+	bash scripts/check-pr-title.sh
+
+# Release only: a development branch may pin the library to a pseudo-version.
+.PHONY: release-deps
+release-deps: ## The library is required by a tag, not a pseudo-version
+	bash scripts/check-release-deps.sh
 
 .PHONY: fixtures-check
 fixtures-check: ## Scan testdata/fixtures for leaks (skipped while there are none)
