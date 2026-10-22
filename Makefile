@@ -9,6 +9,11 @@ GORELEASER_VERSION ?= v2.18.3
 # build the release notes on a temporary local tag without a token.
 GORELEASER_FLAGS ?=
 GORELEASER = go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
+# Private anonymizer inputs, set in .env (never committed): the manual-sync
+# materials and the fixtures built from them. Without them the checks on real
+# data are skipped.
+ANONYMIZE_IN ?=
+ANONYMIZE_OUT ?=
 export
 
 .DEFAULT_GOAL := help
@@ -20,8 +25,12 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: test
-test: ## Vet and run all tests with the race detector
+test: unit lint check-repo release-check fixtures-check fixtures-verify ## Run every local check (before a PR)
+
+.PHONY: unit
+unit: ## Vet and run all tests with the race detector
 	go vet ./...
+	go vet -tags fixtures_verify ./tools/anonymize
 	go test -race -shuffle=on -count=1 ./...
 
 .PHONY: cover
@@ -42,6 +51,21 @@ fmt: ## Format the code
 .PHONY: check-repo
 check-repo: ## Repository hygiene checks (the repo-checks CI job without actionlint)
 	bash scripts/check-repo.sh
+
+.PHONY: fixtures-check
+fixtures-check: ## Scan testdata/fixtures for leaks (skipped while there are none)
+	@if [ -d testdata/fixtures ]; then go run ./tools/anonymize --check testdata/fixtures; \
+	else echo "fixtures-check: no testdata/fixtures, skipped"; fi
+
+# The anonymizer output on the private materials: the same pairs and levels
+# before and after, no input word of 4+ letters in the fixtures, and a digest
+# of at most 30 anonymized records to read. Prints aggregates only.
+.PHONY: fixtures-verify
+fixtures-verify: ## Check the anonymizer on the private materials (needs ANONYMIZE_IN and ANONYMIZE_OUT in .env)
+	@if [ -z "$(ANONYMIZE_IN)" ] || [ -z "$(ANONYMIZE_OUT)" ]; then \
+		echo "fixtures-verify: ANONYMIZE_IN or ANONYMIZE_OUT not set, skipped"; \
+	else go test -tags fixtures_verify -count=1 -v -run 'TestFixtures' ./tools/anonymize \
+		-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.out="$(ANONYMIZE_OUT)"; fi
 
 ##@ Release
 
