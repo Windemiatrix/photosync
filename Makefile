@@ -1,9 +1,10 @@
 dummy := $(shell touch .env)
 include .env
-# golangci-lint is built from source by "go run" with the Go toolchain from
-# go.mod and verified through the Go checksum database. Bump the version here only.
+# Tools are built from source by "go run" with the Go toolchain from go.mod and
+# verified through the Go checksum database. Bump the versions here only.
 GOLANGCI_LINT_VERSION ?= v2.15.0
-# GoReleaser is run the same way. Bump the version here only.
+ACTIONLINT_VERSION ?= v1.7.12
+GOVULNCHECK_VERSION ?= v1.9.0
 GORELEASER_VERSION ?= v2.18.3
 # Extra flags for "make release", for example GORELEASER_FLAGS=--skip=publish to
 # build the release notes on a temporary local tag without a token.
@@ -22,20 +23,32 @@ export
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-17s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+# CI runs the same targets (.github/workflows/ci.yml): every check is defined
+# here once. "make test" is all of them on one machine.
+
 ##@ Development
 
 .PHONY: test
-test: unit lint check-repo release-check fixtures-check fixtures-verify ## Run every local check (before a PR)
+test: mod cover lint check-repo release-check release-snapshot fixtures-check fixtures-verify ## Run every check (before a PR)
 
-.PHONY: unit
-unit: ## Vet and run all tests with the race detector
+.PHONY: mod
+mod: ## go.mod is tidy and the downloaded modules are verified
+	go mod tidy -diff
+	go mod verify
+
+.PHONY: vet
+vet: ## Vet (the fixtures_verify build tag too) and build
 	go vet ./...
 	go vet -tags fixtures_verify ./tools/anonymize
+	go build ./...
+
+.PHONY: unit
+unit: vet ## Vet, build and run all tests with the race detector
 	go test -race -shuffle=on -count=1 ./...
 
 .PHONY: cover
-cover: ## Run tests with coverage and check the thresholds
-	go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+cover: vet ## Vet, build, run tests with coverage and check the thresholds
+	go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
 	bash scripts/check-coverage.sh coverage.out
 
 .PHONY: lint
@@ -49,8 +62,15 @@ fmt: ## Format the code
 ##@ Checks
 
 .PHONY: check-repo
-check-repo: ## Repository hygiene checks (the repo-checks CI job without actionlint)
+check-repo: ## Repository hygiene checks and actionlint
 	bash scripts/check-repo.sh
+	go run github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT_VERSION)
+
+# Not part of "make test": a new vulnerability in a dependency must not turn an
+# unrelated change red. CI runs it on a schedule.
+.PHONY: vuln
+vuln: ## Check dependencies for known vulnerabilities
+	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 .PHONY: fixtures-check
 fixtures-check: ## Scan testdata/fixtures for leaks (skipped while there are none)

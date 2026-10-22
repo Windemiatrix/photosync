@@ -2,6 +2,8 @@
 #
 # - "ci-ok" is the single aggregate check: the ruleset of main requires it, so
 #   the names of the other jobs can change freely.
+# - Every check is a Makefile target; the jobs only choose which targets run
+#   on which machine. "make test" runs all of them locally.
 # - Every third-party action is pinned to a full commit SHA with its release
 #   version in a comment; Dependabot keeps both up to date, and
 #   scripts/check-repo.sh fails on any action that is not pinned by SHA.
@@ -61,18 +63,10 @@ jobs:
           # The module cache is keyed on go.sum, which does not exist while the
           # module has no dependencies. Turn caching on with the first dependency.
           cache: false
-      - name: go.mod is tidy
-        run: go mod tidy -diff
-      - name: Verify dependencies
-        run: go mod verify
-      - name: Vet
-        run: go vet ./...
-      - name: Build
-        run: go build ./...
-      - name: Test
-        run: go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
-      - name: Check coverage
-        run: bash scripts/check-coverage.sh coverage.out
+      - name: go.mod is tidy, modules are verified
+        run: make mod
+      - name: Vet, build, test with coverage
+        run: make cover
 
   macos:
     runs-on: macos-15
@@ -93,8 +87,8 @@ jobs:
       # The linter runs here, not on Linux, so that darwin-only files are analyzed.
       - name: Lint
         run: make lint
-      - name: Test with cgo
-        run: go test -race -shuffle=on ./...
+      - name: Vet, build, test with cgo
+        run: make unit
       # The release pipeline on every pull request: both slices (the amd64 one
       # is a cgo cross-compilation), lipo, the ad-hoc signature and the archive,
       # without publishing. A broken release is found here, not after a tag is
@@ -117,16 +111,17 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Repository checks
-        run: bash scripts/check-repo.sh
+      # actionlint is built from source at the version pinned in the Makefile;
+      # the module checksum database verifies the download.
+      - name: Repository checks and actionlint
+        run: make check-repo
       # A broken .goreleaser.yaml must show up on the pull request: a tag is
       # immutable, so a failed release cannot be repeated on it.
       - name: Validate .goreleaser.yaml
         run: make release-check
-      # Built from source at a fixed version; the module checksum database
-      # verifies the download.
-      - name: actionlint
-        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+      # Skipped while testdata/fixtures does not exist.
+      - name: Leak scan of the fixtures
+        run: make fixtures-check
 
   deps:
     if: github.event_name == 'pull_request'
@@ -163,7 +158,7 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+        run: make vuln
 
   ci-ok:
     if: always()
