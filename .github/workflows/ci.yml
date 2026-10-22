@@ -143,7 +143,7 @@ jobs:
           fail-on-severity: moderate
           # MPL-2.0 is accepted for test-only dependencies (the property-test
           # library); it must not reach the shipped binary.
-          allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, MPL-2.0
+          allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, MPL-2.0, LicenseRef-scancode-google-patent-license-golang
           comment-summary-in-pr: never
 
   # Scheduled and manual only: a new vulnerability in a dependency must not

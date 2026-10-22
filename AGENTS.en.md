@@ -12,7 +12,7 @@ The boundary is an allowlist, not a denylist: any prohibition can be bypassed wi
 
 - reading GitHub: `gh pr view`, `gh pr list`, `gh pr checks`; `gh run list`, `gh run view`, `gh run download`; `gh repo view`;
 - `gh pr create --head <branch>` for an already published branch: the single state-changing exception; it opens a PR, merges nothing and writes to no branch. Without `--head`, `gh` may offer or perform a push of the branch itself;
-- work in the local copy: editing files, building, testing, `make test lint`;
+- work in the local copy: editing files, building, testing, `make test`;
 - `git` limited to `status`, `diff`, `log`, `show`, `add`, `commit`, `switch`, `branch` (without deleting), `fetch`.
 
 **Only with the maintainer's explicit confirmation in the current session** — everything else that changes the state of GitHub or the remote repository, and any other `git` command (including `reset`, `clean`, `checkout -- <file>`, `stash drop`, `branch -D`, `remote`, `config`, `tag`: they irreversibly destroy work or redirect a push), including:
@@ -31,7 +31,7 @@ Reaching the same result another way (a direct GitHub API request, another clien
 
 1. Branch from an up-to-date `main`: `<type>/<topic>`; types `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`. One topic, one PR.
 2. Test first (TDD): the test fails for the right reason, then the code. A bug fix starts with a test that reproduces it.
-3. `make test lint` is green locally → push the branch (with the maintainer's confirmation) → `gh pr create --head <branch>`.
+3. `make test` (every check, the linter included) is green locally → push the branch (with the maintainer's confirmation) → `gh pr create --head <branch>`.
 4. The PR title becomes the commit title on `main`: `<type>(<scope>)[!]: <description>`, English, printable ASCII only, at most 70 characters, no `#<number>`. Mark an incompatible change (commands, flags, config keys, the state schema) with `!` after the scope: `feat(config)!: rename remotes key`; the next version depends on the marker. The scope is required with `!` too.
 5. Code, comments, commits and PR titles are in English; documents are in Russian and English at the same time, with the same meaning.
 6. A new direct dependency, and any change to `.github/`, `scripts/`, `Makefile`, `.goreleaser.yaml`, `docs/release-notes-header*.md`, `go.mod`, `go.sum`, goes in its own PR with an explanation in the description: the maintainer checks that the CI and release checks are not weakened (`.goreleaser.yaml` and the release-notes header run inside the release job).
