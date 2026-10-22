@@ -1,17 +1,5 @@
-# Release: a tag v* pushed by the maintainer (scripts/release.sh) builds a draft
-# GitHub Release.
-#
-# - The workflow never creates tags: the token of a job cannot (the tag ruleset
-#   allows only the repository admin), and there is no secret in the repository.
-# - verify checks the commit; build has the write permissions and runs only
-#   after verify. No cache is used in either job: a cache could be poisoned
-#   by another workflow.
-# - checkout never keeps the credentials (persist-credentials: false): nothing
-#   is pushed through git; the draft Release is created through the API with
-#   the token from env:.
-# - No value from the event (the tag name included) is put into a shell script.
-# - Every third-party action is pinned to a full commit SHA with its release
-#   version in a comment (scripts/check-repo.sh fails otherwise).
+# A tag v* pushed by scripts/release.sh builds a draft GitHub Release. Every
+# step runs one Makefile target. No caches: they could be poisoned.
 name: release
 
 on:
@@ -31,7 +19,6 @@ jobs:
     permissions:
       contents: read
     steps:
-      # The whole history and the tags: the merge-base check below needs them.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -40,35 +27,25 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      # A tag on a commit of a side branch is not released: the draft would
-      # carry code that never went through a pull request into main.
-      - name: The tagged commit is on main
-        run: |
-          git fetch origin main
-          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - name: The library is a tag, not a pseudo-version
-        run: bash scripts/check-release-deps.sh
-      - name: Test
-        run: go test -race -shuffle=on -count=1 ./...
-      # Blocking here, unlike the scheduled run in ci.yml: a release must not
-      # ship a reachable known vulnerability.
+      - name: Tag on main, library by a tag
+        run: make release-verify
+      - name: Vet
+        run: make vet
+      - name: Tests and coverage
+        run: make cover
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+        run: make vuln
 
   build:
     needs: verify
     runs-on: macos-15
     timeout-minutes: 60
-    # The environment holds no secrets; a required reviewer is added when a
-    # second developer appears.
     environment: release
     permissions:
-      contents: write # the draft GitHub Release and its files
-      id-token: write # the OIDC token for the attestation
-      attestations: write # storing the attestation
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      # The whole history and the tags: the change list is built from the
-      # commits between two tags.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -77,14 +54,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      # Both slices, lipo, the ad-hoc signature, the archive, checksums.txt, the
-      # change list, and the draft Release with the files, in one run.
       - name: Build and create the draft Release
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: make release
-      # The subject of the attestation is the archive listed in checksums.txt,
-      # not checksums.txt itself: "gh attestation verify <archive>" works by it.
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

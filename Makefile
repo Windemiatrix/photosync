@@ -1,17 +1,11 @@
 dummy := $(shell touch .env)
 include .env
-# golangci-lint is built from source by "go run" with the Go toolchain from
-# go.mod and verified through the Go checksum database. Bump the version here only.
 GOLANGCI_LINT_VERSION ?= v2.15.0
-# GoReleaser is run the same way. Bump the version here only.
+ACTIONLINT_VERSION ?= v1.7.12
+GOVULNCHECK_VERSION ?= v1.9.0
 GORELEASER_VERSION ?= v2.18.3
-# Extra flags for "make release", for example GORELEASER_FLAGS=--skip=publish to
-# build the release notes on a temporary local tag without a token.
 GORELEASER_FLAGS ?=
 GORELEASER = go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
-# Private anonymizer inputs, set in .env (never committed): the manual-sync
-# materials and the fixtures built from them. Without them the checks on real
-# data are skipped.
 ANONYMIZE_IN ?=
 ANONYMIZE_OUT ?=
 export
@@ -25,17 +19,21 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: test
-test: unit lint check-repo release-check fixtures-check fixtures-verify ## Run every local check (before a PR)
+test: mod vet cover lint check-repo release-snapshot fixtures-check fixtures-verify ## Run every check (before a PR)
 
-.PHONY: unit
-unit: ## Vet and run all tests with the race detector
+.PHONY: mod
+mod: ## go.mod is tidy and the modules match go.sum
+	go mod tidy -diff
+	go mod verify
+
+.PHONY: vet
+vet: ## go vet, the fixtures_verify build tag included
 	go vet ./...
 	go vet -tags fixtures_verify ./tools/anonymize
-	go test -race -shuffle=on -count=1 ./...
 
 .PHONY: cover
-cover: ## Run tests with coverage and check the thresholds
-	go test -race -shuffle=on -covermode=atomic -coverprofile=coverage.out ./...
+cover: ## Tests with the race detector and the coverage thresholds
+	go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
 	bash scripts/check-coverage.sh coverage.out
 
 .PHONY: lint
@@ -49,42 +47,49 @@ fmt: ## Format the code
 ##@ Checks
 
 .PHONY: check-repo
-check-repo: ## Repository hygiene checks (the repo-checks CI job without actionlint)
+check-repo: ## Repository hygiene checks and actionlint
 	bash scripts/check-repo.sh
+	go run github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT_VERSION)
+
+.PHONY: vuln
+vuln: ## Known vulnerabilities in dependencies (not in "make test")
+	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 .PHONY: fixtures-check
-fixtures-check: ## Scan testdata/fixtures for leaks (skipped while there are none)
+fixtures-check: ## Leak scan of testdata/fixtures
 	@if [ -d testdata/fixtures ]; then go run ./tools/anonymize --check testdata/fixtures; \
 	else echo "fixtures-check: no testdata/fixtures, skipped"; fi
 
-# The anonymizer output on the private materials: the same pairs and levels
-# before and after, no input word of 4+ letters in the fixtures, and a digest
-# of at most 30 anonymized records to read. Prints aggregates only.
 .PHONY: fixtures-verify
-fixtures-verify: ## Check the anonymizer on the private materials (needs ANONYMIZE_IN and ANONYMIZE_OUT in .env)
+fixtures-verify: ## Anonymizer check on the private materials (ANONYMIZE_IN, ANONYMIZE_OUT in .env)
 	@if [ -z "$(ANONYMIZE_IN)" ] || [ -z "$(ANONYMIZE_OUT)" ]; then \
 		echo "fixtures-verify: ANONYMIZE_IN or ANONYMIZE_OUT not set, skipped"; \
 	else go test -tags fixtures_verify -count=1 -v -run 'TestFixtures' ./tools/anonymize \
 		-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.out="$(ANONYMIZE_OUT)"; fi
 
+##@ CI
+
+.PHONY: pr-title
+pr-title: ## PR_TITLE follows the title convention
+	bash scripts/check-pr-title.sh
+
+.PHONY: ci-ok
+ci-ok: ## Every job in NEEDS passed or was skipped
+	@printf '%s' "$$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+	@printf '%s' "$$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null
+
 ##@ Release
-
-# GoReleaser reads .goreleaser.yaml. The tag itself is made by scripts/release.sh.
-
-.PHONY: release-check
-release-check: ## Validate .goreleaser.yaml
-	$(GORELEASER) check
 
 .PHONY: release-snapshot
 release-snapshot: ## Build the release archive into dist/ without publishing
 	$(GORELEASER) release --snapshot --skip=publish --clean
 
-# The notes header is the Russian and the English file joined into one
-# temporary file. It must live outside the work tree (an untracked file would
-# make the git state dirty, and GoReleaser would refuse after the tag is
-# pushed) and outside dist/ (--clean empties it before the header is read), so
-# it goes under $RUNNER_TEMP in CI or the temporary directory locally, and is
-# removed afterwards whatever the result.
+.PHONY: release-verify
+release-verify: ## The tagged commit is on main and requires the library by a tag
+	git fetch origin main
+	git merge-base --is-ancestor HEAD origin/main
+	bash scripts/check-release-deps.sh
+
 .PHONY: release
 release: ## Build and create a draft GitHub Release for the current tag (needs GITHUB_TOKEN)
 	@header="$$(mktemp "$${RUNNER_TEMP:-$${TMPDIR:-/tmp}}/photosync-release-header.XXXXXX")" && \
