@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
@@ -163,16 +162,16 @@ func translate(stage string, err error, field string) *toolError {
 func closeQuietly(c io.Closer) { _ = c.Close() }
 
 // decodeFile decodes one JSON value of an input file and rejects trailing
-// data.
+// data. Every input is written by Python and read through nanFilter.
 func decodeFile(fsys fs.FS, name string, v any, stage, field string) error {
-	f, err := fsys.Open(name)
+	f, c, err := openJSON(fsys, name)
 	if err != nil {
 		return translate(stage, err, field)
 	}
-	defer closeQuietly(f)
-	dec := json.NewDecoder(bufio.NewReaderSize(f, 1<<20))
+	defer closeQuietly(c)
+	dec := json.NewDecoder(f)
 	if err := dec.Decode(v); err != nil {
-		return translate(stage, err, field)
+		return translateIn(fsys, name, stage, f, err, field)
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return fail(stage, kindTrailing)
@@ -180,26 +179,19 @@ func decodeFile(fsys fs.FS, name string, v any, stage, field string) error {
 	return nil
 }
 
-func readAll(fsys fs.FS, name, stage string) ([]byte, error) {
-	data, err := fs.ReadFile(fsys, name)
-	if err != nil {
-		return nil, translate(stage, err, "")
-	}
-	return data, nil
-}
-
 // readCatalog streams the catalog array element by element into the
 // whitelisted asset type; the file is never held in memory as a whole.
 func readCatalog(fsys fs.FS) ([]anon.Asset, error) {
-	f, err := fsys.Open(nameCatalog)
+	f, c, err := openJSON(fsys, nameCatalog)
 	if err != nil {
 		return nil, translate(stageCatalog, err, "catalog")
 	}
-	defer closeQuietly(f)
-	dec := json.NewDecoder(bufio.NewReaderSize(f, 1<<20))
+	defer closeQuietly(c)
+	bad := func(err error) error { return translateIn(fsys, nameCatalog, stageCatalog, f, err, "catalog") }
+	dec := json.NewDecoder(f)
 	tok, err := dec.Token()
 	if err != nil {
-		return nil, translate(stageCatalog, err, "catalog")
+		return nil, bad(err)
 	}
 	if d, ok := tok.(json.Delim); !ok || d != '[' {
 		return nil, fail(stageCatalog, kindWrongType("catalog"))
@@ -208,7 +200,7 @@ func readCatalog(fsys fs.FS) ([]anon.Asset, error) {
 	for n := 1; dec.More(); n++ {
 		var a anon.Asset
 		if err := dec.Decode(&a); err != nil {
-			return nil, translate(stageCatalog, err, "catalog")
+			return nil, bad(err)
 		}
 		if a.UUID == "" {
 			return nil, fail(stageCatalog, kindMissing("uuid", n))
@@ -216,7 +208,7 @@ func readCatalog(fsys fs.FS) ([]anon.Asset, error) {
 		out = append(out, a)
 	}
 	if _, err := dec.Token(); err != nil {
-		return nil, translate(stageCatalog, err, "catalog")
+		return nil, bad(err)
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return nil, fail(stageCatalog, kindTrailing)
@@ -333,25 +325,26 @@ func readLinks(fsys fs.FS) (anon.Links, error) {
 // and the first inventory that passes the partition check. It returns which
 // inventory was taken: "current" or "prev".
 func readMaterial(fsys fs.FS) (*anon.Material, string, error) {
-	reviewed, err := readAll(fsys, namePlan, stagePlan)
+	reviewed, rf, err := readJSON(fsys, namePlan, stagePlan)
 	if err != nil {
 		return nil, "", err
 	}
 	var plan anon.Plan
 	dec := json.NewDecoder(bytes.NewReader(reviewed))
 	if err := dec.Decode(&plan); err != nil {
-		return nil, "", translate(stagePlan, err, "plan")
+		return nil, "", translateIn(fsys, namePlan, stagePlan, rf, err, "plan")
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return nil, "", fail(stagePlan, kindTrailing)
 	}
-	rerun, err := readAll(fsys, nameRerunPlan, stageRerun)
+	rerun, ef, err := readJSON(fsys, nameRerunPlan, stageRerun)
 	if err != nil {
 		return nil, "", err
 	}
 	same, err := anon.SamePlan(reviewed, rerun)
 	if err != nil {
-		return nil, "", translate(stageRerun, err, "plan")
+		// The reviewed plan has just decoded: the error is in the rerun.
+		return nil, "", translateIn(fsys, nameRerunPlan, stageRerun, ef, err, "plan")
 	}
 	if !same {
 		return nil, "", fail(stageRerun, kindRerunDiffers)
