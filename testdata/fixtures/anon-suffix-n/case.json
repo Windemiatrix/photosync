@@ -1,0 +1,145 @@
+{
+ "format": 1,
+ "provenance": {
+  "kind": "real-anon",
+  "source": "manual-sync",
+  "expected": "reference-run",
+  "category": "suffix-n"
+ },
+ "icloud": [],
+ "cloud": [
+  {
+   "path": "2040/09-22/Ъчэл юд ыжжê (2).jpg",
+   "kind": "photos_ok",
+   "size": 3073754,
+   "date_taken": "2040-09-22T18:04:07",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000036b7ff9468e058c4e3e1770d01109378"
+  },
+  {
+   "path": "2040/09-22/Ъчэл юд ыжжê (3).jpg",
+   "kind": "photos_ok",
+   "size": 3491517,
+   "date_taken": "2040-09-22T18:04:41",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000004370e73091e89dc4c194c226187acaf1"
+  },
+  {
+   "path": "2040/09-22/Ъчэл юд ыжжê (4).jpg",
+   "kind": "photos_ok",
+   "size": 3242292,
+   "date_taken": "2040-09-22T18:05:40",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000a3d4915138ee6d424c8bfc69c981bc1d"
+  },
+  {
+   "path": "2040/09-22/Ъчэл юд ыжжê.jpg",
+   "kind": "photos_ok",
+   "size": 3264784,
+   "date_taken": "2040-09-22T18:03:36",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000d10491595a8bb3c439b4dc4009a2506c"
+  },
+  {
+   "path": "2040/09-22/Ъчэл юд ыжжê (2).jpg",
+   "kind": "photos_ok",
+   "size": 3073754,
+   "date_taken": "2040-09-22T18:04:07",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000036b7ff9468e058c4e3e1770d01109378"
+  },
+  {
+   "path": "2040/09-22/Ъчэл юд ыжжê (3).jpg",
+   "kind": "photos_ok",
+   "size": 3491517,
+   "date_taken": "2040-09-22T18:04:41",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000004370e73091e89dc4c194c226187acaf1"
+  },
+  {
+   "path": "2040/09-22/Ъчэл юд ыжжê (4).jpg",
+   "kind": "photos_ok",
+   "size": 3242292,
+   "date_taken": "2040-09-22T18:05:40",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000a3d4915138ee6d424c8bfc69c981bc1d"
+  },
+  {
+   "path": "2040/09-22/Ъчэл юд ыжжê.jpg",
+   "kind": "photos_ok",
+   "size": 3264784,
+   "date_taken": "2040-09-22T18:03:36",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000d10491595a8bb3c439b4dc4009a2506c"
+  },
+  {
+   "path": "2040/10-04/У цхпщюят (2).jpg",
+   "kind": "photos_ok",
+   "size": 3350121,
+   "date_taken": "2040-10-04T14:28:00",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000bde7bdb628caf65746e5499afcb66af5"
+  },
+  {
+   "path": "2040/10-04/У цхпщюят.jpg",
+   "kind": "photos_ok",
+   "size": 3303446,
+   "date_taken": "2040-10-04T14:27:37",
+   "width": 3072,
+   "height": 2304,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000dac9eccd5bc33b3120462839e5ba2783"
+  },
+  {
+   "path": "2049/05-13 - выызсé хбяы/ыыъжи/yivnn_6561-05-15_11-31-11 (2).jpg",
+   "kind": "photos_ok",
+   "size": 208121,
+   "date_taken": "",
+   "width": 1280,
+   "height": 960,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000d761f738c2d040bf3dd624aa07811554"
+  },
+  {
+   "path": "2049/05-13 - выызсé хбяы/ыыъжи/yivnn_6561-05-15_11-31-11.jpg",
+   "kind": "photos_ok",
+   "size": 209538,
+   "date_taken": "",
+   "width": 1280,
+   "height": 960,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000006138b15779b38ee44b90d31875c2ec63"
+  }
+ ],
+ "expected": []
+}

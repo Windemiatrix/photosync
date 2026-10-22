@@ -1,0 +1,354 @@
+{
+ "format": 1,
+ "provenance": {
+  "kind": "real-anon",
+  "source": "manual-sync",
+  "expected": "reference-run",
+  "category": "ext-case"
+ },
+ "icloud": [
+  {
+   "uuid": "00000000-9F02-867B-A776-D7CFBB2B5B3C",
+   "original_filename": "IMG_7273.DNG",
+   "filename": "00000000-9F02-867B-A776-D7CFBB2B5B3C.dng",
+   "date": "2054-12-03T12:21:27.447000+03:00",
+   "tzoffset": 10800,
+   "original_filesize": 42685537,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": true,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2054"
+     ],
+     "title": "12/03 юсдхшфцом ьяхм с чуслгуоá"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-460C-80A4-BE62-C1CB1FEE858A",
+   "original_filename": "IMG_9432.DNG",
+   "filename": "00000000-460C-80A4-BE62-C1CB1FEE858A.dng",
+   "date": "2054-12-09T14:59:10.658000+03:00",
+   "tzoffset": 10800,
+   "original_filesize": 38868880,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": true,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2054"
+     ],
+     "title": "12/09 пшпаы, пфтлццгдфн"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-3C29-8B0C-BB77-A5C33F04DB49",
+   "original_filename": "IMG_1160.DNG",
+   "filename": "00000000-3C29-8B0C-BB77-A5C33F04DB49.dng",
+   "date": "2054-12-12T08:53:18.132000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 32045270,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": true,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-D306-885B-8AB3-D805E706AD26",
+   "original_filename": "IMG_3976.DNG",
+   "filename": "00000000-D306-885B-8AB3-D805E706AD26.dng",
+   "date": "2054-12-18T14:04:17.271000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 43710324,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": true,
+   "live_photo": false,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": true,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-0A1A-8BD1-93B5-D329EE3C1297",
+   "original_filename": "IMG_1098.MOV",
+   "filename": "00000000-0A1A-8BD1-93B5-D329EE3C1297.mov",
+   "date": "2054-12-31T18:01:47+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 104854059,
+   "original_width": 3840,
+   "original_height": 2160,
+   "width": 3840,
+   "height": 2160,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": true,
+   "has_raw": false,
+   "israw": false,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": []
+  },
+  {
+   "uuid": "00000000-E1A0-8313-9E18-F8DF5FED0C83",
+   "original_filename": "IMG_6191.DNG",
+   "filename": "00000000-E1A0-8313-9E18-F8DF5FED0C83.dng",
+   "date": "2055-09-13T09:43:16.186000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 48066608,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": true,
+   "live_photo": false,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": true,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-4A92-8DC0-AF53-4941696DA4B6",
+   "original_filename": "IMG_5177.DNG",
+   "filename": "00000000-4A92-8DC0-AF53-4941696DA4B6.dng",
+   "date": "2055-09-13T09:46:57.907000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 49662063,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": true,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  },
+  {
+   "uuid": "00000000-C4E0-8473-8FD6-0FEAF114CC63",
+   "original_filename": "IMG_0956.DNG",
+   "filename": "00000000-C4E0-8473-8FD6-0FEAF114CC63.dng",
+   "date": "2055-09-13T10:06:53.361000+06:00",
+   "tzoffset": 21600,
+   "original_filesize": 48731864,
+   "original_width": 4032,
+   "original_height": 3024,
+   "width": 4032,
+   "height": 3024,
+   "hasadjustments": false,
+   "live_photo": false,
+   "ismovie": false,
+   "has_raw": false,
+   "israw": true,
+   "burst": false,
+   "burst_key": false,
+   "burst_photos": [],
+   "album_info": [
+    {
+     "folder_names": [
+      "2055"
+     ],
+     "title": "09/13 жшыафгд, пфтлццгдфн"
+    }
+   ]
+  }
+ ],
+ "cloud": [
+  {
+   "path": "2054/12-03 - гнелюъп/IMG_7273.dng",
+   "kind": "photos_ok",
+   "size": 42685537,
+   "date_taken": "2054-12-03T12:21:27.447",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000003fa29479d45e822b428751a27ed38838"
+  },
+  {
+   "path": "2054/12-10 - пфтлццгдфн/IMG_9432.dng",
+   "kind": "photos_ok",
+   "size": 38868880,
+   "date_taken": "2054-12-09T14:59:10.658",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000006d510619f69589d4597eb4561e56efb1"
+  },
+  {
+   "path": "2054/12-12 - оезсвëи/IMG_1160.dng",
+   "kind": "photos_ok",
+   "size": 32045270,
+   "date_taken": "2054-12-12T08:53:18.132",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000f31d5badbcefdfffb97249d7b1b736d8"
+  },
+  {
+   "path": "2054/12-18 - шсьш/IMG_3976.dng",
+   "kind": "photos_ok",
+   "size": 43710324,
+   "date_taken": "2054-12-18T14:04:17.271",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "000000004cd6bbd3a950bd3675d69f99f93d0e5a"
+  },
+  {
+   "path": "2054/12-31 - луцбюлэд итъщэж/IMG_1098.mov",
+   "kind": "photos_ok",
+   "size": 104854059,
+   "date_taken": "",
+   "width": 0,
+   "height": 0,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000078c5e303cb106c4749ab7dd39248458e"
+  },
+  {
+   "path": "2055/09-13 - шзрлэоъ, пфтлццгдфн/IMG_6191.dng",
+   "kind": "photos_ok",
+   "size": 8067080,
+   "date_taken": "2055-09-13T09:43:16.186",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000082fdca533c5007a81bc17364bbdba77b"
+  },
+  {
+   "path": "2055/09-13 - шзрлэоъ, пфтлццгдфн/IMG_5177.dng",
+   "kind": "photos_ok",
+   "size": 49662063,
+   "date_taken": "2055-09-13T09:46:57.907",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "0000000076c658c68c1be755f44f12d0ec8574dc"
+  },
+  {
+   "path": "2055/09-13 - шзрлэоъ, пфтлццгдфн/IMG_0956.dng",
+   "kind": "photos_ok",
+   "size": 48731864,
+   "date_taken": "2055-09-13T10:06:53.361",
+   "width": 4032,
+   "height": 3024,
+   "content_id": "",
+   "live_pair": "",
+   "sha1": "00000000647219df37daca6b066b5a71867828ed"
+  }
+ ],
+ "expected": [
+  {
+   "uuid": "00000000-9F02-867B-A776-D7CFBB2B5B3C",
+   "path": "2054/12-03 - гнелюъп/IMG_7273.dng",
+   "level": "exact",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-460C-80A4-BE62-C1CB1FEE858A",
+   "path": "2054/12-10 - пфтлццгдфн/IMG_9432.dng",
+   "level": "exact",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-3C29-8B0C-BB77-A5C33F04DB49",
+   "path": "2054/12-12 - оезсвëи/IMG_1160.dng",
+   "level": "exact",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-D306-885B-8AB3-D805E706AD26",
+   "path": "2054/12-18 - шсьш/IMG_3976.dng",
+   "level": "exact",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-0A1A-8BD1-93B5-D329EE3C1297",
+   "path": "2054/12-31 - луцбюлэд итъщэж/IMG_1098.mov",
+   "level": "exact",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-E1A0-8313-9E18-F8DF5FED0C83",
+   "path": "2055/09-13 - шзрлэоъ, пфтлццгдфн/IMG_6191.dng",
+   "level": "same_shot",
+   "plan": "replace"
+  },
+  {
+   "uuid": "00000000-4A92-8DC0-AF53-4941696DA4B6",
+   "path": "2055/09-13 - шзрлэоъ, пфтлццгдфн/IMG_5177.dng",
+   "level": "exact",
+   "plan": ""
+  },
+  {
+   "uuid": "00000000-C4E0-8473-8FD6-0FEAF114CC63",
+   "path": "2055/09-13 - шзрлэоъ, пфтлццгдфн/IMG_0956.dng",
+   "level": "exact",
+   "plan": ""
+  }
+ ]
+}
