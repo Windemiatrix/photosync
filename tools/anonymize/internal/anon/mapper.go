@@ -479,7 +479,7 @@ func (m *Mapper) Date(s string) (string, error) {
 	return y + s[4:], nil
 }
 
-// ID maps an identifier (uuid, burst_key, content_id) case-insensitively. A
+// ID maps an identifier (uuid, burst_photos, content_id) case-insensitively. A
 // UUID becomes 00000000-XXXX-8XXX-YXXX-XXXXXXXXXXXX, anything else becomes
 // 00000000 and 24 hex digits; the case of the hex digits follows the input.
 func (m *Mapper) ID(s string) (string, error) {
@@ -566,8 +566,14 @@ func (m *Mapper) Asset(a Asset) (Asset, error) {
 		return Asset{}, err
 	}
 	out.OriginalFilesize = m.Size(a.OriginalFilesize)
-	if out.BurstKey, err = m.ID(a.BurstKey); err != nil {
-		return Asset{}, err
+	// Every UUID of burst_photos is mapped in place, also one outside the set:
+	// it maps as the UUID of that photo does, so the burst stays one group.
+	// The order is kept: a sorted image would order by the pseudonyms.
+	out.BurstPhotos = make([]string, len(a.BurstPhotos))
+	for i, u := range a.BurstPhotos {
+		if out.BurstPhotos[i], err = m.ID(u); err != nil {
+			return Asset{}, err
+		}
 	}
 	out.Albums = make([]AlbumRef, len(a.Albums))
 	for i, al := range a.Albums {

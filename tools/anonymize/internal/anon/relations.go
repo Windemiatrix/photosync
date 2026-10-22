@@ -23,11 +23,11 @@ type Violation struct {
 // folders, Live, RAW, bursts, duplicates).
 const (
 	RelShape      = "shape"       // the image has other records
-	RelFields     = "fields"      // 1: extension, kind, frame size, tzoffset, flags, live_pair
+	RelFields     = "fields"      // 1: extension, kind, frame size, tzoffset, flags, burst_photos count, live_pair
 	RelDate       = "date"        // 2: shift, form and fraction of dates and of the 1970 fix
 	RelFolderInfo = "folder_info" // 3: year, event month and day of the folder
 	RelStrings    = "strings"     // 4: emptiness, ASCII, NFC, "/" count, " (N)" and "_edited" tails
-	RelIDs        = "ids"         // 5: uuid, path, content_id, burst_key, sha1 partitions
+	RelIDs        = "ids"         // 5: uuid (with burst_photos), burst group, path, content_id, sha1 partitions
 	RelNames      = "names"       // 6: name and stem partitions of assets and files together
 	RelFolders    = "folders"     // 7: folder, (folder, stem) and neighbor key partitions of files
 	RelAlbums     = "albums"      // 8: album keys of assets and of file folders together
@@ -148,7 +148,8 @@ func (r relations) records(orig *Set, assets []Asset, files []File) {
 		if !extSame(o.OriginalFilename, i.OriginalFilename) || !extSame(o.Filename, i.Filename) ||
 			o.OriginalWidth != i.OriginalWidth || o.OriginalHeight != i.OriginalHeight || o.Width != i.Width || o.Height != i.Height ||
 			o.TZOffset != i.TZOffset || o.InTrash != i.InTrash || o.HasAdjustments != i.HasAdjustments || o.LivePhoto != i.LivePhoto ||
-			o.IsMovie != i.IsMovie || o.HasRaw != i.HasRaw || o.IsRaw != i.IsRaw || o.Burst != i.Burst || !sameAlbumShape(o.Albums, i.Albums) {
+			o.IsMovie != i.IsMovie || o.HasRaw != i.HasRaw || o.IsRaw != i.IsRaw || o.Burst != i.Burst || o.BurstKeyPhoto != i.BurstKeyPhoto ||
+			len(o.BurstPhotos) != len(i.BurstPhotos) || !sameAlbumShape(o.Albums, i.Albums) {
 			r.c[RelFields]++
 		}
 		if !r.dateSame(o.Date, i.Date) || !r.fixSame(o, i) {
@@ -331,7 +332,14 @@ func (r relations) partitions(orig *Set, assets []Asset, files []File) {
 	for k, o := range orig.Assets {
 		i := assets[k]
 		ids[0].add(o.UUID, i.UUID)
-		ids[1].add(o.BurstKey, i.BurstKey)
+		ids[1].add(o.BurstGroup(), i.BurstGroup())
+		if len(o.BurstPhotos) == len(i.BurstPhotos) {
+			// The mapping keeps the order of burst_photos; each element maps
+			// as the UUID of that photo does.
+			for b := range o.BurstPhotos {
+				ids[0].add(o.BurstPhotos[b], i.BurstPhotos[b])
+			}
+		}
 		addNames(o.Name(), i.Name())
 		if sameAlbumShape(o.Albums, i.Albums) {
 			for a := range o.Albums {

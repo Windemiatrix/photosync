@@ -159,12 +159,24 @@ func corpusTable() ([]corpusAsset, []anon.File) {
 	a.HasRaw = true
 	add(a)
 
-	// A burst: two frames of one second.
-	burst := "9C3B2A10-4D5E-4F60-8172-83940A1B2C3D"
-	for i, n := range []string{"14", "15"} {
-		a = asset(n, fmt.Sprintf("IMG_140%d.JPG", i+1), fmt.Sprintf("2013-07-07T07:07:07.%d00000+03:00", 1+2*i), int64(1400000+i))
-		a.Burst, a.BurstKey = true, burst
-		add(a)
+	// A burst of three frames in the osxphotos shape: burst_key on the first,
+	// burst_photos with the UUIDs of the other frames. The third frame is in
+	// the trash: its UUID stays in burst_photos of the others.
+	var frames []anon.Asset
+	for i, n := range []string{"14", "15", "41"} {
+		frames = append(frames, asset(n, fmt.Sprintf("IMG_140%d.JPG", i+1), fmt.Sprintf("2013-07-07T07:07:07.%d00000+03:00", 1+2*i), int64(1400000+i)))
+	}
+	for i := range frames {
+		frames[i].Burst, frames[i].BurstKeyPhoto, frames[i].BurstPhotos = true, i == 0, []string{}
+		for j := range frames {
+			if j != i {
+				frames[i].BurstPhotos = append(frames[i].BurstPhotos, frames[j].UUID)
+			}
+		}
+	}
+	frames[2].InTrash = true
+	for _, f := range frames {
+		add(f)
 	}
 
 	// The same name in different years.
@@ -311,9 +323,7 @@ func writeCorpusWith(t *testing.T, dir string, opt corpusOptions) corpus {
 		m["intrash"] = ca.a.InTrash
 		catalog = append(catalog, m)
 		c.uuids = append(c.uuids, ca.a.UUID)
-		if ca.a.BurstKey != "" {
-			c.uuids = append(c.uuids, ca.a.BurstKey)
-		}
+		// burst_photos holds UUIDs of the catalog only: they are in c.uuids.
 		if y := ca.a.Date[:4]; y != "1970" {
 			years[y] = true
 		}

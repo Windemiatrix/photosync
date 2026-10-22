@@ -696,7 +696,7 @@ func groupsBurst(g *graph) [][]int {
 		if !g.isAsset(i) {
 			return "", false
 		}
-		k := g.asset(i).BurstKey
+		k := g.asset(i).BurstGroup()
 		return k, k != ""
 	})
 }

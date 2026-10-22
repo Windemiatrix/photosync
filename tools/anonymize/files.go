@@ -102,7 +102,7 @@ func init() {
 	for _, f := range []string{
 		"uuid", "original_filename", "filename", "date", "tzoffset", "original_filesize", "original_width",
 		"original_height", "width", "height", "intrash", "hasadjustments", "live_photo", "ismovie", "has_raw",
-		"israw", "burst", "burst_key", "album_info", "album_info.folder_names", "album_info.title",
+		"israw", "burst", "burst_key", "burst_photos", "album_info", "album_info.folder_names", "album_info.title",
 		"files", "files.path", "files.kind", "files.size", "files.date_taken", "files.content_id",
 		"files.live_pair", "files.sha1", "files.stem", "files.folder", "files.year", "files.event_month",
 		"download", "download.uuid", "upload", "upload.path", "replace", "replace.uuid", "replace.yandex_path",

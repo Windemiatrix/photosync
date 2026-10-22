@@ -117,9 +117,15 @@ func categoryCases() []categoryCase {
 	live.LivePhoto = true
 	raw := a1
 	raw.HasRaw = true
-	burst := func(k1, k2 string) testMaterial {
+	burst := func(one bool) testMaterial {
 		b1, b2 := photo(1, "IMG_0001.HEIC", d, 1), photo(2, "IMG_0002.HEIC", d, 2)
-		b1.BurstKey, b2.BurstKey = k1, k2
+		if one {
+			burstOf(&b1, &b2)
+		} else {
+			// Two bursts whose other frames are not in the catalog.
+			b1.Burst, b1.BurstPhotos = true, []string{uuidN(3)}
+			b2.Burst, b2.BurstPhotos = true, []string{uuidN(4)}
+		}
 		b2.Date = "2023-07-14T18:03:29+03:00"
 		return testMaterial{assets: []Asset{b1, b2}}
 	}
@@ -165,7 +171,7 @@ func categoryCases() []categoryCase {
 		{"raw-pair", testMaterial{assets: []Asset{raw}}, exact},
 		{"raw-pair", fileOnly(cloudFile("2023/a/IMG_0001.DNG", "", 1), cloudFile("2023/a/IMG_0001.JPG", "", 1)),
 			fileOnly(cloudFile("2023/a/IMG_0001.DNG", "", 1), cloudFile("2023/b/IMG_0001.JPG", "", 1))},
-		{"burst", burst("K1", "K1"), burst("K1", "K2")},
+		{"burst", burst(true), burst(false)},
 		{"same-second", two(d, "2023-07-14T18:03:27.900+03:00"), two(d, "2023-07-14T18:03:28+03:00")},
 		{"stem-repeat", stems("2019-07-14T18:03:27+03:00"), stems("2023-01-01T00:00:00+03:00")},
 		{"suffix-n", fileOnly(cloudFile("2023/a/IMG_0001 (1).JPG", "", 1)), fileOnly(cloudFile("2023/a/IMG_0001(1).JPG", "", 1))},
@@ -226,7 +232,7 @@ func TestUnionCategoryPullsGroups(t *testing.T) {
 	t.Parallel()
 	d := "2023-07-14T18:03:27+03:00"
 	b1, b2 := photo(1, "IMG_0001.HEIC", d, 1), photo(2, "IMG_0002.HEIC", "2023-07-14T18:03:29+03:00", 2)
-	b1.BurstKey, b2.BurstKey = "K", "K"
+	burstOf(&b1, &b2)
 	f2 := cloudFile("2023/a/IMG_0002.HEIC", "", 2)
 	tm := testMaterial{assets: []Asset{b1, b2}, files: []File{f2, cloudFile("2023/a/IMG_0002.xmp", "", 1)},
 		links: Links{b2.UUID: {{f2.Path, LevelExact}}}}

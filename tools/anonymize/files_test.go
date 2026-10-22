@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 
 	"github.com/Windemiatrix/photosync/tools/anonymize/internal/anon"
 )
@@ -105,6 +106,44 @@ func TestReadMaterialFields(t *testing.T) {
 	}
 	if len(m.Links) == 0 || len(m.Plan.Download) == 0 || len(m.Plan.Conflicts) == 0 {
 		t.Errorf("links %d, plan %+v", len(m.Links), m.Plan)
+	}
+}
+
+// TestReadCatalogOsxphotosShape decodes records in the shape of osxphotos
+// query --json: burst_key is a bool, burst_photos lists the other frames,
+// fields that are never decoded (burst_albums, burst_default_pick, ...) are
+// skipped, and every decoded field upstream can write as null decodes as
+// the zero value.
+func TestReadCatalogOsxphotosShape(t *testing.T) {
+	t.Parallel()
+	catalog := `[
+ {"uuid": "A1", "burst": true, "burst_key": true, "burst_photos": ["B2", "C3"], "burst_default_pick": true,
+  "burst_selected": false, "burst_albums": ["x"], "burst_album_info": [{"uuid": "x", "title": "x"}],
+  "tzoffset": 10800, "original_filesize": 5, "date": "2023-07-14T18:03:27.455000+03:00",
+  "album_info": [{"uuid": "x", "title": "T", "folder_names": ["2023"], "folder_list": ["y"], "sort_order": 0, "parent": null}]},
+ {"uuid": "D4", "burst": false, "burst_key": false, "burst_photos": [], "tzoffset": null, "original_filesize": null,
+  "original_filename": null, "filename": "D4.heic", "width": null, "height": null, "original_width": null,
+  "original_height": null, "album_info": [{"title": null, "folder_names": []}]}
+]`
+	got, err := readCatalog(fstest.MapFS{nameCatalog: {Data: []byte(catalog)}})
+	if err != nil {
+		t.Fatalf("readCatalog: %v", err)
+	}
+	want := []anon.Asset{
+		{UUID: "A1", Burst: true, BurstKeyPhoto: true, BurstPhotos: []string{"B2", "C3"}, TZOffset: 10800, OriginalFilesize: 5,
+			Date: "2023-07-14T18:03:27.455000+03:00", Albums: []anon.AlbumRef{{FolderNames: []string{"2023"}, Title: "T"}}},
+		{UUID: "D4", BurstPhotos: []string{}, Filename: "D4.heic", Albums: []anon.AlbumRef{{FolderNames: []string{}}}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("readCatalog = %+v; want %+v", got, want)
+	}
+	if got[0].BurstGroup() != "A1" || got[1].BurstGroup() != "" {
+		t.Errorf("burst groups %q, %q", got[0].BurstGroup(), got[1].BurstGroup())
+	}
+	// The former string form of burst_key is a type error naming the field.
+	_, err = readCatalog(fstest.MapFS{nameCatalog: {Data: []byte(`[{"uuid": "A1", "burst_key": "B"}]`)}})
+	if err == nil || err.Error() != "read catalog: wrong type in field burst_key" {
+		t.Errorf("string burst_key: %v", err)
 	}
 }
 

@@ -238,7 +238,7 @@ func mapValues(m map[string][]byte) [][]byte {
 func TestOutputFieldsAndDates(t *testing.T) {
 	t.Parallel()
 	_, out, c, _, _ := buildCorpus(t, leakSalt)
-	wantKeys := []string{"album_info", "burst", "burst_key", "date", "filename", "has_raw", "hasadjustments", "height",
+	wantKeys := []string{"album_info", "burst", "burst_key", "burst_photos", "date", "filename", "has_raw", "hasadjustments", "height",
 		"ismovie", "israw", "live_photo", "original_filename", "original_filesize", "original_height", "original_width",
 		"tzoffset", "uuid", "width"}
 	years := map[string]bool{}
@@ -351,7 +351,10 @@ func TestOtherSalt(t *testing.T) {
 	var ids [][2]string
 	sizes, sizesDiff := 0, 0
 	for i := range s1.Assets {
-		ids = append(ids, [2]string{s1.Assets[i].UUID, s2.Assets[i].UUID}, [2]string{s1.Assets[i].BurstKey, s2.Assets[i].BurstKey})
+		ids = append(ids, [2]string{s1.Assets[i].UUID, s2.Assets[i].UUID})
+		for b := range s1.Assets[i].BurstPhotos {
+			ids = append(ids, [2]string{s1.Assets[i].BurstPhotos[b], s2.Assets[i].BurstPhotos[b]})
+		}
 		if set.Assets[i].OriginalFilesize > 0 {
 			sizes++
 			if s1.Assets[i].OriginalFilesize != s2.Assets[i].OriginalFilesize {

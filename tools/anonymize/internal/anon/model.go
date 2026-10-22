@@ -5,11 +5,17 @@
 // command in the parent directory reads and writes the files.
 package anon
 
-import "unicode"
+import (
+	"strings"
+	"unicode"
+)
 
 // Asset is one element of the Photos catalog (osxphotos query --json); field
-// names are kept so that a case's icloud records are a subset of that format.
-// Fields outside this whitelist are never decoded.
+// names and JSON types are kept so that a case's icloud records are a subset
+// of that format. Fields outside this whitelist are never decoded; a null
+// decodes as the zero value. burst_key is true on the key photo of a burst;
+// burst_photos lists the UUIDs of the other photos of the same burst (empty
+// when not a burst).
 type Asset struct {
 	UUID             string     `json:"uuid"`
 	OriginalFilename string     `json:"original_filename"`
@@ -28,8 +34,25 @@ type Asset struct {
 	HasRaw           bool       `json:"has_raw"`
 	IsRaw            bool       `json:"israw"`
 	Burst            bool       `json:"burst"`
-	BurstKey         string     `json:"burst_key"`
+	BurstKeyPhoto    bool       `json:"burst_key"`
+	BurstPhotos      []string   `json:"burst_photos"`
 	Albums           []AlbumRef `json:"album_info"`
+}
+
+// BurstGroup returns the key of the burst of an asset: the smallest UUID of
+// the asset and its burst_photos (upper case), or "" when not a burst. Every
+// photo of one burst gets the same key.
+func (a Asset) BurstGroup() string {
+	if !a.Burst {
+		return ""
+	}
+	k := strings.ToUpper(a.UUID)
+	for _, u := range a.BurstPhotos {
+		if u = strings.ToUpper(u); u < k {
+			k = u
+		}
+	}
+	return k
 }
 
 // AlbumRef is one album of an asset: the folder path and the title.

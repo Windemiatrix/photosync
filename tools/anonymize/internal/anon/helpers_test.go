@@ -111,6 +111,19 @@ func photo(n int, name, date string, size int64) Asset {
 		OriginalFilesize: size, OriginalWidth: 4032, OriginalHeight: 3024, Width: 4032, Height: 3024, Albums: []AlbumRef{}}
 }
 
+// burstOf makes the assets one burst in the osxphotos shape: burst on every
+// frame, burst_key on the first, burst_photos with the UUIDs of the others.
+func burstOf(as ...*Asset) {
+	for i, a := range as {
+		a.Burst, a.BurstKeyPhoto, a.BurstPhotos = true, i == 0, []string{}
+		for j, b := range as {
+			if j != i {
+				a.BurstPhotos = append(a.BurstPhotos, b.UUID)
+			}
+		}
+	}
+}
+
 func cloudFile(path, date string, size int64) File {
 	return File{Path: path, Kind: KindOf(BaseName(path)), Size: size, DateTaken: date, Width: 4032, Height: 3024}
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"sort"
 	"strconv"
@@ -564,16 +565,26 @@ func TestMapperAssetAndFile(t *testing.T) {
 	t.Parallel()
 	m := newTestMapper(t)
 	a := photo(1, "IMG_4821.HEIC", "2023-07-14T18:03:27.455000+03:00", 2734118)
-	a.LivePhoto, a.BurstKey = true, "BURST-1"
+	a.LivePhoto, a.Burst, a.BurstKeyPhoto, a.BurstPhotos = true, true, true, []string{uuidN(3), uuidN(2)}
 	a.Albums = []AlbumRef{{FolderNames: []string{"2023"}, Title: "07/14 Мырдон"}}
 	ma, err := m.Asset(a)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ma.UUID == a.UUID || ma.Filename != ma.UUID+".heic" || !ma.LivePhoto || ma.TZOffset != a.TZOffset ||
-		ma.OriginalWidth != a.OriginalWidth || ma.OriginalFilesize <= a.OriginalFilesize || ma.BurstKey == a.BurstKey ||
+		ma.OriginalWidth != a.OriginalWidth || ma.OriginalFilesize <= a.OriginalFilesize || !ma.BurstKeyPhoto ||
 		ma.Albums[0].FolderNames[0] != shifted(m, 2023) {
 		t.Errorf("Asset = %+v", ma)
+	}
+	// burst_photos: mapped in place as the UUIDs of those photos map, also
+	// outside the set.
+	id2, _ := m.ID(uuidN(2))
+	id3, _ := m.ID(uuidN(3))
+	if !reflect.DeepEqual(ma.BurstPhotos, []string{id3, id2}) || id2 == uuidN(2) || !markerUUIDRE.MatchString(id3) {
+		t.Errorf("burst_photos = %v", ma.BurstPhotos)
+	}
+	if nb, err := m.Asset(photo(5, "IMG_0005.HEIC", "2023-07-14T18:03:27+03:00", 1)); err != nil || nb.BurstPhotos == nil || len(nb.BurstPhotos) != 0 {
+		t.Errorf("burst_photos of a single photo = %#v, %v", nb.BurstPhotos, err)
 	}
 	f := cloudFile("2023/07-14 - Мырдон/IMG_4821.HEIC", "2023-07-14T18:03:27.455", 2734118)
 	f.ContentID, f.LivePair, f.SHA1 = "91C38A0E-B2D4-4F1A-9E3C-5B706F1A9E3C", LivePairCID, "da39a3ee5e6b4b0d3255bfef95601890afd80709"

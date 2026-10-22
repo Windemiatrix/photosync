@@ -18,12 +18,12 @@ func relationSet() *Set {
 	a0.LivePhoto = true
 	a0.Albums = []AlbumRef{{FolderNames: []string{"2023"}, Title: "07/14 Мырдон"}}
 	a1 := photo(2, "PXL_20210305_101112345.jpg", "1970-01-01T03:00:00+03:00", 1000)
-	a1.BurstKey, a1.Burst = "B2", true
+	// A burst whose other frame is not in the set.
+	a1.Burst, a1.BurstPhotos = true, []string{uuidN(9)}
 	a2 := photo(3, "IMG_0001.HEIC", "2019-12-31T23:59:59+03:00", 5000)
 	a2.Albums = []AlbumRef{{FolderNames: []string{"2019"}, Title: "12/31 НГ"}, {FolderNames: []string{}, Title: "Путешествия / Море"}}
-	a2.BurstKey, a2.Burst = "B1", true
 	a3 := photo(4, "IMG_0001.JPG", "2019-12-31T23:59:59.5+03:00", 4000)
-	a3.BurstKey, a3.Burst = "B1", true
+	burstOf(&a2, &a3)
 	a3.Albums = []AlbumRef{{FolderNames: []string{}, Title: "Семья / Лето"}, {FolderNames: []string{}, Title: "Family"}}
 	f0 := cloudFile("2023/07-14 - Мырдон/IMG_4821.HEIC", "2023-07-14T18:03:27.455", 2734118)
 	f0.ContentID, f0.LivePair, f0.SHA1 = "C1", LivePairCID, "aa11"
@@ -111,7 +111,8 @@ func TestCheckRelationsBreakers(t *testing.T) {
 	}{
 		{"extension case", func(_, img *Set) { img.Files[6].Path = strings.TrimSuffix(img.Files[6].Path, ".xmp") + ".XMP" }, []string{RelFields}, false},
 		{"live flag", func(_, img *Set) { img.Assets[0].LivePhoto = false }, []string{RelFields}, false},
-		{"burst flag", func(_, img *Set) { img.Assets[1].Burst = false }, []string{RelFields}, false},
+		// The burst group derives from the flag: it is lost with it.
+		{"burst flag", func(_, img *Set) { img.Assets[1].Burst = false }, []string{RelFields, RelIDs}, false},
 		{"has_raw flag", func(_, img *Set) { img.Assets[0].HasRaw = true }, []string{RelFields}, false},
 		{"ismovie flag", func(_, img *Set) { img.Assets[2].IsMovie = true }, []string{RelFields}, false},
 		{"live_pair dropped", func(_, img *Set) { img.Files[0].LivePair = "" }, []string{RelFields}, false},
@@ -167,7 +168,12 @@ func TestCheckRelationsBreakers(t *testing.T) {
 			img.Files[6].Path = FolderOf(img.Files[6].Path) + "/Жqrst.xmp"
 		}, []string{RelStrings}, false},
 		{"tzoffset changed", func(_, img *Set) { img.Assets[0].TZOffset = 0 }, []string{RelFields}, false},
-		{"two burst keys gave one", func(_, img *Set) { img.Assets[1].BurstKey = img.Assets[2].BurstKey }, []string{RelIDs}, false},
+		{"two burst groups gave one", func(_, img *Set) { img.Assets[1].BurstPhotos = []string{img.Assets[2].UUID} }, []string{RelIDs}, false},
+		{"burst_photos element changed", func(_, img *Set) {
+			img.Assets[2].BurstPhotos = []string{"00000000-0000-8000-8000-000000000000"}
+		}, []string{RelIDs}, false},
+		{"burst_photos element dropped", func(_, img *Set) { img.Assets[1].BurstPhotos = []string{} }, []string{RelFields}, false},
+		{"burst_key flag", func(_, img *Set) { img.Assets[2].BurstKeyPhoto = false }, []string{RelFields}, false},
 		{"two SHA-1 gave one", func(_, img *Set) { img.Files[0].SHA1 = img.Files[3].SHA1 }, []string{RelIDs}, false},
 		{"SHA-1 duplicate split", func(_, img *Set) {
 			img.Files[7].SHA1 = "00000000" + strings.Repeat("f", 32)

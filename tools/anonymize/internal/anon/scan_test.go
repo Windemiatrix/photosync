@@ -34,7 +34,8 @@ func TestScanAllowedForms(t *testing.T) {
  "provenance": {"kind": "real-anon", "source": "manual-sync", "expected": "reference-run", "category": "anon-level-same-time-size"},
  "icloud": [{"uuid": "00000000-3F2A-8C41-9D07-5B1E6A0C77F2", "original_filename": "IMG_4821.HEIC",
    "filename": "00000000-3f2a-8c41-ad07-5b1e6a0c77f2.heic", "date": "2052-07-14T18:03:27.455000+03:00",
-   "tzoffset": 10800, "original_filesize": 2734118, "live_photo": true, "burst_key": "000000000123456789abcdef01234567",
+   "tzoffset": 10800, "original_filesize": 2734118, "live_photo": true, "burst": true, "burst_key": true,
+   "burst_photos": ["00000000-0123-8456-89AB-CDEF01234567"],
    "album_info": [{"folder_names": ["2052"], "title": "07/14 Мырдон / Xqzt"}]}],
  "cloud": [{"path": "2052/07-14 - Мырдон/PXL_20520714_183027123 (1).CR2", "kind": "photos_ok", "date_taken": "2052-07-14T18:03:27",
    "sha1": "00000000da39a3ee5e6b4b0d32550000", "live_pair": "cid", "width": 4032}, {"path": "a b c.3gp", "kind": "convert"}],
@@ -53,7 +54,7 @@ func TestScanRules(t *testing.T) {
 	}{
 		{"uuid", `{"uuid": "3F2A8C41-9D07-4B1E-8A0C-77F25B1E6A0C"}`, RuleUUID, "/uuid", "3F2A8C41"},
 		{"uuid in text", `{"title": "x 3f2a8c41-9d07-4b1e-8a0c-77f25b1e6a0c.heic"}`, RuleUUID, "/title", "3f2a8c41"},
-		{"uuid without version 8", `{"burst_key": "00000000-3F2A-4C41-9D07-5B1E6A0C77F2"}`, RuleUUID, "/burst_key", "3F2A"},
+		{"uuid without version 8", `{"burst_photos": ["00000000-3F2A-4C41-9D07-5B1E6A0C77F2"]}`, RuleUUID, "/burst_photos/0", "3F2A"},
 		{"hex", `{"cloud": [{"sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709"}]}`, RuleHex, "/cloud/0/sha1", "da39a3ee"},
 		{"coordinate number", `{"size": 55.7539}`, RuleCoordinate, "/size", "55.7539"},
 		{"coordinate text", `{"title": "at 55.75393"}`, RuleCoordinate, "/title", "55.75393"},
