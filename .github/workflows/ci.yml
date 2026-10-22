@@ -1,16 +1,5 @@
-# Continuous integration.
-#
-# - "ci-ok" is the single aggregate check: the ruleset of main requires it, so
-#   the names of the other jobs can change freely.
-# - Every check is a Makefile target; the jobs only choose which targets run
-#   on which machine. "make test" runs all of them locally.
-# - Every third-party action is pinned to a full commit SHA with its release
-#   version in a comment; Dependabot keeps both up to date, and
-#   scripts/check-repo.sh fails on any action that is not pinned by SHA.
-# - Values from events (pull request titles, branch names) reach shell steps
-#   only through env:, never through ${{ }} inside run:.
-# - Jobs that need a longer history (fuzzing, repeated runs, mutation testing,
-#   slow chaos tests) are added together with the code they run.
+# Every step runs one Makefile target. Event values reach make only through
+# env:. "ci-ok" is the check the ruleset of main requires.
 name: ci
 
 on:
@@ -19,7 +8,7 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
   schedule:
-    - cron: "23 3 * * 0" # weekly, Sunday night UTC
+    - cron: "23 3 * * 0"
   workflow_dispatch:
 
 permissions: {}
@@ -29,7 +18,6 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
-  # Tests must not depend on the time zone of the machine.
   TZ: Asia/Kolkata
 
 jobs:
@@ -43,7 +31,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check the PR title
+      - name: PR title
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: make pr-title
@@ -60,23 +48,13 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          # The module cache is keyed on go.sum, which does not exist while the
-          # module has no dependencies. Turn caching on with the first dependency.
           cache: false
-      - name: go.mod is tidy
-        run: make tidy
-      - name: Verify the modules
-        run: make mod-verify
+      - name: Modules
+        run: make mod
       - name: Vet
         run: make vet
-      - name: Vet the fixtures_verify build tag
-        run: make vet-tags
-      - name: Build
-        run: make build
-      - name: Test with coverage
-        run: make coverage
-      - name: Check coverage
-        run: make coverage-check
+      - name: Tests and coverage
+        run: make cover
 
   macos:
     runs-on: macos-15
@@ -94,26 +72,17 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      # The linter runs here, not on Linux, so that darwin-only files are analyzed.
       - name: Lint
         run: make lint
       - name: Vet
         run: make vet
-      - name: Build with cgo
-        run: make build
-      - name: Test with cgo
-        run: make race
-      # The release pipeline on every pull request: both slices (the amd64 one
-      # is a cgo cross-compilation), lipo, the ad-hoc signature and the archive,
-      # without publishing. A broken release is found here, not after a tag is
-      # pushed. The checkout is shallow and has no tags; if GoReleaser does not
-      # work on it, add fetch-depth: 0 to the checkout above.
-      - name: Build the release archive (snapshot)
+      - name: Tests and coverage with cgo
+        run: make cover
+      - name: Release archive (snapshot)
         run: make release-snapshot
 
   repo-checks:
     runs-on: ubuntu-24.04
-    # GoReleaser and actionlint are compiled from source (no cache).
     timeout-minutes: 20
     permissions:
       contents: read
@@ -126,17 +95,8 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Repository checks
-        run: make repo-hygiene
-      # Built from source at the version pinned in the Makefile; the module
-      # checksum database verifies the download.
-      - name: actionlint
-        run: make actionlint
-      # A broken .goreleaser.yaml must show up on the pull request: a tag is
-      # immutable, so a failed release cannot be repeated on it.
-      - name: Validate .goreleaser.yaml
-        run: make release-check
-      # Skipped while testdata/fixtures does not exist.
-      - name: Leak scan of the fixtures
+        run: make check-repo
+      - name: Fixtures leak scan
         run: make fixtures-check
 
   deps:
@@ -152,13 +112,11 @@ jobs:
       - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: moderate
-          # MPL-2.0 is accepted for test-only dependencies (the property-test
-          # library); it must not reach the shipped binary.
+          # MPL-2.0: test-only dependencies, never in the shipped binary.
           allow-licenses: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, MPL-2.0, LicenseRef-scancode-google-patent-license-golang
           comment-summary-in-pr: never
 
-  # Scheduled and manual only: a new vulnerability in a dependency must not
-  # turn an unrelated pull request red. Not part of ci-ok.
+  # Not in ci-ok: a new vulnerability must not turn an unrelated change red.
   govulncheck:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
@@ -181,13 +139,13 @@ jobs:
     needs: [pr-title, linux, macos, repo-checks, deps]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    permissions: {}
+    permissions:
+      contents: read
     steps:
-      # A skipped job (for example pr-title on push) counts as passed; a failed
-      # or cancelled one does not.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Every required job passed or was skipped
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: |
-          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          echo "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' > /dev/null
+        run: make ci-ok
