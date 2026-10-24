@@ -43,13 +43,14 @@ fi
 # The PR metrics count neither testdata nor files outside the source
 # extensions, so the build never reads them: no import or #include of
 # testdata, and a quoted #include names a header only.
-if git grep -nE '["`][^"`]*/testdata(/[^"`]*)?["`]|#[[:space:]]*(include|import|cgo).*testdata' \
-  -- '*.go' '*.c' '*.m' '*.h' ':!*_test.go' ':!testdata/**' ':!*/testdata/**'; then
-  fail "production code must not import or include anything under testdata/"
+src=('*.go' '*.c' '*.cc' '*.cpp' '*.cxx' '*.m' '*.mm' '*.h' '*.hh' '*.hpp' '*.hxx' '*.s' '*.S' '*.sx')
+if git grep -nE '["`][^"`]*/testdata(/[^"`]*)?["`]|#[[:space:]]*(include|import|cgo).*(testdata|testkit)' \
+  -- "${src[@]}" ':!*_test.go' ':!testdata/**' ':!*/testdata/**'; then
+  fail "production code must not import or include anything under testdata/ or testkit/"
 fi
-if git grep -nE '#[[:space:]]*(include|import)[[:space:]]*"[^"]*"' -- '*.go' '*.c' '*.m' '*.h' |
-  grep -vE '#[[:space:]]*(include|import)[[:space:]]*"[^"]*\.h"'; then
-  fail "a quoted #include or #import must name a .h file"
+if git grep -nE '#[[:space:]]*(include|import)[[:space:]]*[<"][^>"]*[>"]' -- "${src[@]}" |
+  grep -vE '#[[:space:]]*(include|import)[[:space:]]*[<"][^>"]*\.h[>"]'; then
+  fail "an #include or #import must name a .h file"
 fi
 
 # 3. The Go language version is not newer than the agreed one.

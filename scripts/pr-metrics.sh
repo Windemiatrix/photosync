@@ -49,7 +49,7 @@ fi
 # bypass. NUL-separated output is turned into lines; a newline inside a name
 # becomes \001, which is a bypass wherever it appears.
 diff_z() {
-  git diff --text --no-textconv --no-ext-diff --diff-algorithm=myers -z "$@" "$base...HEAD" |
+  git diff --text --no-textconv --no-ext-diff --diff-algorithm=myers --ignore-submodules=none -z "$@" "$base...HEAD" |
     LC_ALL=C tr '\012\000' '\001\012'
 }
 diff_z --numstat --no-renames >"$tmp/plain" || { echo "pr-metrics: git diff failed for base $base" >&2; exit 2; }
