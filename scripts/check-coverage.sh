@@ -128,7 +128,7 @@ END {
     if (!(k in lunc)) { ccov[lgroup[k]]++; continue }
     split(k, part, SUBSEP)
     # A name from the PR reaches the output only through this whitelist.
-    if (part[1] !~ /^[A-Za-z0-9._\/+-]+$/) part[1] = "<unprintable name>"
+    if (part[1] !~ /^[A-Za-z0-9._\/+-]+$/) part[1] = "unprintable-name"
     uncovered[part[1] ":" part[2]] = 1
   }
 

@@ -107,14 +107,20 @@ expect_line " uncovered: internal/app/a.go:15"
 } >"$work/cover.out"
 run 1 changed7
 expect_line "low changed lines: other 0.0% (0/9, min 80%)"
-expect_line " uncovered: <unprintable name>:1"
 expect_line " uncovered: internal/app/b.go:1"
 expect_line " uncovered: internal/app/c.go:9"
 expect_line " uncovered: internal/app/c.go:10"
 expect_line " uncovered: internal/app/c.go:11"
-expect_no "c.go:12"
+expect_line " uncovered: internal/app/c.go:12"
+expect_no "c.go:13"
+expect_no "unprintable-name"
 expect_no "c.go:100"
 expect_no "cmd/x"
+expect_no '`'
+printf 'mode: atomic\nexample.com/m/internal/a`b/x.go:1.2,1.9 1 0\n' >"$work/cover.out"
+printf 'internal/a`b/x.go:1\n' >"$work/changed1"
+run 1 changed1
+expect_line " uncovered: unprintable-name:1"
 expect_no '`'
 
 # A missing file, a directory or a malformed line is a usage error.
