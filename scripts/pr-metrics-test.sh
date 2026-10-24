@@ -206,7 +206,7 @@ names() {
   [[ "$(grep -o 'link unprintable-name-r[0-9]*' "$work/out" | sort -u | wc -l | tr -d ' ')" == "$want" ]] ||
     fail "want $want distinct unprintable links: $(cat "$work/out")"
   if grep -qE '`|caf|::|=>|a\|b|@|#' "$work/out"; then fail "a raw name reached the output: $(cat "$work/out")"; fi
-  [[ "$(wc -l <"$work/out" | tr -d ' ')" == 1 && "$(cut -d'|' -f1 "$work/out")" == 01 ]] ||
+  [[ "$(cut -d'|' -f1 "$work/out" | tr '\n' ' ')" == "01 02 03 " ]] ||
     fail "a name broke the row format: $(cat "$work/out")"
 }
 start names-1
@@ -219,11 +219,78 @@ printf 'package app\000\n' >"$repo/internal/app/a|b.go"
 run 1
 expect 01 "bypass: binary unprintable-name-1" "❌"
 
+# A directory name and a chain file name pass the same whitelist in row 02.
+start topic-names
+lines 1 "internal/x\`y/a.go"
+lines 1 "internal/x|y/a.go"
+lines 1 "internal/::error x/a.go"
+mkdir -p "$repo/scripts"
+printf 'x\n' >"$repo/scripts/a|b.sh"
+run 0 PR_BODY="nothing"
+expect 02 "packages 3: unprintable-name-" "❌"
+if grep -qE '`|::|x\|y|a\|b' "$work/out"; then fail "a raw name reached the output: $(cat "$work/out")"; fi
+[[ "$(cut -d'|' -f1 "$work/out" | tr '\n' ' ')" == "01 02 03 " ]] || fail "a name broke the row format: $(cat "$work/out")"
+
+start topic-packages
+for p in a b c d e; do lines 1 "internal/$p/$p.go"; done
+run 0
+expect 02 "packages 5: internal/a, internal/b, internal/c, internal/d, internal/e" "⚠️"
+
+start topic-chain
+lines 1 internal/app/a.go
+lines 1 Makefile
+lines 1 go.mod
+run 0 PR_BODY="The Makefile gets a target."
+expect 02 "chain: Makefile (in description) · go.mod: changed" "⚠️"
+
+start topic-chain-unexplained
+lines 1 .golangci.yml
+run 0 PR_BODY="Lint settings."
+expect 02 "chain: .golangci.yml (not in description)" "❌"
+
+start topic-chain-no-body
+lines 1 .github/workflows/ci.yml
+run 0
+expect 02 "chain: .github/workflows/ci.yml · go.mod: -" "⚠️"
+
+start topic-clean
+lines 1 internal/app/a.go
+lines 1 internal/app/a_test.go
+run 0 PR_BODY=""
+expect 02 "packages 1: internal/app · chain: - · go.mod: -" "✅"
+expect 03 "code +1 -0 · tests +1 -0 · ratio 1.0" "n/a (no PR_TITLE)"
+
+start tests-feat
+lines 3 internal/app/a.go
+run 0 PR_TITLE="feat(app): add a"
+expect 03 "code +3 -0 · tests +0 -0" "❌"
+
+start tests-fix-breaking
+lines 3 internal/app/a.go
+run 0 PR_TITLE="fix(app)!: change a"
+expect 03 "code +3 -0" "❌"
+
+start tests-refactor
+lines 3 internal/app/a.go
+run 0 PR_TITLE="refactor(app): split a"
+expect 03 "code +3 -0" "⚠️"
+
+start tests-present
+lines 3 internal/app/a.go
+lines 3 internal/testkit/fake.go
+run 0 PR_TITLE="fix(app): repair a"
+expect 03 "tests +3 -0" "✅"
+
+start tests-no-code
+lines 3 docs/a.md
+run 0 PR_TITLE="feat(app): document a"
+expect 03 "code +0 -0" "✅"
+
 start arguments
 lines 300 internal/app/a.go
 run 1
-(cd "$repo" && bash "$metrics" --base HEAD~1 --rows 02) >"$work/out" 2>/dev/null || fail "a row that was not printed blocked"
-[[ ! -s "$work/out" ]] || fail "--rows not applied: $(cat "$work/out")"
+(cd "$repo" && bash "$metrics" --base HEAD~1 --rows 02,03) >"$work/out" 2>/dev/null || fail "a row that was not printed blocked"
+[[ "$(cut -d'|' -f1 "$work/out" | tr '\n' ' ')" == "02 03 " ]] || fail "--rows not applied: $(cat "$work/out")"
 for args in "--base no-such-rev" "--base" "--out $work" "--bogus x" "--rows 1" "--rows 01,"; do
   got=0
   # shellcheck disable=SC2086 # the arguments are split on purpose

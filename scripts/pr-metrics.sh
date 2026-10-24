@@ -4,6 +4,9 @@
 # "make pr-metrics" before asking for a push.
 #
 #   01 production code lines (blocking: more than 200, or a bypass of the count)
+#   02 one topic: packages, check and release chain, go.mod/go.sum (needs PR_BODY
+#      to check that each changed chain file is named in the description)
+#   03 tests next to the code (needs PR_TITLE)
 #
 # Output: one line per row, "<NN>|<metric>|<value>|<verdict>". Values never
 # contain "|", "`" or "@": file names pass a whitelist first. Values are safe
@@ -11,7 +14,8 @@
 # Exit code: 0 no blocking row failed, 1 a blocking row failed, 2 error.
 #
 # Usage, from the repository root:
-#   bash scripts/pr-metrics.sh [--base origin/main] [--rows 01] [--out rows.txt]
+#   bash scripts/pr-metrics.sh [--base origin/main] [--rows 01,03] [--out rows.txt]
+# PR_TITLE and PR_BODY come from the environment.
 #
 # Plain POSIX awk and bash 3.2 syntax: the script also runs on macOS.
 set -euo pipefail
@@ -19,9 +23,10 @@ set -euo pipefail
 # Repository specifics (the copy in go-libs differs here only).
 max_lines=200
 testkit_is_test=1   # internal/testkit/** counts as tests (depguard keeps it out of production)
+release_chain=1     # .goreleaser.yaml and the release notes header are part of the chain
 
 base="origin/main"
-rows="01"
+rows="01,02,03"
 out=""
 while (($# > 0)); do
   (($# >= 2)) || { echo "pr-metrics: $1 needs a value" >&2; exit 2; }
@@ -57,9 +62,13 @@ diff_z --numstat -M >"$tmp/renames" || exit 2
 diff_z --raw -M >"$tmp/raw" || exit 2
 
 if [[ "${GITHUB_ACTIONS:-}" == true ]]; then gha=1; else gha=0; fi
+if [[ -n "${PR_TITLE+set}" ]]; then has_title=1; else has_title=0; fi
+if [[ -n "${PR_BODY+set}" ]]; then has_body=1; else has_body=0; fi
 
+# The title and the body reach awk through ENVIRON: -v would expand backslashes.
 LC_ALL=C awk \
-  -v max="$max_lines" -v testkit="$testkit_is_test" -v rows=",$rows," -v gha="$gha" \
+  -v max="$max_lines" -v testkit="$testkit_is_test" -v release="$release_chain" -v rows=",$rows," \
+  -v gha="$gha" -v has_title="$has_title" -v has_body="$has_body" \
   -v plain="$tmp/plain" -v renames="$tmp/renames" -v raw="$tmp/raw" '
 function category(p) {
   if (p ~ /(^|\/)testdata\//) return "testdata"
@@ -72,6 +81,18 @@ function category(p) {
   if (p ~ /^scripts\// || p ~ /^\.github\/workflows\// || p == "Makefile") return "prod"
   if (p ~ /\.md$/) return "docs"
   return "other"
+}
+function go_test(p) {
+  return p ~ /_test\.go$/ || (testkit && p ~ /(^|\/)internal\/testkit\/.*\.go$/)
+}
+# The check and release chain: the owner reviews every change of it.
+function chain(p) {
+  if (p ~ /^\.github\// || p ~ /^scripts\// || p == "Makefile" || p == ".env" || p == ".golangci.yml" || p == ".gitattributes") return 1
+  return release && (p == ".goreleaser.yaml" || p ~ /^docs\/release-notes-header[^\/]*\.md$/)
+}
+function basename(p) {
+  sub(/.*\//, "", p)
+  return p
 }
 # A name chosen by the PR author reaches the table only through this whitelist.
 function name(p, id) {
@@ -154,6 +175,36 @@ BEGIN {
     row("01", "Production code lines", value, "✅")
   }
 
+  # Row 02: one topic.
+  pkgs = 0; pkglist = ""; chains = ""; missing = 0; gomod = "-"
+  for (i = 1; i <= n; i++) {
+    p = path[i]
+    if (category(p) == "prod" && p ~ /\.go$/) {
+      d = p; if (!sub(/\/[^\/]*$/, "", d)) d = "."
+      if (!(d in seen)) { seen[d] = 1; pkgs++; pkglist = pkglist (pkgs > 1 ? ", " : "") name(d, i) }
+    }
+    if (basename(p) == "go.mod" || basename(p) == "go.sum") gomod = "changed"
+    if (!chain(p)) continue
+    mentioned = has_body && index(ENVIRON["PR_BODY"], basename(p)) > 0
+    if (has_body && !mentioned) missing++
+    chains = chains (chains != "" ? ", " : "") name(p, i) (has_body ? (mentioned ? " (in description)" : " (not in description)") : "")
+  }
+  value = "packages " pkgs (pkgs ? ": " pkglist : "") " · chain: " (chains != "" ? chains : "-") " · go.mod: " gomod
+  if (missing) verdict = "❌"
+  else if (pkgs > 4 || chains != "" || gomod != "-") verdict = "⚠️"
+  else verdict = "✅"
+  row("02", "One topic", value, verdict)
+
+  # Row 03: tests next to the code.
+  value = "code +" (gadd["prod"] + 0) " -" (gdel["prod"] + 0) " · tests +" (gadd["test"] + 0) " -" (gdel["test"] + 0)
+  if (gadd["prod"] + gdel["prod"] > 0) value = value sprintf(" · ratio %.1f", (gadd["test"] + gdel["test"]) / (gadd["prod"] + gdel["prod"]))
+  type = ENVIRON["PR_TITLE"]; sub(/[(!:].*/, "", type)
+  if (!has_title) verdict = "n/a (no PR_TITLE)"
+  else if (!gofiles["prod"] || gofiles["test"]) verdict = "✅"
+  else if (type == "feat" || type == "fix") verdict = "❌"
+  else verdict = "⚠️"
+  row("03", "Tests next to the code", value, verdict)
+
   # Only a printed row can block: the macOS job prints rows that never do.
   if (blocked != "" && index(rows, ",01,")) {
     printf "%sblocking rows failed:%s\n", (gha ? "::error::pr-metrics: " : "pr-metrics: "), blocked > "/dev/stderr"
@@ -169,5 +220,8 @@ function count(p, a, d, id,    c) {
     a = 0; d = 0
   }
   padd_total[c] += a; pdel_total[c] += d
+  if (p !~ /\.go$/) return
+  g = go_test(p) ? "test" : (c == "prod" ? "prod" : "")
+  if (g != "") { gadd[g] += a; gdel[g] += d; gofiles[g] = 1 }
 }
 ' >"$out"
