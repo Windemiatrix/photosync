@@ -78,6 +78,10 @@ ci-ok: ## Every job in NEEDS passed or was skipped
 	@printf '%s' "$$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
 	@printf '%s' "$$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null
 
+.PHONY: rotate-yandex-test-token
+rotate-yandex-test-token: ## Refresh the Yandex test token and store both tokens in GitHub secrets
+	bash scripts/rotate-yandex-test-token.sh
+
 ##@ Release
 
 .PHONY: release-snapshot
