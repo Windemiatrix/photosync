@@ -67,6 +67,16 @@ fixtures-verify: ## Anonymizer check on the private materials (ANONYMIZE_IN, ANO
 	else go test -tags fixtures_verify -count=1 -v -run 'TestFixtures' ./tools/anonymize \
 		-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.out="$(ANONYMIZE_OUT)"; fi
 
+##@ Yandex test account
+
+.PHONY: yandex-token
+yandex-token: ## Sign in to the Yandex test account, save the local dev token
+	bash scripts/yandex-token.sh create
+
+.PHONY: yandex-token-delete
+yandex-token-delete: ## Revoke and delete the local dev token
+	bash scripts/yandex-token.sh delete
+
 ##@ CI
 
 .PHONY: pr-title
