@@ -1,16 +1,10 @@
-dummy := $(shell touch .env)
-include .env
+-include .env
 GOLANGCI_LINT_VERSION ?= v2.15.0
 ACTIONLINT_VERSION ?= v1.7.12
 GOVULNCHECK_VERSION ?= v1.9.0
 GORELEASER_VERSION ?= v2.18.3
-GORELEASER_FLAGS ?=
 GORELEASER = go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
-ANONYMIZE_IN ?=
-ANONYMIZE_OUT ?=
 # Values from .env are exported only to the targets that need them.
-
-.DEFAULT_GOAL := help
 
 .PHONY: help
 help: ## Display this help.
