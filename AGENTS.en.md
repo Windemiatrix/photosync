@@ -46,7 +46,7 @@ The model is [bxcodec/go-clean-arch](https://github.com/bxcodec/go-clean-arch); 
 
 - `internal/domain` — entities, errors and pure rules without I/O; no dependencies on other layers.
 - `internal/app` — use cases (the service layer). `app` declares the interfaces, that is, the consumer does; there is no separate interfaces package.
-- `internal/adapters` — implementations of those interfaces (WebDAV, Keychain, PhotoKit and others): I/O without decisions. `app` does not import adapters.
+- `internal/adapters` — implementations of those interfaces (`yandexrest` for the Yandex Disk REST API, PhotoKit and others): I/O without decisions. `app` does not import adapters.
 - `cmd/photosync` — the only place where dependencies are wired together.
 - Concrete packages without interfaces: `state`, `report`, `clock`, `config`, `i18n`.
 - Dependencies point inward, toward `domain`. Every cgo adapter has a stub for other OSes (`*_darwin.go` with the `darwin && cgo` tag and `*_other.go`).

@@ -8,7 +8,7 @@ Code of conduct: [CODE_OF_CONDUCT.en.md](CODE_OF_CONDUCT.en.md). Report a vulner
 
 The path is the same for everyone: the maintainer, AI agents acting on the maintainer's behalf ([AGENTS.en.md](AGENTS.en.md)), external contributors (from a fork branch) and Dependabot.
 
-1. Branch from an up-to-date `main`: `<type>/<topic>`, for example `feat/schema-photos12`, `fix/webdav-retry`. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`.
+1. Branch from an up-to-date `main`: `<type>/<topic>`, for example `feat/schema-photos12`, `fix/rest-retry`. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`.
 2. Test first, then code (TDD): a test that fails for the right reason, then the code that makes it pass. A bug fix starts with a test that reproduces the bug.
 3. Before the PR, `make test` is green locally: it runs every check, the linter included.
 4. Open a PR into `main`. The description says what changes and why. There are no direct pushes to `main`.
@@ -22,7 +22,7 @@ The PR title becomes the commit title on `main`, and the release-notes change li
 - Format `<type>(<scope>)[!]: <description>`, for example `feat(schema): add photos12 schema`. The scope is required: lowercase letters, digits, `._/-`.
 - An incompatible change (commands, flags, config keys, the state schema) is marked with `!` right after the scope: `feat(config)!: rename remotes key`. It is the only marker: it decides the next version (see "Releases") and puts the title into the "Breaking changes" group of the release notes. `BREAKING CHANGE:` in the body is not recognized: the squash commit body is empty. Without a scope (`feat!: …`) the title is rejected.
 - English, printable ASCII only, at most 70 characters, no `#<number>`: GitHub appends ` (#<PR number>)` itself.
-- The `pr-title` job checks it; editing the title re-runs the check.
+- The `pr-title` job checks it; editing the title re-runs the check. Before opening the PR you can check the title locally: `PR_TITLE='...' make pr-title`.
 - **Do not edit the title or body in the squash-merge dialog.** The only place to fix a title is the PR itself; otherwise `main` gets a title the check never saw.
 - Commit titles inside a branch are not checked: squash discards them.
 
@@ -44,7 +44,7 @@ A new direct dependency goes in its own PR with a rationale: why it is needed, w
 Public history cannot be undone: forks and archives keep whatever once reached the repository. Commits and PRs must not contain:
 
 - Photos libraries, `*.sqlite*`, `state.db`, `runs/`, `*.jsonl`, run reports and journals;
-- passwords, tokens, `client_secret`, Keychain contents;
+- passwords, tokens, `client_secret`, token files (`~/.config/photosync/tokens/`);
 - names of your albums, cloud paths, logins, UUIDs and GUIDs, exact counts from your library.
 
 Tests and documents use generic examples: `IMG_0001.HEIC`, `2024/05-01 - Holidays`, `user@example.com`. Fixtures made from real materials are allowed only as the output of `tools/anonymize`, after the leak check and the maintainer's review of a sample. Optional: run `gitleaks` and a personal list of forbidden strings, kept outside the repository, before committing.
