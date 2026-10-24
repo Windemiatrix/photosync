@@ -36,6 +36,14 @@ fi
 if git ls-files | grep -E '(^|/)go\.work(\.sum)?$'; then
   fail "go.work must not be committed"
 fi
+# .env is included by the Makefile: a committed one could change any target.
+if git ls-files | grep -E '(^|/)\.env$'; then
+  fail ".env must not be committed"
+fi
+# testdata is not counted as code by the PR metrics, so code never imports it.
+if git grep -nE '"[^"]*/testdata(/[^"]*)?"' -- '*.go' ':!*_test.go' ':!**/testdata/**'; then
+  fail "production code must not import packages under testdata/"
+fi
 
 # 3. The Go language version is not newer than the agreed one.
 go_version="$(awk '$1 == "go" { print $2; exit }' go.mod)"

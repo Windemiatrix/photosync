@@ -6,7 +6,8 @@
 #   01 production code lines (blocking: more than 200, or a bypass of the count)
 #
 # Output: one line per row, "<NN>|<metric>|<value>|<verdict>". Values never
-# contain "|" or "`": file names pass a whitelist first.
+# contain "|", "`" or "@": file names pass a whitelist first. Values are safe
+# only inside a markdown code span; the PR comment wraps each one in backticks.
 # Exit code: 0 no blocking row failed, 1 a blocking row failed, 2 error.
 #
 # Usage, from the repository root:
@@ -23,6 +24,7 @@ base="origin/main"
 rows="01"
 out=""
 while (($# > 0)); do
+  (($# >= 2)) || { echo "pr-metrics: $1 needs a value" >&2; exit 2; }
   case "$1" in
     --base) base="${2:-}"; shift 2 ;;
     --rows) rows="${2:-}"; shift 2 ;;
@@ -33,15 +35,21 @@ done
 [[ -n "$base" ]] || { echo "pr-metrics: --base is empty" >&2; exit 2; }
 [[ -n "$rows" ]] || rows="01"
 
-tmp="$(mktemp -d "${TMPDIR:-/tmp}/pr-metrics.XXXXXX")"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/pr-metrics.XXXXXX")" || exit 2
 trap 'rm -rf "$tmp"' EXIT
+if [[ -n "$out" ]]; then
+  : >"$out" 2>/dev/null || { echo "pr-metrics: cannot write $out" >&2; exit 2; }
+else
+  out=/dev/stdout
+fi
 
-# No textconv and no external diff: .gitattributes of the PR cannot rewrite the
-# count. A file git still takes as binary has no line count ("-"); in production
-# code that is a bypass. NUL-separated output is turned into lines; a newline
-# inside a name becomes \001 and fails the name whitelist.
+# No textconv, no external diff, a fixed diff algorithm: neither .gitattributes
+# of the PR nor the git config of the machine changes the count. A file git
+# still takes as binary has no line count ("-"); in production code that is a
+# bypass. NUL-separated output is turned into lines; a newline inside a name
+# becomes \001, which is a bypass wherever it appears.
 diff_z() {
-  git -c core.quotePath=false diff --text --no-textconv --no-ext-diff -z "$@" "$base...HEAD" |
+  git diff --text --no-textconv --no-ext-diff --diff-algorithm=myers -z "$@" "$base...HEAD" |
     LC_ALL=C tr '\012\000' '\001\012'
 }
 diff_z --numstat --no-renames >"$tmp/plain" || { echo "pr-metrics: git diff failed for base $base" >&2; exit 2; }
@@ -49,7 +57,6 @@ diff_z --numstat -M >"$tmp/renames" || exit 2
 diff_z --raw -M >"$tmp/raw" || exit 2
 
 if [[ "${GITHUB_ACTIONS:-}" == true ]]; then gha=1; else gha=0; fi
-[[ -n "$out" ]] || out=/dev/stdout
 
 LC_ALL=C awk \
   -v max="$max_lines" -v testkit="$testkit_is_test" -v rows=",$rows," -v gha="$gha" \
@@ -60,15 +67,20 @@ function category(p) {
   if (p ~ /_test\.go$/) return "test"
   if (p ~ /^scripts\/[^\/]*-test\.sh$/) return "test"
   if (testkit && p ~ /(^|\/)internal\/testkit\//) return "test"
-  if (p ~ /\.(go|c|cc|cpp|m|mm|h|s|S)$/) return "prod"
+  # Every file the go tool compiles or links, .syso (prebuilt objects) included.
+  if (p ~ /\.(go|c|cc|cpp|cxx|m|mm|h|hh|hpp|hxx|s|S|sx|f|F|for|f90|swig|swigcxx|syso)$/) return "prod"
   if (p ~ /^scripts\// || p ~ /^\.github\/workflows\// || p == "Makefile") return "prod"
   if (p ~ /\.md$/) return "docs"
   return "other"
 }
 # A name chosen by the PR author reaches the table only through this whitelist.
 function name(p, id) {
-  if (p ~ /^[A-Za-z0-9._\/@+-]+$/) return p
-  return "<unprintable name #" id ">"
+  if (p ~ /^[A-Za-z0-9._\/+-]+$/) return p
+  return "unprintable-name-" id
+}
+# A name with a newline (now \001) can collide with another name and hide it.
+function check_name(p, id) {
+  if (index(p, "\001")) bypass = bypass " newline " name(p, id)
 }
 function cell(s) {
   if (length(s) > 200) s = substr(s, 1, 199) "..."
@@ -89,6 +101,7 @@ BEGIN {
     if (line == "") continue
     numstat(line, f)
     n++; path[n] = f["path"]; add[n] = f["add"]; del[n] = f["del"]
+    check_name(path[n], n)
   }
   close(plain)
 
@@ -99,6 +112,7 @@ BEGIN {
     if (line !~ /^[0-9-]+\t[0-9-]+\t$/) continue
     numstat(line, f)
     if ((getline old < renames) <= 0 || (getline new < renames) <= 0) break
+    check_name(old, "m" pairs); check_name(new, "m" pairs)
     if (category(old) != category(new)) continue
     skip[old] = 1; skip[new] = 1
     pairs++; padd[pairs] = f["add"]; pdel[pairs] = f["del"]; ppath[pairs] = new
@@ -106,14 +120,17 @@ BEGIN {
   close(renames)
 
   # --raw: ":<old mode> <new mode> <old sha> <new sha> <status>", then one path,
-  # or two for a rename or copy. A symbolic link in production code is a bypass:
-  # the link counts as one line, the build reads the whole target.
+  # or two for a rename or copy. A symbolic link or a submodule anywhere is a
+  # bypass: it counts as one line, the build can read a whole tree through it
+  # (a link to a directory of testdata, say). The project has neither.
+  r = 0
   while ((getline line < raw) > 0) {
     if (substr(line, 1, 1) != ":") continue
     split(line, m, " ")
     paths = (m[5] ~ /^[RC]/) ? 2 : 1
     for (k = 1; k <= paths; k++) if ((getline p < raw) <= 0) break
-    if (m[2] == "120000" && category(p) == "prod") bypass = bypass " link " name(p, "raw")
+    r++
+    if (m[2] == "120000" || m[2] == "160000") bypass = bypass " link " name(p, "r" r)
   }
   close(raw)
 
@@ -121,7 +138,7 @@ BEGIN {
     if (path[i] in skip) continue
     count(path[i], add[i], del[i], i)
   }
-  for (i = 1; i <= pairs; i++) count(ppath[i], padd[i], pdel[i], "rename " i)
+  for (i = 1; i <= pairs; i++) count(ppath[i], padd[i], pdel[i], "m" i)
 
   # Row 01: production code lines.
   prod = padd_total["prod"] + pdel_total["prod"]
