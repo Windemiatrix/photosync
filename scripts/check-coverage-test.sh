@@ -54,19 +54,20 @@ expect_line "ok all other packages (total) 80.0% (min 80%)"
 expect_line "ok internal/domain 100.0% (min 95%)"
 expect_no "changed lines"
 
-# Changed lines inside covered and uncovered blocks; line 11 is inside 10-12,
-# line 99 has no statements, b.go is not in the profile.
+# Each changed line with statements counts once. Line 11 is inside the covered
+# block 10-12, lines 14 and 30 are uncovered, line 99 has no statements, b.go
+# is not in the profile.
 printf 'internal/app/a.go:11\ninternal/app/a.go:14\ninternal/app/a.go:30\ninternal/app/a.go:99\ninternal/app/b.go:1\ninternal/domain/d.go:6\n' >"$work/changed"
 run 0 changed
-expect_line "low changed lines: other 66.7% (4/6, min 80%)"
-expect_line "ok changed lines: domain 100.0% (2/2, min 95%)"
+expect_line "low changed lines: other 33.3% (1/3, min 80%)"
+expect_line "ok changed lines: domain 100.0% (1/1, min 95%)"
 expect_line " uncovered: internal/app/a.go:14"
 expect_line " uncovered: internal/app/a.go:30"
 
 # Only covered lines changed.
 printf 'internal/app/a.go:21\n' >"$work/changed"
 run 0 changed
-expect_line "ok changed lines: other 100.0% (4/4, min 80%)"
+expect_line "ok changed lines: other 100.0% (1/1, min 80%)"
 expect_no "uncovered"
 expect_no "changed lines: domain"
 
@@ -75,31 +76,54 @@ expect_no "changed lines: domain"
 run 0 changed
 expect_line "info changed lines: n/a (no statements on changed lines)"
 
-# The changed lines never change the exit code: a failing total stays 1.
+# A line in a covered and an uncovered block is uncovered; the changed lines
+# never change the exit code: a failing total stays 1.
 cat >"$work/cover.out" <<'EOF'
 mode: atomic
 example.com/m/internal/app/a.go:10.2,12.3 4 0
 example.com/m/internal/app/a.go:14.2,14.9 1 1
+example.com/m/internal/app/a.go:15.2,15.20 1 1
+example.com/m/internal/app/a.go:15.21,15.30 1 0
 EOF
-printf 'internal/app/a.go:14\n' >"$work/changed"
+printf 'internal/app/a.go:14\ninternal/app/a.go:15\n' >"$work/changed"
 run 1 changed
-expect_line "ok changed lines: other 100.0% (1/1, min 80%)"
+expect_line "low changed lines: other 50.0% (1/2, min 80%)"
+expect_line " uncovered: internal/app/a.go:15"
 
-# At most five uncovered places, in path and line order.
+# Excluded packages stay out; names outside the whitelist are replaced; at
+# most five uncovered lines, by path, then by line number.
 {
   echo "mode: atomic"
-  for line in 70 10 60 20 50 30 40; do
+  echo "example.com/m/cmd/x/main.go:5.2,5.9 1 0"
+  echo "cmd/x/main.go:5" >>"$work/changed7"
+  echo "example.com/m/internal/app/b.go:1.2,1.9 1 0"
+  echo "internal/app/b.go:1" >>"$work/changed7"
+  for line in 9 10 100 11 12 13 200; do
     echo "example.com/m/internal/app/c.go:$line.2,$line.9 1 0"
     echo "internal/app/c.go:$line" >>"$work/changed7"
   done
+  echo 'example.com/m/internal/a`b/x.go:1.2,1.9 1 0'
+  echo 'internal/a`b/x.go:1' >>"$work/changed7"
 } >"$work/cover.out"
 run 1 changed7
+expect_line "low changed lines: other 0.0% (0/9, min 80%)"
+expect_line " uncovered: <unprintable name>:1"
+expect_line " uncovered: internal/app/b.go:1"
+expect_line " uncovered: internal/app/c.go:9"
 expect_line " uncovered: internal/app/c.go:10"
-expect_line " uncovered: internal/app/c.go:50"
-expect_no "c.go:60"
+expect_line " uncovered: internal/app/c.go:11"
+expect_no "c.go:12"
+expect_no "c.go:100"
+expect_no "cmd/x"
+expect_no '`'
 
-# A missing changed-lines file is a usage error.
+# A missing file, a directory or a malformed line is a usage error.
 run 2 missing
+mkdir "$work/dir"
+run 2 dir
+printf 'internal/app/a.go\n' >"$work/bad"
+run 2 bad
+
 
 if ((failures > 0)); then
   echo "$failures check-coverage case(s) failed" >&2
