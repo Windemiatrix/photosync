@@ -11,7 +11,7 @@
 # Exit code: 0 no blocking row failed, 1 a blocking row failed, 2 error.
 #
 # Usage, from the repository root:
-#   scripts/pr-metrics.sh [--base origin/main] [--rows 01] [--out rows.txt]
+#   bash scripts/pr-metrics.sh [--base origin/main] [--rows 01] [--out rows.txt]
 #
 # Plain POSIX awk and bash 3.2 syntax: the script also runs on macOS.
 set -euo pipefail
@@ -33,7 +33,7 @@ while (($# > 0)); do
   esac
 done
 [[ -n "$base" ]] || { echo "pr-metrics: --base is empty" >&2; exit 2; }
-[[ -n "$rows" ]] || rows="01"
+[[ "$rows" =~ ^[0-9]{2}(,[0-9]{2})*$ ]] || { echo "pr-metrics: --rows wants NN[,NN...]" >&2; exit 2; }
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/pr-metrics.XXXXXX")" || exit 2
 trap 'rm -rf "$tmp"' EXIT

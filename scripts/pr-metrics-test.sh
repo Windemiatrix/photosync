@@ -224,7 +224,7 @@ lines 300 internal/app/a.go
 run 1
 (cd "$repo" && bash "$metrics" --base HEAD~1 --rows 02) >"$work/out" 2>/dev/null || fail "a row that was not printed blocked"
 [[ ! -s "$work/out" ]] || fail "--rows not applied: $(cat "$work/out")"
-for args in "--base no-such-rev" "--base" "--out $work" "--bogus x"; do
+for args in "--base no-such-rev" "--base" "--out $work" "--bogus x" "--rows 1" "--rows 01,"; do
   got=0
   # shellcheck disable=SC2086 # the arguments are split on purpose
   (cd "$repo" && bash "$metrics" $args) >/dev/null 2>&1 || got=$?
