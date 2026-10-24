@@ -21,12 +21,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: yandex-test-token-rotation
-    permissions:
-      contents: read
+    permissions: {}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - name: Refresh and store the tokens
         env:
           YANDEX_CLIENT_ID: ${{ secrets.YANDEX_CLIENT_ID }}
@@ -34,4 +30,27 @@ jobs:
           YANDEX_TEST_REFRESH_TOKEN: ${{ secrets.YANDEX_TEST_REFRESH_TOKEN }}
           YANDEX_TEST_UID: ${{ vars.YANDEX_TEST_UID }}
           GH_TOKEN: ${{ secrets.GH_PAT_UPDATE_YANDEX_TEST_TOKEN }}
-        run: bash scripts/rotate-yandex-test-token.sh
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          answer="$(curl -sS -X POST https://oauth.yandex.ru/token \
+            --data-urlencode grant_type=refresh_token \
+            --data-urlencode "refresh_token=$YANDEX_TEST_REFRESH_TOKEN" \
+            --data-urlencode "client_id=$YANDEX_CLIENT_ID" \
+            --data-urlencode "client_secret=$YANDEX_CLIENT_SECRET")"
+          access="$(jq -r '.access_token // empty' <<<"$answer")"
+          refresh="$(jq -r '.refresh_token // empty' <<<"$answer")"
+          if [[ -z "$access" || -z "$refresh" ]]; then
+            echo "refresh refused: $(jq -r '.error // "no tokens"' <<<"$answer"); the old tokens are kept"
+            exit 1
+          fi
+          echo "::add-mask::$access"
+          echo "::add-mask::$refresh"
+          # The old refresh token is spent now: save the new one first.
+          gh secret set YANDEX_TEST_REFRESH_TOKEN --env yandex-test-token-rotation --body "$refresh"
+          uid="$(curl -sS -H "Authorization: OAuth $access" "https://cloud-api.yandex.net/v1/disk/?fields=user.uid" | jq -r '.user.uid // empty')"
+          if [[ "$uid" != "$YANDEX_TEST_UID" ]]; then
+            echo "the new token is not for the test account; YANDEX_TEST_TOKEN is kept"
+            exit 1
+          fi
+          gh secret set YANDEX_TEST_TOKEN --env integration --body "$access"

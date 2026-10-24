@@ -64,11 +64,10 @@ if git grep -nE 'uses: *[^ ]+@' -- '.github/workflows' | grep -vE '@[0-9a-f]{40}
   fail "workflow actions must be pinned to a full 40-character commit SHA"
 fi
 
-# 6. Self-tests of the scripts that decide titles, versions and releases or handle secrets.
+# 6. Self-tests of the scripts that decide titles, versions and releases.
 bash scripts/check-pr-title-test.sh || failed=1
 bash scripts/next-version-test.sh || failed=1
 bash scripts/check-release-deps-test.sh || failed=1
-bash scripts/rotate-yandex-test-token-test.sh || failed=1
 
 if ((failed)); then
   exit 1
