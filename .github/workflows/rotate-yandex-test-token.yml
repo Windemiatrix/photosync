@@ -21,7 +21,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: yandex-test-token-rotation
-    permissions: {}
     steps:
       - name: Refresh and store the tokens
         env:

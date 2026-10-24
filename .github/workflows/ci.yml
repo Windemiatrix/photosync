@@ -1,5 +1,5 @@
-# Every step runs one Makefile target. Event values reach make only through
-# env:. "ci-ok" is the check the ruleset of main requires.
+# A step that also runs locally calls one Makefile target; event values reach
+# it only through env:. "ci-ok" is the check the ruleset of main requires.
 name: ci
 
 on:
@@ -139,13 +139,10 @@ jobs:
     needs: [pr-title, linux, macos, repo-checks, deps]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    permissions:
-      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - name: Every required job passed or was skipped
         env:
           NEEDS: ${{ toJSON(needs) }}
-        run: make ci-ok
+        run: |
+          printf '%s' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          printf '%s' "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null
