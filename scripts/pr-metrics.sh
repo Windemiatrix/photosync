@@ -82,9 +82,6 @@ function category(p) {
   if (p ~ /\.md$/) return "docs"
   return "other"
 }
-function go_test(p) {
-  return p ~ /_test\.go$/ || (testkit && p ~ /(^|\/)internal\/testkit\/.*\.go$/)
-}
 # The check and release chain: the owner reviews every change of it.
 function chain(p) {
   if (p ~ /^\.github\// || p ~ /^scripts\// || p == "Makefile" || p == ".env" || p == ".golangci.yml" || p == ".gitattributes") return 1
@@ -175,7 +172,11 @@ BEGIN {
     row("01", "Production code lines", value, "✅")
   }
 
-  # Row 02: one topic.
+  # Row 02: one topic. The checklist of the PR template names chain files
+  # itself, so its lines do not count as an explanation.
+  body = ""
+  nb = split(ENVIRON["PR_BODY"], bl, "\n")
+  for (j = 1; j <= nb; j++) if (bl[j] !~ /^[[:space:]]*[-*] \[[ xX]\]/) body = body bl[j] "\n"
   pkgs = 0; pkglist = ""; chains = ""; missing = 0; gomod = "-"
   for (i = 1; i <= n; i++) {
     p = path[i]
@@ -185,11 +186,12 @@ BEGIN {
     }
     if (basename(p) == "go.mod" || basename(p) == "go.sum") gomod = "changed"
     if (!chain(p)) continue
-    mentioned = has_body && index(ENVIRON["PR_BODY"], basename(p)) > 0
+    mentioned = has_body && index(body, basename(p)) > 0
     if (has_body && !mentioned) missing++
     chains = chains (chains != "" ? ", " : "") name(p, i) (has_body ? (mentioned ? " (in description)" : " (not in description)") : "")
   }
-  value = "packages " pkgs (pkgs ? ": " pkglist : "") " · chain: " (chains != "" ? chains : "-") " · go.mod: " gomod
+  # The package list goes last: only it is cut when the cell is too long.
+  value = "chain: " (chains != "" ? chains : "-") " · go.mod: " gomod " · packages " pkgs (pkgs ? ": " pkglist : "")
   if (missing) verdict = "❌"
   else if (pkgs > 4 || chains != "" || gomod != "-") verdict = "⚠️"
   else verdict = "✅"
@@ -200,7 +202,7 @@ BEGIN {
   if (gadd["prod"] + gdel["prod"] > 0) value = value sprintf(" · ratio %.1f", (gadd["test"] + gdel["test"]) / (gadd["prod"] + gdel["prod"]))
   type = ENVIRON["PR_TITLE"]; sub(/[(!:].*/, "", type)
   if (!has_title) verdict = "n/a (no PR_TITLE)"
-  else if (!gofiles["prod"] || gofiles["test"]) verdict = "✅"
+  else if (gadd["prod"] + gdel["prod"] == 0 || gadd["test"] + gdel["test"] > 0) verdict = "✅"
   else if (type == "feat" || type == "fix") verdict = "❌"
   else verdict = "⚠️"
   row("03", "Tests next to the code", value, verdict)
@@ -220,8 +222,6 @@ function count(p, a, d, id,    c) {
     a = 0; d = 0
   }
   padd_total[c] += a; pdel_total[c] += d
-  if (p !~ /\.go$/) return
-  g = go_test(p) ? "test" : (c == "prod" ? "prod" : "")
-  if (g != "") { gadd[g] += a; gdel[g] += d; gofiles[g] = 1 }
+  if (p ~ /\.go$/ && (c == "prod" || c == "test")) { gadd[c] += a; gdel[c] += d }
 }
 ' >"$out"

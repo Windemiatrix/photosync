@@ -257,8 +257,60 @@ start topic-clean
 lines 1 internal/app/a.go
 lines 1 internal/app/a_test.go
 run 0 PR_BODY=""
-expect 02 "packages 1: internal/app · chain: - · go.mod: -" "✅"
+expect 02 "chain: - · go.mod: - · packages 1: internal/app" "✅"
 expect 03 "code +1 -0 · tests +1 -0 · ratio 1.0" "n/a (no PR_TITLE)"
+
+start topic-four-packages
+for p in a b c d; do lines 1 "internal/$p/$p.go"; done
+run 0
+expect 02 "packages 4: " "✅"
+
+start topic-gomod
+lines 1 go.mod
+run 0
+expect 02 "go.mod: changed" "⚠️"
+
+start topic-chain-basename
+lines 1 .github/workflows/ci.yml
+lines 1 .goreleaser.yaml
+run 0 PR_BODY="ci.yml gets a step, .goreleaser.yaml a hook."
+expect 02 "chain: .github/workflows/ci.yml (in description), .goreleaser.yaml (in description)" "⚠️"
+
+start topic-env
+lines 1 .env
+run 0 PR_BODY="x"
+expect 02 "chain: .env (not in description)" "❌"
+
+# The checklist of the PR template names Makefile itself: no explanation.
+start topic-template-checklist
+lines 1 Makefile
+run 0 PR_BODY="$(printf -- '- [x] Changes to `.github/`, `scripts/`, `Makefile` do not weaken any CI check.\nRefactor the parser.')"
+expect 02 "chain: Makefile (not in description)" "❌"
+
+# Long package names are cut, the chain part stays visible.
+start topic-long
+for p in adapters/yandexrest adapters/space/macos adapters/network/macos adapters/photokit adapters/secrets/keychain; do
+  lines 1 "internal/$p/x.go"
+done
+lines 1 Makefile
+run 0 PR_BODY="none"
+expect 02 "chain: Makefile (not in description) · go.mod: - · packages 5: " "❌"
+
+# Row 03 counts what row 01 counts: testdata is not tests, an unedited move
+# is no code.
+start tests-testdata-not-tests
+lines 3 internal/app/a.go
+lines 3 internal/app/testdata/x_test.go
+run 0 PR_TITLE="feat(app): add a"
+expect 03 "code +3 -0 · tests +0 -0" "❌"
+
+start tests-unedited-move
+lines 10 internal/app/big.go
+g add -A
+g commit -qm "base with code"
+git -C "$repo" mv internal/app/big.go internal/app/moved.go
+run 0 PR_TITLE="feat(app): move big"
+expect 03 "code +0 -0" "✅"
 
 start tests-feat
 lines 3 internal/app/a.go
