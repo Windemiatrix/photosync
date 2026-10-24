@@ -51,6 +51,6 @@ Requires macOS 13 or newer; the archive is universal, for Apple Silicon and Inte
    photosync doctor
    ```
 
-The binary has only an ad-hoc signature: it is not signed by Apple or notarized. After an update macOS may ask again for access to Photos and Keychain: this is expected, and `photosync doctor` shows the state.
+The binary has only an ad-hoc signature: it is not signed by Apple or notarized. A process started by a LaunchAgent may ask for Photos access again after an update (the permission is kept when run from a terminal): this is expected, and `photosync doctor` shows the state.
 
 The change list below is in English: it is built from PR titles.
