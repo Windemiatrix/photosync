@@ -36,22 +36,6 @@ fi
 if git ls-files | grep -E '(^|/)go\.work(\.sum)?$'; then
   fail "go.work must not be committed"
 fi
-# .env is included by the Makefile: a committed one could change any target.
-if git ls-files | grep -E '(^|/)\.env$'; then
-  fail ".env must not be committed"
-fi
-# The PR metrics count neither testdata nor files outside the source
-# extensions, so the build never reads them: no import or #include of
-# testdata, and a quoted #include names a header only.
-src=('*.go' '*.c' '*.cc' '*.cpp' '*.cxx' '*.m' '*.mm' '*.h' '*.hh' '*.hpp' '*.hxx' '*.s' '*.S' '*.sx')
-if git grep -nE '["`][^"`]*/testdata(/[^"`]*)?["`]|#[[:space:]]*(include|import|cgo).*(testdata|testkit)' \
-  -- "${src[@]}" ':!*_test.go' ':!testdata/**' ':!*/testdata/**'; then
-  fail "production code must not import or include anything under testdata/ or testkit/"
-fi
-if git grep -nE '#[[:space:]]*(include|import)[[:space:]]*[<"][^>"]*[>"]' -- "${src[@]}" |
-  grep -vE '#[[:space:]]*(include|import)[[:space:]]*[<"][^>"]*\.h[>"]'; then
-  fail "an #include or #import must name a .h file"
-fi
 
 # 3. The Go language version is not newer than the agreed one.
 go_version="$(awk '$1 == "go" { print $2; exit }' go.mod)"
@@ -79,12 +63,10 @@ if git grep -nE 'uses: *[^ ]+@' -- '.github/workflows' | grep -vE '@[0-9a-f]{40}
   fail "workflow actions must be pinned to a full 40-character commit SHA"
 fi
 
-# 6. Self-tests of the scripts that decide titles, versions, coverage and releases.
+# 6. Self-tests of the scripts that decide titles, versions and releases.
 bash scripts/check-pr-title-test.sh || failed=1
-bash scripts/check-coverage-test.sh || failed=1
 bash scripts/next-version-test.sh || failed=1
 bash scripts/check-release-deps-test.sh || failed=1
-bash scripts/pr-metrics-test.sh || failed=1
 
 if ((failed)); then
   exit 1

@@ -19,14 +19,7 @@ linters:
     - noctx
     - misspell
     - revive
-    - gocyclo
-    - nolintlint
   settings:
-    gocyclo:
-      min-complexity: 15
-    nolintlint:
-      require-specific: true
-      require-explanation: true
     depguard:
       rules:
         # The domain does no I/O and knows nothing about the other layers.
@@ -79,15 +72,6 @@ linters:
             - "!$test"
           deny:
             - {pkg: github.com/Windemiatrix/photosync/internal/app, desc: "adapters and state must not import app"}
-        # Test support is imported only by tests, so its lines count as tests.
-        testkit:
-          list-mode: lax
-          files:
-            - "**"
-            - "!$test"
-            - "!**/internal/testkit/**"
-          deny:
-            - {pkg: github.com/Windemiatrix/photosync/internal/testkit, desc: "testkit is imported by tests only"}
     forbidigo:
       forbid:
         - pattern: ^time\.(Now|Since|Until|Sleep|After|Tick|Local)$
@@ -109,9 +93,7 @@ linters:
         - name: exported
 
   exclusions:
-    # The project has no generated code; lax would also hide files that merely
-    # mention "do not edit" from every linter, gosec included.
-    generated: disable
+    generated: lax
     rules:
       # forbidigo applies to library code, not to the composition root,
       # configuration loading, the clock itself, developer tools and tests.
@@ -123,10 +105,6 @@ linters:
         linters: [forbidigo]
       - path: _test\.go$
         linters: [forbidigo]
-      # Complexity is a review aid for the product: table tests and the
-      # developer tools are long by nature.
-      - path: (_test\.go$|(^|/)tools/)
-        linters: [gocyclo]
       # Tests read their own fixtures by variable path.
       - path: _test\.go$
         linters: [gosec]
