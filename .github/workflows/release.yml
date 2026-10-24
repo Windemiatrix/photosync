@@ -1,5 +1,5 @@
-# A tag v* pushed by scripts/release.sh builds a draft GitHub Release. Every
-# step runs one Makefile target. No caches: they could be poisoned.
+# A tag v* pushed by scripts/release.sh builds a draft GitHub Release. A step
+# that also runs locally calls one Makefile target. No caches: they could be poisoned.
 name: release
 
 on:
@@ -28,7 +28,10 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Tag on main, library by a tag
-        run: make release-verify
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+          bash scripts/check-release-deps.sh
       - name: Vet
         run: make vet
       - name: Tests and coverage

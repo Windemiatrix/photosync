@@ -8,7 +8,7 @@ GORELEASER_FLAGS ?=
 GORELEASER = go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
 ANONYMIZE_IN ?=
 ANONYMIZE_OUT ?=
-export
+# Values from .env are exported only to the targets that need them.
 
 .DEFAULT_GOAL := help
 
@@ -69,6 +69,9 @@ fixtures-verify: ## Anonymizer check on the private materials (ANONYMIZE_IN, ANO
 
 ##@ Yandex test account
 
+yandex-token-create yandex-token-delete: export YANDEX_CLIENT_ID := $(YANDEX_CLIENT_ID)
+yandex-token-create yandex-token-delete: export YANDEX_CLIENT_SECRET := $(YANDEX_CLIENT_SECRET)
+
 .PHONY: yandex-token-create
 yandex-token-create: ## Sign in to the Yandex test account, save the local dev token
 	bash scripts/yandex-token.sh create
@@ -77,28 +80,17 @@ yandex-token-create: ## Sign in to the Yandex test account, save the local dev t
 yandex-token-delete: ## Revoke and delete the local dev token
 	bash scripts/yandex-token.sh delete
 
-##@ CI
+##@ Pull requests
 
 .PHONY: pr-title
-pr-title: ## PR_TITLE follows the title convention
+pr-title: ## PR_TITLE follows the title convention (PR_TITLE='...' make pr-title)
 	bash scripts/check-pr-title.sh
-
-.PHONY: ci-ok
-ci-ok: ## Every job in NEEDS passed or was skipped
-	@printf '%s' "$$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-	@printf '%s' "$$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null
 
 ##@ Release
 
 .PHONY: release-snapshot
 release-snapshot: ## Build the release archive into dist/ without publishing
 	$(GORELEASER) release --snapshot --skip=publish --clean
-
-.PHONY: release-verify
-release-verify: ## The tagged commit is on main and requires the library by a tag
-	git fetch origin main
-	git merge-base --is-ancestor HEAD origin/main
-	bash scripts/check-release-deps.sh
 
 .PHONY: release
 release: ## Build and create a draft GitHub Release for the current tag (needs GITHUB_TOKEN)
