@@ -256,7 +256,7 @@ func TestLoadSalt(t *testing.T) {
 		if err := os.WriteFile(p, []byte(tt.content), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.Chmod(p, tt.mode); err != nil { //nolint:gosec // the test needs modes that are too open
+		if err := os.Chmod(p, tt.mode); err != nil {
 			t.Fatal(err)
 		}
 		salt, _, err := loadSalt(p, false)
