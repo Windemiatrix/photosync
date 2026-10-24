@@ -12,7 +12,6 @@ Makefile @Windemiatrix
 /scripts/ @Windemiatrix
 *.m @Windemiatrix
 *.h @Windemiatrix
-/internal/adapters/secrets/ @Windemiatrix
-/internal/adapters/webdav/ @Windemiatrix
+/internal/adapters/yandexrest/ @Windemiatrix
 /tools/anonymize/ @Windemiatrix
 /testdata/ @Windemiatrix
