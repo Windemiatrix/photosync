@@ -69,8 +69,8 @@ fixtures-verify: ## Anonymizer check on the private materials (ANONYMIZE_IN, ANO
 
 ##@ Yandex test account
 
-.PHONY: yandex-token
-yandex-token: ## Sign in to the Yandex test account, save the local dev token
+.PHONY: yandex-token-create
+yandex-token-create: ## Sign in to the Yandex test account, save the local dev token
 	bash scripts/yandex-token.sh create
 
 .PHONY: yandex-token-delete

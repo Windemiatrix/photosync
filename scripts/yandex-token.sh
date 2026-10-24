@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Local development token for the Yandex Disk REST API, separate from the one
 # in GitHub secrets. Sign in with the test account, not your own.
-#   scripts/yandex-token.sh create   sign in with a device code and save the token
-#   scripts/yandex-token.sh delete   revoke the token and delete the file
+#   make yandex-token-create   sign in with a device code and save the token
+#   make yandex-token-delete   revoke the token and delete the file
 # Needs YANDEX_CLIENT_ID and YANDEX_CLIENT_SECRET (the Makefile exports .env).
 # Secrets go in request bodies built from the environment, never in argv or output.
 set -euo pipefail
