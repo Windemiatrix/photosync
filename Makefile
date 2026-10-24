@@ -80,6 +80,13 @@ yandex-token-delete: ## Revoke and delete the local dev token
 pr-title: ## PR_TITLE follows the title convention (PR_TITLE='...' make pr-title)
 	bash scripts/check-pr-title.sh
 
+BASE ?= origin/main
+ROWS ?= 01
+
+.PHONY: pr-metrics
+pr-metrics: ## PR metrics table rows against BASE (make pr-metrics BASE=origin/main ROWS=01 OUT=rows.txt)
+	bash scripts/pr-metrics.sh --base '$(BASE)' --rows '$(ROWS)' $(if $(OUT),--out '$(OUT)')
+
 ##@ Release
 
 .PHONY: release-snapshot

@@ -67,6 +67,7 @@ fi
 bash scripts/check-pr-title-test.sh || failed=1
 bash scripts/next-version-test.sh || failed=1
 bash scripts/check-release-deps-test.sh || failed=1
+bash scripts/pr-metrics-test.sh || failed=1
 
 if ((failed)); then
   exit 1
