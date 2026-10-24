@@ -34,4 +34,4 @@ jobs:
           YANDEX_TEST_REFRESH_TOKEN: ${{ secrets.YANDEX_TEST_REFRESH_TOKEN }}
           YANDEX_TEST_UID: ${{ vars.YANDEX_TEST_UID }}
           GH_TOKEN: ${{ secrets.GH_PAT_UPDATE_YANDEX_TEST_TOKEN }}
-        run: make rotate-yandex-test-token
+        run: bash scripts/rotate-yandex-test-token.sh

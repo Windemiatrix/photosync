@@ -2,7 +2,7 @@
 # Refreshes the OAuth token of the Yandex test account and stores both new
 # tokens in GitHub secrets. A refresh token works once: the new one is saved
 # first, the access token for the integration tests second. No token is ever
-# printed. Run by rotate-yandex-test-token.yml through "make rotate-yandex-test-token".
+# printed. Run only by rotate-yandex-test-token.yml.
 #
 # Environment: YANDEX_CLIENT_ID, YANDEX_CLIENT_SECRET, YANDEX_TEST_REFRESH_TOKEN,
 # YANDEX_TEST_UID, GH_TOKEN (writes environment secrets), GITHUB_REPOSITORY.
