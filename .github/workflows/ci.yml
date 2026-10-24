@@ -139,7 +139,6 @@ jobs:
     needs: [pr-title, linux, macos, repo-checks, deps]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    permissions: {}
     steps:
       - name: Every required job passed or was skipped
         env:
