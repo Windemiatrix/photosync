@@ -8,10 +8,12 @@ This document is for readers who want to see how the tool is built; to learn wha
 
 In short: the tool reads a copy of the Photos database, walks the chosen folders on the Disk and compares three states: what was there at the previous run, what is in Photos now and what is on the Disk. The plan is built from the difference; it is applied only with `--apply`.
 
-```text
-Photos ──(snapshot)──┐
-                     ├─► three-state comparison ─► plan ─► (--apply) ─► operations
-Yandex Disk ─(scan)──┘    (previous run, Photos, Disk)
+```mermaid
+flowchart LR
+  photos["Photos"] -->|snapshot| compare["three-state comparison"]
+  disk["Yandex Disk"] -->|scan| compare
+  last["previous run"] --> compare
+  compare --> plan["plan"] -->|"--apply"| ops["operations"]
 ```
 
 ## Terms
@@ -29,12 +31,16 @@ The [osxphotos](https://github.com/Windemiatrix/go-libs/tree/main/osxphotos) lib
 
 ## 2. Components
 
-```text
-cmd ──► app ──► domain
-cmd ──► adapters ──► domain      (app does not import adapters; adapters do not import app)
-cmd, app ──► state, report, clock
-cmd ──► config, i18n             (state, report, clock, config, i18n are concrete packages, no interfaces)
+```mermaid
+flowchart LR
+  cmd --> app --> domain
+  cmd --> adapters --> domain
+  cmd --> concrete["state, report, clock"]
+  app --> concrete
+  cmd --> setup["config, i18n"]
 ```
+
+`app` does not import the adapters, and the adapters do not import `app`. `state`, `report`, `clock`, `config` and `i18n` are concrete packages, with no interfaces.
 
 The code layout follows [bxcodec/go-clean-arch](https://github.com/bxcodec/go-clean-arch): `app` is the service layer, `adapters` the repository layer, `cmd` the delivery layer; interfaces are declared by their consumer, there is no separate interfaces package, and dependencies point inward, to `domain`.
 

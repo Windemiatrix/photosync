@@ -8,10 +8,12 @@
 
 В двух словах: программа читает копию базы «Фото», обходит выбранные папки на Диске и сравнивает три состояния: что было при прошлом запуске, что сейчас в «Фото» и что на Диске. Из разницы строится план; применяется он только по `--apply`.
 
-```text
-«Фото» ──(снимок)──┐
-                   ├─► сравнение трёх состояний ─► план ─► (--apply) ─► операции
-Яндекс Диск ─(скан)┘    (прошлый запуск, «Фото», Диск)
+```mermaid
+flowchart LR
+  photos["«Фото»"] -->|снимок| compare["сравнение трёх состояний"]
+  disk["Яндекс Диск"] -->|скан| compare
+  last["прошлый запуск"] --> compare
+  compare --> plan["план"] -->|"--apply"| ops["операции"]
 ```
 
 ## Термины
@@ -29,12 +31,16 @@
 
 ## 2. Компоненты
 
-```text
-cmd ──► app ──► domain
-cmd ──► adapters ──► domain      (app адаптеры не импортирует; адаптеры не импортируют app)
-cmd, app ──► state, report, clock
-cmd ──► config, i18n             (state, report, clock, config, i18n — конкретные пакеты, без интерфейсов)
+```mermaid
+flowchart LR
+  cmd --> app --> domain
+  cmd --> adapters --> domain
+  cmd --> concrete["state, report, clock"]
+  app --> concrete
+  cmd --> setup["config, i18n"]
 ```
+
+`app` адаптеры не импортирует, адаптеры не импортируют `app`. `state`, `report`, `clock`, `config` и `i18n` — конкретные пакеты, без интерфейсов.
 
 Структура кода следует образцу [bxcodec/go-clean-arch](https://github.com/bxcodec/go-clean-arch): `app` — слой сервиса, `adapters` — repository, `cmd` — delivery; интерфейсы объявляет тот, кто их использует, отдельного пакета интерфейсов нет, зависимости направлены внутрь, к `domain`.
 
