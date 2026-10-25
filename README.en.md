@@ -18,7 +18,7 @@ Already in place:
 - research into the behavior of macOS, Photos and Yandex Disk, on which the design is built;
 - the program skeleton and automatic releases: an archive for Mac, checksums and a provenance attestation;
 - CI on macOS: tests with the race detector, a coverage threshold, a linter;
-- in the [osxphotos](https://github.com/Windemiatrix/go-libs/tree/main/osxphotos) library: detecting the Photos schema and reading photos from a copy of the Photos database (`photosdb.Open`); albums and filters come next.
+- in the [osxphotos](https://github.com/Windemiatrix/go-libs/tree/main/osxphotos) library: detecting the Photos schema and reading photos and albums from a copy of the Photos database (`photosdb.Open`); folders and filters come next.
 
 Next: reading the Photos library → scanning the Disk → the plan → upload and import → the first working version.
 
