@@ -1,5 +1,6 @@
-# A step that also runs locally calls one Makefile target; event values reach
-# it only through env:. "ci-ok" is the check the ruleset of main requires.
+# A step that also runs locally calls one Makefile target or the action of the
+# same tool and version; event values reach it only through env:. "ci-ok" is
+# the check the ruleset of main requires.
 # Every push to main is released by the "release" job. The tests do not run
 # again on that push: the ruleset of main merges only a branch that is up to
 # date with main and green, so main gets exactly the tree the PR tested.
@@ -9,7 +10,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [opened, synchronize, reopened, edited]
   schedule:
     - cron: "23 3 * * 0"
   workflow_dispatch:
@@ -44,29 +44,9 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: make pr-title
 
-  linux:
-    if: github.event_name != 'push'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-          cache: false
-      - name: Modules
-        run: make mod
-      - name: Vet
-        run: make vet
-      - name: Tests and coverage
-        run: make cover
-
+  # The app runs only on macOS, so the tests run only there.
   macos:
-    if: github.event_name != 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: macos-15
     timeout-minutes: 40
     permissions:
@@ -82,17 +62,23 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
+      - name: Modules
+        run: make mod
+      # The release binary instead of "go run": building golangci-lint from
+      # source took most of the job.
       - name: Lint
-        run: make lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          # Bump together with GOLANGCI_LINT_VERSION in the Makefile.
+          version: v2.15.0
+          skip-cache: true
       - name: Vet
         run: make vet
       - name: Tests and coverage with cgo
         run: make cover
-      - name: Release archive (snapshot)
-        run: make release-snapshot
 
   repo-checks:
-    if: github.event_name != 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -150,7 +136,7 @@ jobs:
 
   ci-ok:
     if: always()
-    needs: [pr-title, linux, macos, repo-checks, deps]
+    needs: [pr-title, macos, repo-checks, deps]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -205,12 +191,17 @@ jobs:
           fi
           echo "Release $tag"
           git tag "$tag"
+      # The release binary instead of "go run": building GoReleaser from source
+      # took more than two minutes.
       - name: Build and publish the Release
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        # Bump together with GORELEASER_VERSION in the Makefile, which runs it
-        # locally (make release-snapshot).
-        run: go run github.com/goreleaser/goreleaser/v2@v2.18.3 release --clean --release-header-tmpl docs/release-notes-header.md
+        with:
+          # Bump together with GORELEASER_VERSION in the Makefile, which runs it
+          # locally (make release-snapshot).
+          version: v2.18.3
+          args: release --clean --release-header-tmpl docs/release-notes-header.md
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:

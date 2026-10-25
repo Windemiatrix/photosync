@@ -1,5 +1,5 @@
 # GoReleaser OSS configuration:
-#   make release-snapshot   builds the archive locally and on every pull request,
+#   make release-snapshot   builds the archive locally (part of make test),
 #                           publishes nothing
 #   the release job of ci.yml  builds and publishes the GitHub Release after
 #                              every merge to main

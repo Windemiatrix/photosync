@@ -57,7 +57,7 @@ Tests tagged `photokit_live` import, change and delete objects in a real library
 
 - CI for a PR from a fork runs after the maintainer approves it.
 - Explain in the description any PR that changes `.github/`, `scripts/`, `Makefile`, `.goreleaser.yaml`, `docs/release-notes-header*.md`, `go.mod` or `go.sum`: the maintainer checks that it does not weaken the checks. The last two of the named files run inside the release job with write access.
-- Building on macOS is needed for the cgo adapters; the rest of the code builds and is checked on Linux too.
+- The app runs only on macOS, and CI checks it only there.
 
 ## Releases
 
