@@ -35,7 +35,7 @@ The code layout follows [bxcodec/go-clean-arch](https://github.com/bxcodec/go-cl
 - **`adapters`**: implementations of the interfaces that `app` declares; they make no decisions.
 - **Concrete packages** (no interfaces: tests use the real ones, including SQLite; `clock` has a controllable test implementation): `state` (SQLite), `report` (`json/md/csv`), `clock`, `config`, `i18n` (ru/en).
 
-`app` interfaces: `PhotoLibrary` (snapshot through `photosdb`; download, import, albums and deletion through `photokit`); `Remote` (a neutral storage contract; the first-version adapter is the Yandex Disk REST API; the cloud is scanned by a recursive parallel walk of folders, with no flat listing); `MediaProbe` (own EXIF/ISOBMFF/QuickTime parsing over Range requests); `Converter` (`ffmpeg`); `SpaceManager`, `NetworkMonitor`; `UI` (no full-screen interface). A linter enforces layer boundaries. Every cgo adapter has a stub for other platforms, so the code builds and tests run on Linux too.
+`app` interfaces: `PhotoLibrary` (snapshot through `photosdb`; download, import, albums and deletion through `photokit`); `Remote` (a neutral storage contract; the first-version adapter is the Yandex Disk REST API; the cloud is scanned by a recursive parallel walk of folders, with no flat listing); `MediaProbe` (own EXIF/ISOBMFF/QuickTime parsing over Range requests); `Converter` (`ffmpeg`); `SpaceManager`, `NetworkMonitor`; `UI` (no full-screen interface). A linter enforces layer boundaries. Every cgo adapter has a stub for other platforms; CI builds and tests on macOS only.
 
 Main commands:
 
@@ -110,11 +110,11 @@ Retries: up to 6 attempts with exponential backoff; after three consecutive fail
 - **Other:** parser fuzzing; ru and en key parity; with `--output json`, stdout is exactly one valid JSON document.
 - **PhotoKit:** tests tagged `photokit_live` (import, deletion, albums on a real library) run only by hand under a separate macOS account with its own Apple ID and a test library, never on a primary library. In CI, on a disposable runner with its own library, only a smoke run of import, download and albums runs; deletion needs a system dialog and is not checked in CI.
 
-Coverage: the domain at least 95% per package, the rest at least 80%, except for code that runs only against real system APIs (cgo adapters, stubs, `cmd/`, `tools/`); the list of exclusions lives in the check script.
+Coverage: at least 80% in total over all packages (`make cover`); the 95% threshold for each domain package comes with the first of them.
 
 ## 7. Build
 
-The cgo binary (PhotoKit, network monitoring, disk space) is built on macOS only: `MACOSX_DEPLOYMENT_TARGET=13.0`, `-trimpath`. The arm64 and amd64 slices are merged with `lipo` into a universal binary, then a mandatory ad-hoc signature `codesign -s - --identifier io.github.windemiatrix.photosync` is applied (without the identifier macOS sees the binary as `a.out`; not an Apple signature and no notarization; no certificates needed); the archive and checksums are computed after it. The `Info.plist` with the Photos usage description is embedded through a directive in `cmd/photosync`. One config describes the build: `make release-snapshot` locally and on every PR, `goreleaser release` with the release-notes header `docs/release-notes-header.md` in the tag workflow; bit-for-bit reproducibility is not promised, and provenance is covered by an attestation.
+The cgo binary (PhotoKit, network monitoring, disk space) is built on macOS only: `MACOSX_DEPLOYMENT_TARGET=13.0`, `-trimpath`. The arm64 and amd64 slices are merged with `lipo` into a universal binary, then a mandatory ad-hoc signature `codesign -s - --identifier io.github.windemiatrix.photosync` is applied (without the identifier macOS sees the binary as `a.out`; not an Apple signature and no notarization; no certificates needed); the archive and checksums are computed after it. The `Info.plist` with the Photos usage description is embedded through a directive in `cmd/photosync`. One config describes the build: `make release-snapshot` locally (part of `make test`), `goreleaser release` with the release-notes header `docs/release-notes-header.md` in the release job after a merge; bit-for-bit reproducibility is not promised, and provenance is covered by an attestation.
 
 **Unverified:** compatibility of the ad-hoc signature with the hardened runtime (currently off); running on macOS 13 (checked by the release checklist).
 
