@@ -1,0 +1,32 @@
+# The PR title becomes the squash commit title and decides the next version,
+# so it is checked again whenever it changes. Apart from ci.yml: a title edit
+# must not rerun the tests or cancel a test run. "pr-title" is a required check
+# of the ruleset of main, next to "ci-ok".
+name: pr-title
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # No "if" on edits of the description: a skipped required check counts as
+  # passed and would hide a failed title. The check takes seconds.
+  pr-title:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: make pr-title
