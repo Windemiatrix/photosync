@@ -54,12 +54,14 @@ vuln: ## Known vulnerabilities in dependencies (not in "make test")
 fixtures-check: ## Leak scan of testdata/fixtures
 	go run ./tools/anonymize --check testdata/fixtures
 
+ANONYMIZE_SALT ?= $(HOME)/.config/photosync-dev/anonymize.key
+
 .PHONY: fixtures-verify
-fixtures-verify: ## Anonymizer check on the private materials (ANONYMIZE_IN, ANONYMIZE_OUT in .env)
-	@if [ -z "$(ANONYMIZE_IN)" ] || [ -z "$(ANONYMIZE_OUT)" ]; then \
-		echo "fixtures-verify: ANONYMIZE_IN or ANONYMIZE_OUT not set, skipped"; \
+fixtures-verify: ## Anonymizer check on the private materials; rebuilt fixtures equal testdata/fixtures (ANONYMIZE_IN, ANONYMIZE_SALT in .env)
+	@if [ -z "$(ANONYMIZE_IN)" ]; then \
+		echo "fixtures-verify: ANONYMIZE_IN not set, skipped"; \
 	else go test -tags fixtures_verify -count=1 -v -run 'TestFixtures' ./tools/anonymize \
-		-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.out="$(ANONYMIZE_OUT)"; fi
+		-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.salt="$(ANONYMIZE_SALT)"; fi
 
 ##@ Yandex test account
 
