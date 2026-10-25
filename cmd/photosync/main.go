@@ -1,7 +1,8 @@
-// Command photosync keeps a macOS Photos library and cloud storage in sync.
+// Command photosync keeps a macOS Photos library and Yandex Disk in sync as
+// plain year/date folders.
 //
-// This is the repository skeleton: it implements only the version command.
-// The other commands arrive together with the application packages.
+// Work in progress: only "photosync version" exists so far. The planned
+// commands and their safety rules are described in README.md.
 package main
 
 import (
