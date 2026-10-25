@@ -1,7 +1,10 @@
-// Command anonymize turns the materials of the manual sync (the Photos
-// catalog, the cloud inventory, the reviewed plan and the reference links of
-// a rerun of the reference manual-sync script) into anonymized matching
-// fixtures, and scans a directory of fixtures for leaks.
+// Command anonymize is a developer tool; it is not needed to use photosync.
+// It builds test fixtures from a real photo-sync setup without leaking
+// personal data: names, paths and hashes are replaced by keyed pseudonyms,
+// dates and sizes are mapped, keeping the relations the matching tests need. Its
+// input is the materials of an earlier script-based sync (a Photos catalog,
+// a cloud file inventory, the reviewed plan and a rerun of that plan with its
+// links). It also scans fixture directories for leaks (--check).
 //
 //	anonymize --in <dir> --out <dir> --salt-file <file>
 //	anonymize --check <dir> [--salt-file <file>]
@@ -25,8 +28,10 @@
 //	anonymize --in ~/materials/sync --out ~/materials/fixtures-out --salt-file ~/.config/photosync-dev/anonymize.key
 //	anonymize --check ~/materials/fixtures-out
 //
-// Fixtures reach testdata/fixtures only by a manual move after --check and a
-// review by the owner of the materials.
+// Fixtures reach testdata/fixtures only by a manual move after --check; an
+// automatic comparison with the source materials ("make fixtures-verify")
+// confirms that none of the input words got in, and the maintainer reads the
+// summary of that comparison.
 //
 // The standard output holds aggregates only (counts per level, unit and
 // case); --check prints "<file>: <JSON pointer>: <rule>" per finding and a

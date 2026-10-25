@@ -21,7 +21,7 @@ The report is stored by GitHub and may become public when the advisory is publis
 - `config.yaml` (it contains cloud paths), token files (`~/.config/photosync/tokens/`), OAuth tokens, `client_secret`;
 - screenshots and text with your album names, paths and logins.
 
-Instead, describe the situation in generic terms (`IMG_0001.HEIC`, `2024/05-01 - Holidays`) and attach the output of `photosync version` and `photosync doctor`, after reviewing it. If a secret did end up in a report, revoke it first (token: `photosync remote logout <name>`; if the token may have been an old one or the command did not revoke access, revoke the photosync app's access in your Yandex ID settings), then say so.
+Instead, describe the situation in generic terms (`IMG_0001.HEIC`, `2024/05-01 - Holidays`) and attach the output of `photosync version` (and of `photosync doctor`, if your version has the command), after reviewing it. If a secret did end up in a report, revoke it first (token: `photosync remote logout <name>`; if the token may have been an old one or the command did not revoke access, revoke the photosync app's access in your Yandex ID settings), then say so.
 
 ## Response times
 

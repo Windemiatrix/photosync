@@ -2,9 +2,17 @@
 
 **English** | [Русский](architecture.md) | [← README](../README.en.md)
 
-Contents: [Terms](#terms) · [1. Two deliverables](#1-two-deliverables) · [2. Components](#2-components) · [3. Data and state](#3-data-and-state) · [4. How synchronization works](#4-how-synchronization-works) · [5. Protection against data loss](#5-protection-against-data-loss) · [6. Testing](#6-testing) · [7. Build](#7-build) · [8. Release](#8-release) · [9. Installation and updates](#9-installation-and-updates)
+Contents: [Terms](#terms) · [1. The application and the library](#1-the-application-and-the-library) · [2. Components](#2-components) · [3. Data and state](#3-data-and-state) · [4. How synchronization works](#4-how-synchronization-works) · [5. Protection against data loss](#5-protection-against-data-loss) · [6. Testing](#6-testing) · [7. Build](#7-build) · [8. Release](#8-release) · [9. Installation and updates](#9-installation-and-updates)
 
-A condensed overview of how the application is built. There is no code yet: this document describes the intended behavior. Points that depend on facts about macOS, PhotoKit and iCloud that are not yet verified are marked as unconfirmed. The `R-*` (plan rules) and `INV-*` (invariants) identifiers and the configuration keys (`targets.*`, `remote_priority`, `sync.*`, the `conflict` and `deletes` policies and others) are named here ahead of time: their full list will appear together with the code and a configuration reference.
+This document is for readers who want to see how the tool is built; to learn what it does, the [README](../README.en.md) is enough. There is no sync yet: this document describes the intended behavior. Points that depend on facts about macOS, PhotoKit and iCloud that are not yet verified are marked as unconfirmed. The `R-*` (plan rules) and `INV-*` (invariants) identifiers and the configuration keys (`targets.*`, `remote_priority`, `sync.*`, the `conflict` and `deletes` policies and others) are working names: a reference for them will appear together with the code.
+
+In short: the tool reads a copy of the Photos database, walks the chosen folders on the Disk and compares three states: what was there at the previous run, what is in Photos now and what is on the Disk. The plan is built from the difference; it is applied only with `--apply`.
+
+```text
+Photos ──(snapshot)──┐
+                     ├─► three-state comparison ─► plan ─► (--apply) ─► operations
+Yandex Disk ─(scan)──┘    (previous run, Photos, Disk)
+```
 
 ## Terms
 
@@ -15,9 +23,9 @@ A condensed overview of how the application is built. There is no code yet: this
 - **Event**: a Photos album of the form `MM/DD Title` inside a year folder; it corresponds to the directory `MM-DD - Title`. **Thematic album**: any other album.
 - **Quarantine**: the `.photosync/quarantine` directory in the cloud; instead of being deleted, a file is moved there.
 
-## 1. Two deliverables
+## 1. The application and the library
 
-The [osxphotos](https://github.com/Windemiatrix/go-libs/tree/main/osxphotos) library knows nothing about synchronization: it reads a copy of `Photos.sqlite`, builds paths from templates and bridges to PhotoKit. The application reaches the library's I/O (`photosdb`, `photokit`) through a single adapter; the domain imports the pure `template` and `export` packages directly (section 2). The application depends on published library tags, and `replace` in `go.mod` is forbidden. Principle: of two solutions, take the simpler one until it is shown not to cope.
+The [osxphotos](https://github.com/Windemiatrix/go-libs/tree/main/osxphotos) library knows nothing about synchronization: it reads a copy of `Photos.sqlite`; path templates (`template`), export file names (`export`) and the PhotoKit bridge (`photokit`) are planned. The application will reach the library's I/O (`photosdb`, `photokit`) through a single adapter; the domain will import the pure `template` and `export` packages directly (section 2). The application depends on published library tags, and `replace` in `go.mod` is forbidden. Principle: of two solutions, take the simpler one until it is shown not to cope.
 
 ## 2. Components
 
@@ -91,8 +99,8 @@ Retries: up to 6 attempts with exponential backoff; after three consecutive fail
 
 - **`--yes` is not accepted** (without a terminal: exit code 1 naming what is required, a flag or a terminal) when:
   - there is no reviewed plan or it changed: manual confirmation in a terminal is needed;
-  - the plan has irreversible operations (cloud deletion under `deletes: propagate`): you must type their number in a terminal;
-  - deletions, quarantines and replacements exceed the threshold (50 items or 5%): `--allow-mass-changes` or typing the number is required;
+  - the plan has irreversible operations (cloud deletion under `deletes: propagate`): you must type how many such operations there are in a terminal;
+  - deletions, quarantines and replacements exceed the threshold (50 items or 5%): `--allow-mass-changes` or typing in a terminal how many such operations there are is required;
   - on a first sync more than 1% of pairs are probable matches (`same_time_size`, `probable`): you must review a sample and confirm separately, or pass `--confirm-probable`.
 - **Deletions.** The `deletes` policy is mandatory and has no default: `none` (do not propagate), `quarantine` (recommended) or `propagate`. Cloud quarantine is `.photosync/quarantine/<date>`, kept 90 days by default (`sync.quarantine_keep_days`). Under `propagate`, a cloud deletion is irreversible as far as photosync is concerned: the file goes to the Yandex Disk trash, `undo` does not bring it back from there, it can be restored by hand until the trash is emptied, and until then it counts against the quota. Expired quarantine and `.photosync/tmp` are deleted permanently, bypassing the trash. A deletion in Photos goes to Recently Deleted and is confirmed by the system dialog.
 - **Cloud.** Moves and copies never overwrite an occupied destination, except for moves into quarantine inside `.photosync/`. The REST API has no conditional operations, so before deleting, quarantining or replacing, `Stat` checks size and `etag` against the link record in `links`. Directories outside `.photosync/` are never deleted recursively, and the storage root is untouchable. Paths from the cloud are untrusted: `path.Clean`, prefix check, NFC. Uploads are atomic: write to `.photosync/tmp`, then move without overwrite.
@@ -104,7 +112,7 @@ Retries: up to 6 attempts with exponential backoff; after three consecutive fail
 ## 6. Testing
 
 - **Domain:** tables per `R-*` rule; property tests of `INV-*` invariants (after apply the plan is empty, order is deterministic, the last original never disappears, operations stay inside the root, no double import).
-- **Matching:** a world generator with known ground truth; fixtures from anonymized materials with a human-verified result; before commit they pass a leak scanner and the maintainer reviews a sample.
+- **Matching:** a world generator with known ground truth; fixtures from real materials are allowed only as the output of `tools/anonymize`: a leak scanner checks them, an automatic comparison with the source materials (`make fixtures-verify`) confirms that none of the input words got in, and the maintainer reads the summary of that comparison; the expected result is verified by a human.
 - **`app` scenarios:** a real `state` package (SQLite); the Yandex Disk adapter against a REST API emulator with failures (429, 503, dropped connection, lost response); fakes for Photos, disk space and network. A failure at any operation boundary must end in the same outcome as a run without it.
 - **Contracts:** one set of checks for all `Remote` implementations (a REST API emulator; integration tests on a separate Yandex test account in GitHub Actions) and for `PhotoLibrary`.
 - **Other:** parser fuzzing; ru and en key parity; with `--output json`, stdout is exactly one valid JSON document.
@@ -116,7 +124,7 @@ Coverage: at least 80% in total over all packages (`make cover`); the 95% thresh
 
 The cgo binary (PhotoKit, network monitoring, disk space) is built on macOS only: `MACOSX_DEPLOYMENT_TARGET=13.0`, `-trimpath`. The arm64 and amd64 slices are merged with `lipo` into a universal binary, then a mandatory ad-hoc signature `codesign -s - --identifier io.github.windemiatrix.photosync` is applied (without the identifier macOS sees the binary as `a.out`; not an Apple signature and no notarization; no certificates needed); the archive and checksums are computed after it. The `Info.plist` with the Photos usage description is embedded through a directive in `cmd/photosync`. One config describes the build: `make release-snapshot` locally (part of `make test`), `goreleaser release` with the release-notes header `docs/release-notes-header.md` in the release job after a merge; bit-for-bit reproducibility is not promised, and provenance is covered by an attestation.
 
-**Unverified:** compatibility of the ad-hoc signature with the hardened runtime (currently off); running on macOS 13 (checked by the release checklist).
+**Unverified:** compatibility of the ad-hoc signature with the hardened runtime (currently off); running on macOS 13 (to be checked by the release checklist).
 
 ## 8. Release
 
@@ -124,8 +132,18 @@ The cgo binary (PhotoKit, network monitoring, disk space) is built on macOS only
 
 Versions: semver without pre-releases, computed by svu from PR titles (`!` after the scope is an incompatible change, `feat` is minor, anything else is patch; before `v1.0.0` an incompatible change bumps minor); `v1.0.0` is set explicitly, by a manual run. A release's `go.mod` points at a published library tag, with no pseudo-version and no `replace`. A release comes out after every PR merged into `main`: once CI is green, the `release` job computes the version, builds the release and publishes the GitHub Release with the tag on that commit.
 
-Contents: `photosync_<version>_darwin_universal.tar.gz` (the binary, `LICENSE`, README), `checksums.txt` and a build provenance attestation. There are no per-architecture archives, SBOM or Homebrew in the first version. Release notes carry verification instructions in two languages and an English-only changelog built from PR titles (the squash commits between tags). A manual checklist on a clean account (arm64 on Apple Silicon, amd64 on Intel or under Rosetta; macOS 13 and the latest) runs on the published release; a fault it finds is fixed by the next release.
+Contents: `photosync_<version>_darwin_universal.tar.gz` (the binary, `LICENSE`, README), `checksums.txt` and a build provenance attestation. There are no per-architecture archives, SBOM or Homebrew in the first version. Release notes carry verification instructions in two languages and an English-only changelog built from PR titles (the squash commits between tags). Starting with the first working version, a manual checklist on a clean account (arm64 on Apple Silicon, amd64 on Intel or under Rosetta; macOS 13 and the latest) runs on the published release; a fault it finds is fixed by the next release.
 
 ## 9. Installation and updates
 
-Step-by-step instructions (download, verification, installation, updates, uninstall) live in the [README](../README.en.md#installation), and macOS permissions are described there under "Requirements (planned)". Additions to the README: the Photos permission of a LaunchAgent process is tied to the binary (an ad-hoc signature ties it to the code hash), so macOS may ask for it again after an update; when run from a terminal, the terminal's permission applies; `go install` produces a binary with the linker's `a.out` signature and is not recommended.
+Installation and verification are described in the release notes, and macOS permissions in "Requirements (planned)" in the [README](../README.en.md#requirements-planned).
+
+**Updates** are manual, through the same channels: there is no self-update and no network version check. A binary older than the state database refuses to run; rolling the binary back is possible while no migration has been applied, or from the database backup copy.
+
+**Signature.** The binary carries only an ad-hoc signature and is not notarized by Apple, which requires a paid developer account. So macOS may ask for confirmation on first run. That the archive was built from this repository by the release workflow is confirmed by `gh attestation verify`. The Photos permission of a LaunchAgent process is tied to the binary (an ad-hoc signature ties it to the code hash), so macOS may ask for it again after an update; when run from a terminal, the terminal's permission applies, shared by everything launched from that terminal. The release binary is signed with the identifier `io.github.windemiatrix.photosync`; `go install` gives the linker's signature with the name `a.out`, and macOS shows "a.out" in the access prompt and in settings, so installing that way is not recommended. A build of your own from source (`go install`, `make release-snapshot`) cannot sign in to Yandex: the application credentials are embedded only in release builds.
+
+**Uninstall.** First run `photosync remote logout <name>` for each storage: it deletes the token file `~/.config/photosync/tokens/<name>.json` and revokes access at Yandex. Then these are removed separately:
+
+- the binary;
+- the state directory `state_dir` (by default `~/Library/Application Support/photosync`) and the configuration `~/.config/photosync/`;
+- in the cloud: the `.photosync/` directory (quarantine and `owner.json`), if the cloud is no longer synchronized. While `owner.json` is in place, another photosync installation (with a different `state_dir`) cannot work with that cloud.
