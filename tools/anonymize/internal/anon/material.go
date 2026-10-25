@@ -35,9 +35,9 @@ func (c Counters) String() string {
 		c.UnknownAsset, c.UnknownFile, c.DoubleLink, c.Download, c.Upload, c.Replace, c.Probable, c.KeepCloud, c.Derivation, c.Duplicate)
 }
 
-// SamePlan reports whether the plan of the rerun equals the reviewed plan:
-// both are decoded as plain JSON values with exact numbers and compared
-// deeply. Links of another computation cannot be expected pairs.
+// SamePlan reports whether the plan of the rerun equals the reviewed plan,
+// comparing the decoded JSON with exact numbers. Links of another computation
+// cannot be expected pairs.
 func SamePlan(reviewed, rerun []byte) (bool, error) {
 	a, err := decodeAny(reviewed)
 	if err != nil {
@@ -63,7 +63,6 @@ func decodeAny(data []byte) (any, error) {
 	return v, nil
 }
 
-// errTrailing reports data after the JSON value of a file.
 var errTrailing = errors.New("trailing data after the JSON value")
 
 // CheckPartition checks that the reference links, the inventory of m and the
@@ -94,8 +93,8 @@ func CheckPartition(m *Material) Counters {
 			c.Derivation++
 		}
 	}
-	linked := map[string]string{} // path -> level
-	links := map[string]bool{}    // uuid \x00 path \x00 kind
+	linked := map[string]string{}
+	links := map[string]bool{}
 	for _, key := range slices.Sorted(maps.Keys(m.Links)) {
 		if !assets[key] {
 			c.UnknownAsset++
@@ -176,7 +175,6 @@ func derivationDiffers(f File, d Derived) bool {
 	return d.Stem != stem || d.Folder != fi.Folder || d.Year != fi.Year || d.EventMonth != fi.EventMonth || f.Kind != KindOf(BaseName(f.Path))
 }
 
-// planIndex answers the plan decision of a pair.
 type planIndex struct {
 	replace map[string]bool
 	keep    map[string]bool
@@ -195,9 +193,6 @@ func newPlanIndex(p Plan) planIndex {
 	return pi
 }
 
-// decision returns the plan decision of a pair: replace when the reviewed
-// plan replaces the cloud copy with the original, keep_cloud when it keeps
-// the cloud copy, "" otherwise.
 func (pi planIndex) decision(uuid, path string) string {
 	switch {
 	case pi.replace[uuid+"\x00"+path]:

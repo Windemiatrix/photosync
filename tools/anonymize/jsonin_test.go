@@ -13,9 +13,7 @@ func TestNaNToNull(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{`{"a": NaN, "b": Infinity, "c": -Infinity, "d": -1.5}`, `{"a": null, "b": null    , "c": null     , "d": -1.5}`},
 		{`[NaN,NaN,-Infinity]`, `[null,null,null     ]`},
-		// Strings are untouched, escapes included.
 		{`{"t": "NaN", "u": "a\"NaN", "v": "a\\", "w": NaN, "x": "-Infinity"}`, `{"t": "NaN", "u": "a\"NaN", "v": "a\\", "w": null, "x": "-Infinity"}`},
-		// Anything else passes as it is.
 		{`[Nan, NaX, Inf, -Inf, -1, nan]`, `[Nan, NaX, Inf, -Inf, -1, nan]`},
 		{`[-Infinit`, `[-Infinit`}, //nolint:misspell // a truncated token on purpose
 		{`NaN`, `null`},
@@ -27,8 +25,6 @@ func TestNaNToNull(t *testing.T) {
 	}
 }
 
-// TestCatalogNaN: the three tokens decode as null in a decoded field (the
-// zero value) and in a field that is never decoded; strings keep them.
 func TestCatalogNaN(t *testing.T) {
 	t.Parallel()
 	catalog := `[{"uuid": "A", "tzoffset": NaN, "original_filesize": Infinity, "width": -Infinity,
@@ -64,9 +60,8 @@ func TestOtherInputsNaN(t *testing.T) {
 	}
 }
 
-// TestSyntaxErrorOffset: the offset counts the bytes after the NaN
-// replacement up to the end of the offending byte; no byte of the input is
-// in the error.
+// The offset counts the bytes after the NaN replacement up to the end of the
+// offending byte.
 func TestSyntaxErrorOffset(t *testing.T) {
 	t.Parallel()
 	_, err := readCatalog(fstest.MapFS{nameCatalog: {Data: []byte(`[NaN Zinaida]`)}})

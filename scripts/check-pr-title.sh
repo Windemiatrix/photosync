@@ -1,16 +1,10 @@
 #!/usr/bin/env bash
-# Checks that a pull request title follows the repository rule. The title of a
-# PR becomes the title of its squash commit on main, and the release job of
-# ci.yml computes the next version from those titles (.svu.yml), so a bad title
-# is stopped before the merge.
+# The title of a PR becomes the title of its squash commit on main, and the
+# release job of ci.yml computes the next version from those titles (.svu.yml),
+# so a bad title is stopped before the merge.
 #
-# Run:    make pr-title PR_TITLE='feat(plan): add match levels'
-#         scripts/check-pr-title.sh 'feat(config)!: rename the remotes key'
-# Input:  the title as the first argument, otherwise the PR_TITLE variable. CI
-#         passes it through the environment, never through ${{ }} inside a run
-#         script: the title of a pull request from a fork is untrusted input.
-# Exit:   0 the title is valid; 1 it is not, the reason and the rule are on
-#         stderr.
+# CI passes the title through the environment, never through ${{ }} inside a
+# run script: the title of a pull request from a fork is untrusted input.
 set -euo pipefail
 
 # In the C locale [ -~] is the printable ASCII range, which also keeps out

@@ -7,8 +7,7 @@ import (
 	"unicode"
 )
 
-// This file ports the small derivations of the reference manual-sync script
-// that the relation check and the unit selection need. It does no matching.
+// This file ports the small derivations of the reference manual-sync script.
 
 // Splitext splits a name into a stem and an extension with the semantics of
 // Python's os.path.splitext: the extension starts at the last dot of the last
@@ -70,9 +69,8 @@ var (
 	suffixNRE    = regexp.MustCompile(` \(([0-9]+)\)$`)
 )
 
-// FolderInfoOf derives the folder structure of a cloud path: the year folder
-// (exactly four digits), the event folder below it and the event month and
-// day from the event name.
+// FolderInfoOf derives the folder structure of a cloud path as the inventory
+// does.
 func FolderInfoOf(p string) FolderInfo {
 	fi := FolderInfo{Folder: FolderOf(p)}
 	if fi.Folder == "" {
@@ -135,7 +133,6 @@ func ParseDT(s string) (t time.Time, ok bool) {
 	return time.Time{}, false
 }
 
-// wall returns the wall clock of t as a UTC time.
 func wall(t time.Time) time.Time {
 	y, mo, d := t.Date()
 	h, mi, sec := t.Clock()
@@ -175,7 +172,7 @@ func EventToTitle(event string) string {
 	return strings.TrimFunc(head+" "+strings.TrimFunc(m[3], unicode.IsSpace), unicode.IsSpace)
 }
 
-// AlbumKey is an album of the catalog: the folder path and the title.
+// AlbumKey is an album of the catalog.
 type AlbumKey struct {
 	Folders []string
 	Title   string

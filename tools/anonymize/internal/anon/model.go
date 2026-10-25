@@ -1,8 +1,5 @@
-// Package anon holds the pure logic of the anonymize tool: the input and
-// output types, the ports of the reference manual-sync script derivations,
-// the material consistency checks, the deterministic keyed mapping, the unit
-// selection, the relation check and the leak scanner. It does no I/O: the
-// command in the parent directory reads and writes the files.
+// Package anon holds the pure logic of the anonymize tool. It does no I/O:
+// the command in the parent directory reads and writes the files.
 package anon
 
 import (
@@ -59,7 +56,7 @@ func (a Asset) BurstGroup() string {
 	return k
 }
 
-// AlbumRef is one album of an asset: the folder path and the title.
+// AlbumRef is one album of an asset.
 type AlbumRef struct {
 	FolderNames []string `json:"folder_names"`
 	Title       string   `json:"title"`
@@ -122,8 +119,7 @@ type Inventory struct {
 	Derived []Derived
 }
 
-// Link is one reference link of an asset: a cloud path and the reference
-// match kind.
+// Link is one reference link of an asset.
 type Link struct {
 	Path string
 	Kind string
@@ -157,8 +153,7 @@ type Plan struct {
 	Conflicts [][]string     `json:"conflicts"`
 }
 
-// Material is everything the tool reads: the catalog, the chosen inventory,
-// the reviewed plan and the reference links.
+// Material is everything the tool reads.
 type Material struct {
 	Assets []Asset
 	Inventory
@@ -274,10 +269,10 @@ const (
 // IsMedia reports whether an inventory kind takes part in matching.
 func IsMedia(kind string) bool { return kind == KindPhotosOK || kind == KindConvert }
 
-// structuralWords are letter runs kept as they are (compared without case).
+// structuralWords are lower case: they are compared without case.
 var structuralWords = []string{"img", "dsc", "dscf", "dscn", "pxl", "mvi", "vid", "pano", "burst", "cover", "hdr", "raw", "mp", "edited"}
 
-// knownExts are extensions (lower case, without the dot) kept as they are.
+// knownExts are lower case, without the dot.
 var knownExts = []string{
 	"jpg", "jpeg", "heic", "heif", "png", "gif", "tif", "tiff", "webp", "bmp",
 	"dng", "cr2", "cr3", "nef", "arw", "raf", "orf", "rw2",
@@ -307,7 +302,6 @@ var (
 	formatSet = runSet(formatStrings())
 )
 
-// runSet returns the lower-case letter runs of the strings.
 func runSet(ss []string) map[string]bool {
 	l := map[string]bool{}
 	for _, s := range ss {
@@ -319,13 +313,11 @@ func runSet(ss []string) map[string]bool {
 }
 
 // AllowedWord reports whether a lower-case NFC letter run may appear in the
-// output without being a generated word: a structural word, a known
-// extension or a word of the format dictionary.
+// output without being a generated word.
 func AllowedWord(w string) bool {
 	return slices.Contains(structuralWords, w) || extSet[w] || formatSet[w]
 }
 
-// letterRuns returns the letter runs of s: a letter followed by marks.
 func letterRuns(s string) []string {
 	var runs []string
 	for _, r := range splitRuns(s) {
@@ -336,7 +328,6 @@ func letterRuns(s string) []string {
 	return runs
 }
 
-// Run classes of the text rule.
 const (
 	runOther = iota
 	runLetters
@@ -348,9 +339,6 @@ type textRun struct {
 	text  string
 }
 
-// splitRuns cuts s into letter runs (letters with the marks that follow
-// them), ASCII digit runs and other runs. A mark that does not follow a
-// letter belongs to an other run.
 func splitRuns(s string) []textRun {
 	var runs []textRun
 	start, class := 0, -1

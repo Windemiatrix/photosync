@@ -15,8 +15,8 @@ import (
 	"strings"
 )
 
-// Finding is one leak scanner finding: a file, a JSON pointer and a rule.
-// It never holds the value that triggered it.
+// Finding is one leak scanner finding. It never holds the value that
+// triggered it.
 type Finding struct {
 	File    string
 	Pointer string
@@ -64,9 +64,7 @@ var (
 	localPaths   = []string{`\`, "/Users/", "/Volumes/", "/home/", "/private/"}
 )
 
-// Scan checks one JSON file for leaks: identifiers without the marker,
-// coordinates, e-mail addresses, local paths, words outside the dictionary
-// of generated words and the format dictionary, and the salt (when given).
+// Scan checks one JSON file for leaks; the salt is checked only when given.
 // Object keys are checked by every rule except "word"; a key outside the
 // field names of the output types is reported as unexpected-key and shown as
 // <key> in the pointer.
@@ -131,8 +129,6 @@ func (s *scanner) value(ptr string, v any) {
 	}
 }
 
-// text applies the string rules; marker identifiers and ISO dates are cut
-// out first.
 func (s *scanner) text(ptr, v string, words bool) {
 	v = isoDateRE.ReplaceAllString(v, " ")
 	v = markerUUIDRE.ReplaceAllString(v, " ")
@@ -182,8 +178,6 @@ func isLocalPath(v string) bool {
 	return false
 }
 
-// hasSalt reports whether data holds the salt raw, as hex in either case or
-// as base64 (standard or URL alphabet, with or without padding).
 func hasSalt(data, salt []byte) bool {
 	h := hex.EncodeToString(salt)
 	forms := [][]byte{

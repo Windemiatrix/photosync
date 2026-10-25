@@ -13,9 +13,6 @@ func TestComponentsOf(t *testing.T) {
 	t.Parallel()
 	trash := photo(9, "IMG_0009.HEIC", "2023-01-01T09:00:00+00:00", 9)
 	trash.InTrash = true
-	// Records: assets 0-2 and the trashed 3; files 4 (A1), 5 (neighbor of
-	// 4), 6 (A2), 7 (neighbor of 6), 8 (kind other), 9 (another folder),
-	// 10 (A3), 11 (neighbor of 10, linked to A1), 12 (alone).
 	tm := testMaterial{
 		assets: []Asset{
 			photo(1, "IMG_0001.HEIC", "2023-01-01T10:00:00+00:00", 100),
@@ -113,7 +110,6 @@ func categoryCases() []categoryCase {
 		if one {
 			burstOf(&b1, &b2)
 		} else {
-			// Two bursts whose other frames are not in the catalog.
 			b1.Burst, b1.BurstPhotos = true, []string{uuidN(3)}
 			b2.Burst, b2.BurstPhotos = true, []string{uuidN(4)}
 		}
@@ -233,8 +229,6 @@ func TestUnionCategoryPullsGroups(t *testing.T) {
 	}
 }
 
-// manyUnits returns n units of size records each: an asset alone (size 1)
-// or an asset linked to one file of a folder with size-1 neighbor files.
 func manyUnits(n, size int) *Material {
 	tm := testMaterial{links: Links{}}
 	for i := 0; i < n; i++ {
@@ -259,8 +253,6 @@ func mustPick(t *testing.T, g *graph, mp *Mapper, category string, cands [][]int
 	return got
 }
 
-// TestPickOrderIsKeyed checks that the pick follows the keyed hash of the
-// salt and the category, not the record order.
 func TestPickOrderIsKeyed(t *testing.T) {
 	t.Parallel()
 	g := newGraph(manyUnits(40, 1))
@@ -297,7 +289,6 @@ func TestPickUnits(t *testing.T) {
 		if len(got) != tt.want {
 			t.Errorf("%d units: picked %d records; want %d", tt.units, len(got), tt.want)
 		}
-		// The order of candidates does not matter.
 		for i, j := 0, len(cands)-1; i < j; i, j = i+1, j-1 {
 			cands[i], cands[j] = cands[j], cands[i]
 		}
@@ -312,7 +303,6 @@ func TestPickUnits(t *testing.T) {
 	if len(got) != 50 {
 		t.Errorf("picked %d records; want 50", len(got))
 	}
-	// A unit over 60 records is never a candidate.
 	g = newGraph(manyUnits(1, 61))
 	if cands := g.candidates(c2); len(cands) != 0 {
 		t.Errorf("too large unit is a candidate")
@@ -451,7 +441,6 @@ func TestBuild(t *testing.T) {
 			t.Errorf("%s: units %+v", cc.category, res.Units)
 		}
 	}
-	// The same material and salt give the same result.
 	m := categoryCases()[0].yes.build()
 	a, err1 := Build(m, newTestMapper(t))
 	b, err2 := Build(categoryCases()[0].yes.build(), newTestMapper(t))
@@ -533,8 +522,7 @@ func TestBuildSkipsUnits(t *testing.T) {
 	}
 }
 
-// TestClustersRule: a letter run whose lower NFC form has another number of
-// clusters (Hangul jamo compose) is not supported.
+// Hangul jamo compose, so the lower NFC form has another number of clusters.
 func TestClustersRule(t *testing.T) {
 	t.Parallel()
 	jamo := string([]rune{0x1100, 0x1161})
@@ -543,10 +531,6 @@ func TestClustersRule(t *testing.T) {
 	}
 }
 
-// partialUnits is a material where an unsupported record shares its unit
-// with supported ones: an unsupported asset with a linked file and a
-// neighbor, and a supported asset whose linked file is not supported, next to
-// a supported sidecar. Asset 2 alone is the only supported unit.
 func partialUnits() testMaterial {
 	d := "2023-07-14T18:03:27+03:00"
 	bad := photo(1, "me@example.com.jpg", d, 1)
@@ -615,8 +599,6 @@ func TestSupportedUnits(t *testing.T) {
 	}
 }
 
-// TestBuildSkipsExhaustedUnits maps with a MAC of one output: the first unit
-// takes it, every other unit runs out of space and is skipped, not fatal.
 func TestBuildSkipsExhaustedUnits(t *testing.T) {
 	t.Parallel()
 	tm := testMaterial{assets: []Asset{
@@ -640,8 +622,7 @@ func TestBuildSkipsExhaustedUnits(t *testing.T) {
 	}
 }
 
-// TestBuildEpochGapIsUnsupported: an epoch date next to the shifted range
-// drops its unit, so the epoch_gap relation never stops a run.
+// The unit is dropped so that the epoch_gap relation never stops a run.
 func TestBuildEpochGapIsUnsupported(t *testing.T) {
 	t.Parallel()
 	tm := testMaterial{files: []File{
@@ -657,8 +638,7 @@ func TestBuildEpochGapIsUnsupported(t *testing.T) {
 	}
 }
 
-// TestBuildCaseFailsClosed: a case whose set breaks a relation is never
-// built; the error holds the relation and its count only.
+// The error holds the relation and its count only.
 func TestBuildCaseFailsClosed(t *testing.T) {
 	t.Parallel()
 	tm := testMaterial{files: []File{
@@ -674,10 +654,8 @@ func TestBuildCaseFailsClosed(t *testing.T) {
 	}
 }
 
-// TestBuildSkipsBrokenUnits: a 1970 fix the mapping does not keep is
-// supported by the rules; the pick maps the unit, finds the broken date
-// relation and skips the unit, counted once whatever the categories it is a
-// candidate of.
+// The rules support a 1970 fix the mapping does not keep: only the pick finds
+// the broken date relation.
 func TestBuildSkipsBrokenUnits(t *testing.T) {
 	t.Parallel()
 	for _, name := range []string{
@@ -705,9 +683,7 @@ func TestBuildSkipsBrokenUnits(t *testing.T) {
 	}
 }
 
-// TestEpochRuleBound: the last supported epoch date is just before the
-// smallest one the epoch_gap relation rejects next to the first shifted
-// date: the reference links a pair exactly 14 h 2 s apart.
+// The reference links a pair exactly 14 h 2 s apart.
 func TestEpochRuleBound(t *testing.T) {
 	t.Parallel()
 	first := cloudFile("1971/01-01/IMG_0001.JPG", "1971-01-01T00:00:00", 1)
@@ -725,10 +701,6 @@ func TestEpochRuleBound(t *testing.T) {
 	}
 }
 
-// TestBuildExpectedPairs checks the records and the expected pairs of every
-// case against an independent construction from the material: the mapped
-// source records in source order, and per asset its reference links in
-// reference order with the mapped uuid and path, the level and the plan.
 func TestBuildExpectedPairs(t *testing.T) {
 	t.Parallel()
 	live := photo(1, "IMG_0001.HEIC", "2023-07-14T18:03:27+03:00", 100)
@@ -824,7 +796,6 @@ func TestBuildExpectedPairs(t *testing.T) {
 			t.Errorf("%s: expected = %+v; want %+v", cr.Category, cr.Case.Expected, want)
 		}
 	}
-	// The categories of this material exist and hold what they promise.
 	checks := map[string]func(c *Case) bool{
 		"level-pair-component": func(c *Case) bool { return len(c.Expected) == 2 && c.Expected[1].Level == LevelPairComponent },
 		"plan-replace":         func(c *Case) bool { return len(c.Expected) == 1 && c.Expected[0].Plan == PlanReplaceDecision },

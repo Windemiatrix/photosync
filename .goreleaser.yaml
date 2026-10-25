@@ -1,9 +1,3 @@
-# GoReleaser OSS configuration:
-#   make release-snapshot   builds the archive locally (part of make test),
-#                           publishes nothing
-#   the release job of ci.yml  builds and publishes the GitHub Release after
-#                              every merge to main
-#
 # This file and docs/release-notes-header.md run inside the release job with
 # write access, so changes to them are reviewed like changes to a workflow.
 # Only the open-source features are used: no monorepo, no changelog.paths, no
@@ -55,8 +49,7 @@ universal_binaries:
 archives:
   - id: photosync
     ids: [photosync]
-    # tar.gz is the default format. There is a single archive, the universal
-    # binary, so the name is fixed: photosync_<version>_darwin_universal.tar.gz.
+    # There is a single archive, the universal binary, so the name is fixed: photosync_<version>_darwin_universal.tar.gz.
     name_template: "photosync_{{ .Version }}_darwin_universal"
     builds_info:
       mtime: "{{ .CommitDate }}"

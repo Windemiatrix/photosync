@@ -16,7 +16,6 @@ import (
 	"github.com/Windemiatrix/photosync/tools/anonymize/internal/anon"
 )
 
-// recordingFS records the names opened through it.
 type recordingFS struct {
 	fsys   fs.FS
 	opened map[string]bool
@@ -87,11 +86,9 @@ func TestReadMaterialFields(t *testing.T) {
 	}
 }
 
-// TestReadCatalogOsxphotosShape decodes records in the shape of osxphotos
-// query --json: burst_key is a bool, burst_photos lists the other frames,
-// fields that are never decoded (burst_albums, burst_default_pick, ...) are
-// skipped, and every decoded field upstream can write as null decodes as
-// the zero value.
+// TestReadCatalogOsxphotosShape uses the shape of osxphotos query --json:
+// burst_key is a bool, burst_photos lists the other frames, and every decoded
+// field upstream can write as null.
 func TestReadCatalogOsxphotosShape(t *testing.T) {
 	t.Parallel()
 	catalog := `[

@@ -8,17 +8,11 @@ import (
 	"testing"
 )
 
-// relationSet is a small set with every relation of the check: a Live pair
-// with a content identifier, a 1970 date fixed by a PXL_ name, a year
-// boundary, albums with folders and without, two albums no folder holds (one
-// with "/", one ASCII), a " (N)" tail, an "_edited" tail, a hash-named file,
-// two bursts, a SHA-1 duplicate, a sidecar and a cloud date left at the epoch.
 func relationSet() *Set {
 	a0 := photo(1, "IMG_4821.HEIC", "2023-07-14T18:03:27.455000+03:00", 2734118)
 	a0.LivePhoto = true
 	a0.Albums = []AlbumRef{{FolderNames: []string{"2023"}, Title: "07/14 Мырдон"}}
 	a1 := photo(2, "PXL_20210305_101112345.jpg", "1970-01-01T03:00:00+03:00", 1000)
-	// A burst whose other frame is not in the set.
 	a1.Burst, a1.BurstPhotos = true, []string{uuidN(9)}
 	a2 := photo(3, "IMG_0001.HEIC", "2019-12-31T23:59:59+03:00", 5000)
 	a2.Albums = []AlbumRef{{FolderNames: []string{"2019"}, Title: "12/31 НГ"}, {FolderNames: []string{}, Title: "Путешествия / Море"}}
@@ -71,7 +65,6 @@ func relationNames(vs []Violation) []string {
 	return out
 }
 
-// replaceStem replaces the stem digits of the base name of a path.
 func replaceStemDigits(p, digits string) string {
 	dir, base := FolderOf(p), BaseName(p)
 	stem, ext := Splitext(base)
@@ -95,9 +88,8 @@ func TestCheckRelationsCorrectImage(t *testing.T) {
 	}
 }
 
-// TestCheckRelationsBreakers applies one minimal break to a correct image and
-// expects exactly the relation it breaks. A changed stem of a file next to its
-// pair breaks both the name and the folder partitions by nature.
+// A changed stem of a file next to its pair breaks both the name and the
+// folder partitions by nature.
 func TestCheckRelationsBreakers(t *testing.T) {
 	t.Parallel()
 	m := newTestMapper(t)

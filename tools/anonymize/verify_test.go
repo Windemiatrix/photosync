@@ -13,14 +13,8 @@ import (
 	"github.com/Windemiatrix/photosync/tools/anonymize/internal/anon"
 )
 
-// verifyMaterials checks the tool on a materials directory: the build
-// succeeds with a fresh salt, the material passes the rerun and partition
-// checks, the image of every supported unit keeps every relation (except
-// units the mapping runs out of space for and units whose 1970 PXL_ date
-// breaks the date relation, counted in the log), the expected pairs of each
-// case keep the level distribution of the reference links of its source
-// assets, and the output passes the leak scanner. It returns the number of
-// units skipped for the date relation. Logs and messages hold aggregates and
+// verifyMaterials returns the number of units skipped because their 1970 PXL_
+// date breaks the date relation. Logs and messages hold aggregates and
 // counters only; nothing is written outside t.TempDir().
 func verifyMaterials(t *testing.T, dir string) int {
 	t.Helper()
@@ -55,9 +49,8 @@ func verifyMaterials(t *testing.T, dir string) int {
 		t.Fatal(err)
 	}
 	units := anon.SupportedUnits(m)
-	// One mapping unit by unit, as the build does: a unit the mapping runs
-	// out of space for or whose own image breaks a relation is skipped; the
-	// mapping of the union only repeats registered outputs.
+	// Unit by unit, as the build does; the mapping of the union only repeats
+	// registered outputs.
 	var mapped [][]int
 	exhausted, broken := 0, 0
 	for _, u := range units {
@@ -127,8 +120,6 @@ func verifyMaterials(t *testing.T, dir string) int {
 			t.Errorf("case %s: does not parse", cr.Category)
 			continue
 		}
-		// The level distribution of the written pairs equals the one of the
-		// reference links of the case's source assets.
 		var got, want [6]int
 		for _, p := range c.Expected {
 			got[slices.Index(anon.Levels, p.Level)]++
@@ -164,9 +155,8 @@ func verifyMaterials(t *testing.T, dir string) int {
 	return broken
 }
 
-// fix1970Only reports whether the only broken relation is the date and the
-// unit has a 1970 asset with a PXL_ name: the one case the build skips
-// instead of marking it unsupported.
+// fix1970Only is the one case the build skips instead of marking the unit
+// unsupported.
 func fix1970Only(sub *anon.Set, vs []anon.Violation) bool {
 	for _, v := range vs {
 		if v.Relation != anon.RelDate {

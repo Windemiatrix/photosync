@@ -197,8 +197,6 @@ func TestSplitRuns(t *testing.T) {
 			t.Errorf("run %d = %v; want %v", i, got[i], want[i])
 		}
 	}
-	// A mark after a letter joins the letter run; a mark at the start of a
-	// run is "other".
 	got = splitRuns("éx ́")
 	if len(got) != 2 || got[0] != (textRun{runLetters, "éx"}) || got[1] != (textRun{runOther, " ́"}) {
 		t.Errorf("marks: %v", got)

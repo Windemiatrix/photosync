@@ -20,11 +20,10 @@ import (
 	"github.com/Windemiatrix/photosync/tools/anonymize/internal/anon"
 )
 
-// Word classes by length in runes of the lower NFC form.
 const (
-	classShort = iota // 1-2
-	class3            // 3
-	class4            // 4 and more
+	classShort = iota
+	class3
+	class4
 )
 
 func wordClass(w string) int {
@@ -37,13 +36,12 @@ func wordClass(w string) int {
 	return classShort
 }
 
-// idRE matches identifiers: a UUID or a long hexadecimal run. Their hex
-// letters are not words on either side.
+// The hex letters of an identifier (a UUID or a long hexadecimal run) are not
+// words on either side.
 var idRE = regexp.MustCompile(`[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}|[0-9A-Fa-f]{16,}`)
 
-// textRuns returns the letter runs (a letter with the marks that follow it)
-// of s outside identifiers, in lower case NFC. It does not use anon on
-// purpose: the privacy tests must not share a mistake of the code they check.
+// textRuns does not use anon on purpose: the privacy tests must not share a
+// mistake of the code they check.
 func textRuns(s string) []string {
 	var out []string
 	var cur []rune
@@ -64,8 +62,6 @@ func textRuns(s string) []string {
 	return out
 }
 
-// addWords adds the letter runs of s that are not kept by design
-// (structural words, known extensions, format words) to words.
 func addWords(words map[string]bool, s string) {
 	for _, r := range textRuns(s) {
 		if !anon.AllowedWord(r) {
@@ -74,9 +70,6 @@ func addWords(words map[string]bool, s string) {
 	}
 }
 
-// inputWords returns the words of every text the tool pseudonymizes: asset
-// names, album titles and folder names, cloud paths (every folder and the
-// file name).
 func inputWords(m *anon.Material) map[string]bool {
 	out := map[string]bool{}
 	for _, a := range m.Assets {
@@ -95,10 +88,10 @@ func inputWords(m *anon.Material) map[string]bool {
 	return out
 }
 
-// crossResult holds the aggregates of a cross-check; it holds no word.
+// crossResult holds aggregates only, never a word.
 type crossResult struct {
-	Input  [3]int // input words by class
-	Output int    // output runs checked
+	Input  [3]int
+	Output int
 	// Hits are output runs equal to an input word that are not generated
 	// words: a word that reached the output. Collisions are generated words
 	// (pseudonyms, random letters) that happen to equal an input word.
@@ -109,7 +102,6 @@ type crossResult struct {
 	Glued, GluedCollisions int
 }
 
-// Failed reports a word of four or more letters that reached the output.
 func (r crossResult) Failed() bool { return r.Hits[class4] > 0 || r.Glued > 0 }
 
 func (r crossResult) String() string {
@@ -119,8 +111,6 @@ func (r crossResult) String() string {
 		r.Glued, r.Collisions[class4], r.Collisions[class3], r.GluedCollisions)
 }
 
-// jsonStrings returns the string values and the keys outside anon.OutputKeys of
-// a JSON document, or the whole text of a file that is not JSON.
 func jsonStrings(data []byte) []string {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
@@ -151,7 +141,6 @@ func jsonStrings(data []byte) []string {
 	return out
 }
 
-// dictionaryOf returns the generated words of tokens.json in the output.
 func dictionaryOf(files map[string][]byte) map[string]bool {
 	var tk anon.Tokens
 	_ = json.Unmarshal(files[nameTokens], &tk) // a missing or broken dictionary is empty: every run counts as kept
@@ -162,8 +151,7 @@ func dictionaryOf(files map[string][]byte) map[string]bool {
 	return dict
 }
 
-// crossCheck compares the letter runs of every output file (tokens.json, the
-// dictionary itself, aside) with the input words.
+// crossCheck skips tokens.json: it is the dictionary itself.
 func crossCheck(input, dict map[string]bool, files map[string][]byte) crossResult {
 	var r crossResult
 	maxLen := 0
@@ -206,8 +194,6 @@ func crossCheck(input, dict map[string]bool, files map[string][]byte) crossResul
 	return r
 }
 
-// glued reports whether run holds an input word of four or more runes as a
-// proper substring.
 func glued(run string, input map[string]bool, maxLen int) bool {
 	rs := []rune(run)
 	for i := range rs {
@@ -223,12 +209,8 @@ func glued(run string, input map[string]bool, maxLen int) bool {
 	return false
 }
 
-// digestHeader explains the digest lines to the owner.
 const digestHeader = "digest: anonymized values; month and day are real by design, the year is shifted, names and folders are pseudonyms"
 
-// digest returns at most limit lines: the header and records taken at an
-// even step across the cases in name order: "name | album folders/title |
-// date" for a Photos record, "path | date" for a cloud record.
 func digest(files map[string][]byte, limit int) []string {
 	var names []string
 	for n := range files {
@@ -262,8 +244,7 @@ func digest(files map[string][]byte, limit int) []string {
 	return out
 }
 
-// readTree reads every regular file under dir by its slash path; errors
-// name no path.
+// Errors of readTree name no path.
 func readTree(dir string) (map[string][]byte, error) {
 	fsys := os.DirFS(dir)
 	out := map[string][]byte{}
@@ -306,8 +287,6 @@ func TestCrossCheck(t *testing.T) {
 	if r.Failed() || r.Input[class4] == 0 || r.Output == 0 || len(dict) == 0 {
 		t.Errorf("pseudonymized corpus: %s", r)
 	}
-	// Words of the corpus planted into a fake output: a value, a key and a
-	// run glued to other letters.
 	planted := map[string][]byte{nameTokens: files[nameTokens],
 		"anon-live/case.json": []byte(`{"icloud": [{"title": "Пельменевых", "zinaida": 1, "path": "a/ыыЗинаидыы.jpg"}]}`)}
 	p := crossCheck(input, dict, planted)
@@ -319,7 +298,6 @@ func TestCrossCheck(t *testing.T) {
 			t.Errorf("the aggregates hold the word %q", w)
 		}
 	}
-	// A generated word equal to an input word is a collision, not a hit.
 	dict["пельменевых"] = true
 	if c := crossCheck(input, dict, planted); c.Hits[class4] != 1 || c.Collisions[class4] != 1 {
 		t.Errorf("collision: %s", c)

@@ -31,8 +31,6 @@ func TestDim(t *testing.T) {
 	}
 }
 
-// partitionMaterial is a small consistent material with every kind of row
-// the partition check looks at.
 func partitionMaterial() testMaterial {
 	trash := photo(5, "IMG_0005.HEIC", "2023-01-01T00:00:00+00:00", 5)
 	trash.InTrash = true

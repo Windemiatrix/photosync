@@ -1,18 +1,8 @@
 #!/usr/bin/env bash
-# Repository hygiene checks: rules that neither the compiler nor the linter
-# enforce, plus the self-test of the PR title check. Only files tracked by git
-# are examined, so build output and local junk never matter.
-#
-# Run:    make check-repo (which also runs actionlint), or
-#         bash scripts/check-repo.sh, from the repository root; CI runs it in
-#         the repo-checks job.
-# Input:  none.
-# Exit:   0 every check passed; 1 at least one failed. Every check runs, and
-#         each failure is printed as "FAIL: ..." on stderr after the offending
-#         lines.
+# Rules that neither the compiler nor the linter enforce. Only files tracked by
+# git are examined, so build output and local junk never matter.
 set -euo pipefail
 
-# The only package that may use cgo.
 cgo_allowed_dir="cmd/photosync/"
 
 spike_build_tag_re='^//go:build.*[[:space:](&|]spike([[:space:])&|]|$)|^// \+build.*[[:space:]]spike'

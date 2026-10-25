@@ -29,7 +29,6 @@ func writeSalt(t *testing.T, hexSalt string) string {
 	return p
 }
 
-// buildCorpus writes the corpus and builds it with a salt.
 func buildCorpus(t *testing.T, hexSalt string) (in, out string, c corpus, stdout, stderr string) {
 	t.Helper()
 	in, out, _, c = setup(t, corpusOptions{})
@@ -54,8 +53,6 @@ var (
 	compactDate = regexp.MustCompile(`^(19|20)[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])$`)
 )
 
-// findDigitLeaks returns the input digit runs of seven and more digits (not
-// dates) and the canaries that occur in the output.
 func findDigitLeaks(input, output map[string][]byte, canaries []string) []string {
 	var outText strings.Builder
 	for _, data := range output {
@@ -87,8 +84,6 @@ func findDigitLeaks(input, output map[string][]byte, canaries []string) []string
 	return leaks
 }
 
-// afterCompactDate reports whether the digit run at i follows a YYYYMMDD
-// date run and "_".
 func afterCompactDate(s string, i int) bool {
 	if i < 9 || s[i-1] != '_' || i >= 10 && s[i-10] >= '0' && s[i-10] <= '9' {
 		return false
@@ -96,8 +91,7 @@ func afterCompactDate(s string, i int) bool {
 	return compactDate.MatchString(s[i-9 : i-1])
 }
 
-// keptTime reports whether a digit run after a date is a valid HHMMSS or
-// HHMMSSmmm, the only run the mapping keeps there.
+// The mapping keeps only a valid HHMMSS or HHMMSSmmm after a date.
 func keptTime(d string) bool {
 	if len(d) != 6 && len(d) != 9 {
 		return false
@@ -234,7 +228,6 @@ func TestDeterministic(t *testing.T) {
 	}
 }
 
-// TestOtherSalt maps every supported record of the corpus with two salts.
 func TestOtherSalt(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -320,7 +313,6 @@ func TestCorpusCoversCategories(t *testing.T) {
 	if !regexp.MustCompile(`units: total=\d+ unsupported=[1-9]\d* too_large=0 exhausted=0\n`).MatchString(stdout) {
 		t.Errorf("stdout = %s", stdout)
 	}
-	// Every rule of "not supported" fires on the corpus.
 	line := regexp.MustCompile(`(?m)^unsupported:(.*)$`).FindStringSubmatch(stdout)
 	if line == nil {
 		t.Fatalf("no unsupported line: %s", stdout)

@@ -16,9 +16,6 @@ import (
 // version and commit are set at link time:
 //
 //	go build -ldflags "-X main.version=v1.2.3 -X main.commit=<sha>"
-//
-// When they are empty (for example after "go install"), the values that the
-// Go toolchain records in the binary are used instead.
 var (
 	version string
 	commit  string
@@ -32,7 +29,6 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, ver, rev))
 }
 
-// run executes one command line and returns the process exit code.
 func run(args []string, stdout, stderr io.Writer, ver, rev string) int {
 	if len(args) == 0 {
 		_, _ = io.WriteString(stderr, usage) // nothing more to do if stderr is broken
@@ -54,9 +50,6 @@ func run(args []string, stdout, stderr io.Writer, ver, rev string) int {
 	}
 }
 
-// resolve returns the version and the commit to print. Link-time values win;
-// empty ones fall back to the toolchain build information (nil when the
-// binary has none), then to the placeholders "devel" and "unknown".
 func resolve(version, commit string, info *debug.BuildInfo) (ver, rev string) {
 	ver, rev = version, commit
 	if ver == "" {
@@ -74,8 +67,6 @@ func resolve(version, commit string, info *debug.BuildInfo) (ver, rev string) {
 	return ver, rev
 }
 
-// vcsRevision returns the revision the toolchain stamped into the binary,
-// marked "+dirty" when the working tree had local changes, or "unknown".
 func vcsRevision(info *debug.BuildInfo) string {
 	rev, dirty := "", false
 	for _, s := range info.Settings {

@@ -18,7 +18,6 @@ var (
 	saltFile     = flag.String("anonymize.salt", "", "absolute path to the salt file the fixtures were built with")
 )
 
-// committedFixtures is testdata/fixtures of the repository.
 const committedFixtures = "../../testdata/fixtures"
 
 func isDir(p string) bool {
@@ -33,10 +32,8 @@ func TestFixturesVerify(t *testing.T) {
 	verifyMaterials(t, *materialsDir)
 }
 
-// TestFixturesRebuild builds the fixtures again from the materials with the
-// salt they were built with: the output must equal testdata/fixtures byte
-// for byte, or a change of the tool changed the fixtures. The log names only
-// the differing files; the names are anonymized.
+// TestFixturesRebuild fails when a change of the tool changed the fixtures.
+// The log names the differing files: the names are anonymized.
 func TestFixturesRebuild(t *testing.T) {
 	if !isDir(*materialsDir) || *saltFile == "" {
 		t.Skip("pass -anonymize.in and -anonymize.salt")
@@ -74,11 +71,7 @@ func TestFixturesRebuild(t *testing.T) {
 	}
 }
 
-// TestFixturesNoInputWords cross-checks the committed fixtures with the real
-// materials: no input word of four and more letters is in the fixtures,
-// alone or glued to other letters. Equal words of three letters and
-// pseudonyms that happen to equal an input word are counted only. The log
-// holds aggregates only.
+// The log of TestFixturesNoInputWords holds aggregates only.
 func TestFixturesNoInputWords(t *testing.T) {
 	if !isDir(*materialsDir) {
 		t.Skip("no materials directory: pass -anonymize.in")
@@ -99,8 +92,7 @@ func TestFixturesNoInputWords(t *testing.T) {
 	}
 }
 
-// TestFixturesDigest prints a one-screen sample of the committed fixtures
-// for the owner: anonymized values only.
+// The owner reads the log of TestFixturesDigest: anonymized values only.
 func TestFixturesDigest(t *testing.T) {
 	files, err := readTree(committedFixtures)
 	if err != nil {

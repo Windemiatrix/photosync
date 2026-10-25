@@ -13,15 +13,12 @@ import (
 	"time"
 )
 
-// runTool runs the command line and returns the exit code and the output.
 func runTool(args ...string) (code int, stdout, stderr string) {
 	var o, e bytes.Buffer
 	code = safely(func() int { return run(args, &o, &e) }, &e)
 	return code, o.String(), e.String()
 }
 
-// setup writes a corpus and returns the paths of a build run: the corpus,
-// a missing output directory and a missing salt file.
 func setup(t *testing.T, opt corpusOptions) (in, out, salt string, c corpus) {
 	t.Helper()
 	base := t.TempDir()
@@ -120,8 +117,6 @@ func TestPrevInventory(t *testing.T) {
 	}
 }
 
-// gitTree makes dir a git working tree and returns a symbolic link to it
-// next to dir.
 func gitTree(t *testing.T, dir string) string {
 	t.Helper()
 	writeFile(t, dir, ".git/HEAD", []byte("ref: refs/heads/main\n"))
@@ -297,8 +292,6 @@ func TestOutputPermissions(t *testing.T) {
 	}
 }
 
-// TestOutputDirs: --out may be an existing empty directory or a path whose
-// parents are missing.
 func TestOutputDirs(t *testing.T) {
 	t.Parallel()
 	in, out, salt, _ := setup(t, corpusOptions{})
@@ -317,8 +310,6 @@ func TestOutputDirs(t *testing.T) {
 	}
 }
 
-// snapshot records the names, sizes, modes, modification times and content
-// hashes of a tree.
 func snapshot(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
@@ -366,8 +357,6 @@ func TestInputUnchanged(t *testing.T) {
 	}
 }
 
-// TestErrorsWithoutValues breaks the corpus right next to personal values and
-// checks that no canary reaches the output.
 func TestErrorsWithoutValues(t *testing.T) {
 	t.Parallel()
 	canary := "Зинаида Пельменева"
@@ -449,7 +438,6 @@ func TestCheckFindings(t *testing.T) {
 			t.Errorf("stdout lacks %q:\n%s", want, stdout)
 		}
 	}
-	// Names the build never writes are not printed.
 	for line, n := range map[string]int{
 		"<file>: /<key>: unexpected-key\n": 2, // Пельменева/case.json and anon-zinaida/case.json
 		"<file>: : unexpected-file\n":      2, // notes.txt and the symbolic link

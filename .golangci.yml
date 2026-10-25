@@ -1,6 +1,5 @@
-# golangci-lint v2 configuration. The version is pinned in the Makefile
-# (GOLANGCI_LINT_VERSION); CI runs "make lint" on macOS so that darwin-only
-# files are analyzed too.
+# The version is pinned in the Makefile (GOLANGCI_LINT_VERSION); CI runs the
+# linter on macOS so that darwin-only files are analyzed too.
 version: "2"
 
 run:
@@ -8,7 +7,6 @@ run:
   tests: true
 
 linters:
-  # standard = govet, staticcheck, errcheck, ineffassign, unused
   default: standard
   enable:
     - depguard
@@ -22,7 +20,6 @@ linters:
   settings:
     depguard:
       rules:
-        # The domain does no I/O and knows nothing about the other layers.
         domain:
           list-mode: lax
           files:
@@ -72,7 +69,6 @@ linters:
             - "!$test"
           deny:
             - {pkg: github.com/Windemiatrix/photosync/internal/app, desc: "adapters and state must not import app"}
-        # The anonymize tool has no network, starts no processes and does not log.
         anon-tool:
           list-mode: lax
           files:
@@ -86,7 +82,6 @@ linters:
             - {pkg: plugin, desc: "the anonymize tool loads no code"}
             - {pkg: log, desc: "the anonymize tool does not log"}
             - {pkg: log/slog, desc: "the anonymize tool does not log"}
-        # The anonymize tool uses no module outside the whitelist.
         anon-modules:
           list-mode: strict
           files:
@@ -95,7 +90,6 @@ linters:
             - $gostd
             - github.com/Windemiatrix/photosync/tools/anonymize/internal/anon
             - golang.org/x/text/unicode/norm
-        # The pure package of the anonymize tool does no I/O.
         anon-pure:
           list-mode: lax
           files:
