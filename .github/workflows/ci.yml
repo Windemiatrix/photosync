@@ -1,6 +1,7 @@
 # A step that also runs locally calls one Makefile target or the action of the
 # same tool and version; event values reach it only through env:. "ci-ok" is
-# the check the ruleset of main requires.
+# a check the ruleset of main requires; the PR title has its own workflow,
+# pr-title.yml.
 # Every push to main is released by the "release" job. The tests do not run
 # again on that push: the ruleset of main merges only a branch that is up to
 # date with main and green, so main gets exactly the tree the PR tested.
@@ -29,21 +30,6 @@ env:
   TZ: Asia/Kolkata
 
 jobs:
-  pr-title:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: PR title
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-        run: make pr-title
-
   # The app runs only on macOS, so the tests run only there.
   macos:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
@@ -136,7 +122,7 @@ jobs:
 
   ci-ok:
     if: always()
-    needs: [pr-title, macos, repo-checks, deps]
+    needs: [macos, repo-checks, deps]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -154,7 +140,7 @@ jobs:
     needs: [ci-ok]
     # A manual run without "major" is a check (govulncheck), not a release.
     # !cancelled(): without a status function GitHub adds success(), which is
-    # false when any job before ci-ok was skipped (pr-title on a push).
+    # false when any job before ci-ok was skipped (the tests on a push).
     if: >-
       !cancelled() && needs.ci-ok.result == 'success' && github.ref == 'refs/heads/main'
       && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.major))
