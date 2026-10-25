@@ -9,24 +9,12 @@
 # Input:  the title as the first argument, otherwise the PR_TITLE variable. CI
 #         passes it through the environment, never through ${{ }} inside a run
 #         script: the title of a pull request from a fork is untrusted input.
-# Exit:   0 the title is valid; 1 it is not, the reason is on stderr.
-#
-# The rule:
-#
-#   <type>(<scope>)[!]: <description>
-#
-#   type         feat, fix, docs, style, refactor, test or chore
-#   scope        required: lowercase letters, digits and . _ / -
-#   !            optional, right after the scope: an incompatible change of
-#                commands, flags, config keys or the state schema; it decides
-#                the next version and puts the title in the "Breaking changes"
-#                section of the release notes
-#   description  English, printable ASCII only, which also keeps out control
-#                characters, ESC and bidi marks
-#   length       at most 70 characters, no period at the end
+# Exit:   0 the title is valid; 1 it is not, the reason and the rule are on
+#         stderr.
 set -euo pipefail
 
-# In the C locale [ -~] is the printable ASCII range and ${#title} counts bytes.
+# In the C locale [ -~] is the printable ASCII range, which also keeps out
+# control characters, ESC and bidi marks, and ${#title} counts bytes.
 export LC_ALL=C
 
 title_re='^(feat|fix|docs|style|refactor|test|chore)\([a-z0-9._/-]+\)!?: [ -~]+$'
