@@ -114,7 +114,7 @@ cmd ──► config, i18n             (state, report, clock, config, i18n — �
 
 ## 7. Сборка
 
-Бинарник с cgo (PhotoKit, мониторинг сети, свободное место) собирается только на macOS: `MACOSX_DEPLOYMENT_TARGET=13.0`, `-trimpath`. Срезы arm64 и amd64 объединяются `lipo` в universal, затем ставится обязательная ad-hoc подпись `codesign -s - --identifier io.github.windemiatrix.photosync` (без идентификатора macOS видит бинарник как `a.out`; не подпись Apple и без нотаризации, сертификаты не нужны); архив и суммы считаются после неё. `Info.plist` с описанием доступа к «Фото» встраивается директивой в `cmd/photosync`. Сборку описывает один конфиг: локально и на каждом PR — `make release-snapshot`, в workflow по тегу — `make release`; побитовая воспроизводимость не обещается, происхождение подтверждает аттестация.
+Бинарник с cgo (PhotoKit, мониторинг сети, свободное место) собирается только на macOS: `MACOSX_DEPLOYMENT_TARGET=13.0`, `-trimpath`. Срезы arm64 и amd64 объединяются `lipo` в universal, затем ставится обязательная ad-hoc подпись `codesign -s - --identifier io.github.windemiatrix.photosync` (без идентификатора macOS видит бинарник как `a.out`; не подпись Apple и без нотаризации, сертификаты не нужны); архив и суммы считаются после неё. `Info.plist` с описанием доступа к «Фото» встраивается директивой в `cmd/photosync`. Сборку описывает один конфиг: локально и на каждом PR — `make release-snapshot`, в workflow по тегу — `goreleaser release` с шапкой заметок `docs/release-notes-header.md`; побитовая воспроизводимость не обещается, происхождение подтверждает аттестация.
 
 **Не проверено:** совместимость ad-hoc подписи с hardened runtime (он пока выключен); запуск на macOS 13 (проверяется чеклистом релиза).
 

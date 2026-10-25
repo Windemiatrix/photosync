@@ -13,18 +13,16 @@
 #   no commits           no release: the script fails
 #
 # 1.0.0 is never inferred from commits: pass --major to move from 0.x to 1.0.0.
-# From 2.0.0 on the module path must end with /vN (go.mod is checked), because
-# go install and go get cannot use the tag otherwise.
 #
 # Only the tag goes to stdout. The class of every title and the warnings go to
 # stderr, so that release.sh can do tag="$(scripts/next-version.sh)" and still
-# show them. Titles are untrusted input: they are printed escaped (every byte
-# outside printable ASCII becomes \xHH) and never reach eval or a command line.
+# show them. Titles are untrusted input: every byte outside printable ASCII is
+# printed as "?", and they never reach eval or a command line.
 #
 # Usage: scripts/next-version.sh [--major]
 set -euo pipefail
 
-# In the C locale a bracket range is a plain byte range and ${#s} counts bytes.
+# In the C locale a bracket range is a plain byte range.
 export LC_ALL=C
 
 die() {
@@ -39,38 +37,13 @@ re_break='^[a-z]+\([a-z0-9._/-]+\)!: '
 re_feat='^feat\('
 re_suffix='^(.*) \(#[0-9]+\)$'
 re_tag='^v(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})\.(0|[1-9][0-9]{0,8})$'
-re_printable='^[ -~]*$'
-re_char='^[ -~]$'
-
-# escape prints its argument with every byte outside printable ASCII, and the
-# backslash itself, as \xHH.
-escape() {
-  local s="$1" out="" c code hex i
-  if [[ "$s" =~ $re_printable && "$s" != *\\* ]]; then
-    printf '%s' "$s"
-    return
-  fi
-  for ((i = 0; i < ${#s}; i++)); do
-    c="${s:i:1}"
-    if [[ "$c" =~ $re_char && "$c" != "\\" ]]; then
-      out+="$c"
-    else
-      # A byte above 0x7f comes back sign-extended (negative) on some
-      # platforms, so keep only the low 8 bits.
-      printf -v code '%d' "'$c"
-      printf -v hex '\\x%02x' "$((code & 255))"
-      out+="$hex"
-    fi
-  done
-  printf '%s' "$out"
-}
 
 force_major=0
 for arg in "$@"; do
   case "$arg" in
     --major) force_major=1 ;;
     *)
-      printf 'error: unknown argument: %s\nusage: scripts/next-version.sh [--major]\n' "$(escape "$arg")" >&2
+      printf 'error: unknown argument: %s\nusage: scripts/next-version.sh [--major]\n' "${arg//[^ -~]/?}" >&2
       exit 2
       ;;
   esac
@@ -87,7 +60,7 @@ elif [[ "$last" =~ $re_tag ]]; then
   range="$last..HEAD"
   base="$last"
 else
-  die "the last tag is not vMAJOR.MINOR.PATCH: $(escape "$last")"
+  die "the last tag is not vMAJOR.MINOR.PATCH: ${last//[^ -~]/?}"
 fi
 
 count="$(git rev-list --count "$range")"
@@ -116,7 +89,7 @@ while IFS= read -r title; do
     class=other
     outside=$((outside + 1))
   fi
-  printf '  %-9s %s\n' "$class" "$(escape "$title")" >&2
+  printf '  %-9s %s\n' "$class" "${title//[^ -~]/?}" >&2
 done < <(git log --format=%s "$range")
 
 if ((outside > 0)); then
@@ -136,13 +109,6 @@ elif ((feats > 0)); then
   next_major=$major next_minor=$((minor + 1)) next_patch=0
 else
   next_major=$major next_minor=$minor next_patch=$((patch + 1))
-fi
-
-if ((next_major >= 2)); then
-  [[ -f go.mod ]] || die "go.mod not found: cannot check the module path for v$next_major"
-  module="$(awk '$1 == "module" { print $2; exit }' go.mod)"
-  [[ "$module" == */v"$next_major" ]] ||
-    die "v$next_major needs the module path to end with /v$next_major (go.mod has: $(escape "$module"))"
 fi
 
 tag="v$next_major.$next_minor.$next_patch"

@@ -114,7 +114,7 @@ tag v0.2.0
 commit "fix(core): third"
 expect_tag v0.2.1
 
-# --- 1.x: breaking is major, the module path must carry /vN ------------------
+# --- 1.x: breaking is major ---------------------------------------------------
 
 new_repo
 commit "feat(core): first"
@@ -126,14 +126,7 @@ commit "feat(core): a feature"
 expect_tag v1.3.0
 
 commit "refactor(state)!: change the schema (#12)"
-printf 'module example.com/photosync/v2\n\ngo 1.27.0\n' >"$repo/go.mod"
 expect_tag v2.0.0
-
-printf 'module example.com/photosync\n\ngo 1.27.0\n' >"$repo/go.mod"
-expect_refusal "/v2"
-
-rm "$repo/go.mod"
-expect_refusal "go.mod not found"
 
 # --- --major ----------------------------------------------------------------
 
@@ -178,20 +171,18 @@ tag v0.1.0
 commit "feat!: no scope" "feat(Core)!: upper case scope" "Feat(core): upper case type"
 expect_tag v0.1.1
 
-# --- titles are untrusted: printed escaped -----------------------------------
+# --- titles are untrusted: bytes outside printable ASCII become "?" ----------
 
 new_repo
 commit "feat(core): first"
 tag v0.1.0
 commit "fix(core): red $(printf '\033')[31m text" \
-  "fix(core): bidi $(printf '\xe2\x80\xae') mark" \
-  'fix(core): a back\slash'
+  "fix(core): bidi $(printf '\xe2\x80\xae') mark"
 expect_tag v0.1.1
 [[ "$err" != *$'\033'* ]] || fail "a raw ESC reached stderr"
 [[ "$err" != *$'\xe2\x80\xae'* ]] || fail "a raw bidi mark reached stderr"
-[[ "$err" == *'red \x1b[31m text'* ]] || fail "ESC is not shown as \\x1b: $err"
-[[ "$err" == *'bidi \xe2\x80\xae mark'* ]] || fail "the bidi mark is not shown as bytes: $err"
-[[ "$err" == *'a back\x5cslash'* ]] || fail "the backslash is not escaped: $err"
+[[ "$err" == *'red ?[31m text'* ]] || fail "ESC is not shown as ?: $err"
+[[ "$err" == *'bidi ??? mark'* ]] || fail "the bidi mark is not shown as ???: $err"
 
 # --- tags -------------------------------------------------------------------
 

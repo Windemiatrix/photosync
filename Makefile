@@ -2,6 +2,7 @@
 GOLANGCI_LINT_VERSION ?= v2.15.0
 ACTIONLINT_VERSION ?= v1.7.12
 GOVULNCHECK_VERSION ?= v1.9.0
+# Bump together with the GoReleaser version in .github/workflows/release.yml.
 GORELEASER_VERSION ?= v2.18.3
 GORELEASER = go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
 # Values from .env are exported only to the targets that need them.
@@ -51,8 +52,7 @@ vuln: ## Known vulnerabilities in dependencies (not in "make test")
 
 .PHONY: fixtures-check
 fixtures-check: ## Leak scan of testdata/fixtures
-	@if [ -d testdata/fixtures ]; then go run ./tools/anonymize --check testdata/fixtures; \
-	else echo "fixtures-check: no testdata/fixtures, skipped"; fi
+	go run ./tools/anonymize --check testdata/fixtures
 
 .PHONY: fixtures-verify
 fixtures-verify: ## Anonymizer check on the private materials (ANONYMIZE_IN, ANONYMIZE_OUT in .env)
@@ -85,10 +85,3 @@ pr-title: ## PR_TITLE follows the title convention (PR_TITLE='...' make pr-title
 .PHONY: release-snapshot
 release-snapshot: ## Build the release archive into dist/ without publishing
 	$(GORELEASER) release --snapshot --skip=publish --clean
-
-.PHONY: release
-release: ## Build and create a draft GitHub Release for the current tag (needs GITHUB_TOKEN)
-	@header="$$(mktemp "$${RUNNER_TEMP:-$${TMPDIR:-/tmp}}/photosync-release-header.XXXXXX")" && \
-	{ cat docs/release-notes-header.md; printf '\n---\n\n'; cat docs/release-notes-header.en.md; } >"$$header" && \
-	$(GORELEASER) release --clean --release-header-tmpl "$$header" $(GORELEASER_FLAGS); \
-	status=$$?; rm -f "$$header"; exit $$status
