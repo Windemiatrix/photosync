@@ -26,10 +26,19 @@ vet: ## go vet, the fixtures_verify build tag included
 	go vet ./...
 	go vet -tags fixtures_verify ./tools/anonymize
 
+# The minimum total test coverage, in percent. Not "?=": the environment must
+# not lower it. The per-package threshold of 95 % for internal/domain comes
+# with the first package there.
+COVERAGE_MIN := 80
+# Left out of the total: the composition root is wiring only, and the main
+# package of the developer tool is driven through its commands.
+COVERAGE_EXCLUDE := ^github\.com/Windemiatrix/photosync/(cmd/|tools/anonymize/[^/]+\.go:)
+
 .PHONY: cover
-cover: ## Tests with the race detector and the coverage thresholds
+cover: ## Tests with the race detector and the coverage threshold
 	go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
-	bash scripts/check-coverage.sh coverage.out
+	grep -vE '$(COVERAGE_EXCLUDE)' coverage.out >coverage.gate.out
+	go tool cover -func=coverage.gate.out | awk '/^total:/ { found = 1; sub(/%/, "", $$3); print; exit ($$3 + 0 < $(COVERAGE_MIN)) } END { if (!found) exit 1 }'
 
 .PHONY: lint
 lint: ## Run golangci-lint
