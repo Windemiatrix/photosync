@@ -5,7 +5,6 @@ GOVULNCHECK_VERSION ?= v1.9.0
 # Bump together with the GoReleaser version in .github/workflows/release.yml.
 GORELEASER_VERSION ?= v2.18.3
 GORELEASER = go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
-# Values from .env are exported only to the targets that need them.
 
 .PHONY: help
 help: ## Display this help.
@@ -60,11 +59,14 @@ ANONYMIZE_SALT ?= $(HOME)/.config/photosync-dev/anonymize.key
 fixtures-verify: ## Anonymizer check on the private materials; rebuilt fixtures equal testdata/fixtures (ANONYMIZE_IN, ANONYMIZE_SALT in .env)
 	@if [ -z "$(ANONYMIZE_IN)" ]; then \
 		echo "fixtures-verify: ANONYMIZE_IN not set, skipped"; \
-	else go test -tags fixtures_verify -count=1 -v -run 'TestFixtures' ./tools/anonymize \
-		-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.salt="$(ANONYMIZE_SALT)"; fi
+	else \
+		go test -tags fixtures_verify -count=1 -v -run 'TestFixtures' ./tools/anonymize \
+			-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.salt="$(ANONYMIZE_SALT)"; \
+	fi
 
 ##@ Yandex test account
 
+# Values from .env are exported only to the targets that need them.
 yandex-token-create yandex-token-delete: export YANDEX_CLIENT_ID := $(YANDEX_CLIENT_ID)
 yandex-token-create yandex-token-delete: export YANDEX_CLIENT_SECRET := $(YANDEX_CLIENT_SECRET)
 
@@ -79,7 +81,7 @@ yandex-token-delete: ## Revoke and delete the local dev token
 ##@ Pull requests
 
 .PHONY: pr-title
-pr-title: ## PR_TITLE follows the title convention (PR_TITLE='...' make pr-title)
+pr-title: ## PR_TITLE follows the title convention (make pr-title PR_TITLE='...')
 	bash scripts/check-pr-title.sh
 
 ##@ Release
