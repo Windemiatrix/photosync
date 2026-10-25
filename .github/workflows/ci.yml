@@ -2,8 +2,9 @@
 # same tool and version; event values reach it only through env:. "ci-ok" is
 # a check the ruleset of main requires; the PR title has its own workflow,
 # pr-title.yml.
-# The tests do not run again on a push to main: the ruleset of main merges only a branch that is up to
-# date with main and green, so main gets exactly the tree the PR tested.
+# The tests do not run again on a push to main: the ruleset of main merges
+# only a branch that is up to date with main and green, so main gets exactly
+# the tree the PR tested.
 name: ci
 
 on:

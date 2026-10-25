@@ -51,7 +51,6 @@ linters:
             - {pkg: github.com/Windemiatrix/go-libs/osxphotos/albuminfo, desc: "domain uses only the pure template and export packages of the library"}
             - {pkg: github.com/Windemiatrix/go-libs/osxphotos/query, desc: "domain uses only the pure template and export packages of the library"}
             - {pkg: github.com/Windemiatrix/go-libs/osxphotos/photokit, desc: "domain uses only the pure template and export packages of the library"}
-        # The application layer declares the interfaces it needs; the adapters are wired in cmd.
         app:
           list-mode: lax
           files:
@@ -60,7 +59,6 @@ linters:
           deny:
             - {pkg: github.com/Windemiatrix/photosync/internal/adapters, desc: "app must not import adapters; interfaces are declared in app and implemented structurally"}
             - {pkg: github.com/Windemiatrix/photosync/internal/testkit, desc: "testkit is used by app_test only"}
-        # Adapters and the state store implement app interfaces without importing app.
         outer:
           list-mode: lax
           files:
@@ -126,8 +124,6 @@ linters:
   exclusions:
     generated: lax
     rules:
-      # forbidigo applies to library code and developer tools, not to the
-      # composition root, configuration loading, the clock itself and tests.
       - path: (^|/)cmd/
         linters: [forbidigo]
       - path: (^|/)internal/(config|clock)/

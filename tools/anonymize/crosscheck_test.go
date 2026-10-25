@@ -102,7 +102,7 @@ type crossResult struct {
 	Glued, GluedCollisions int
 }
 
-func (r crossResult) Leaks4PlusOrGluedWord() bool { return r.Hits[class4Plus] > 0 || r.Glued > 0 }
+func (r crossResult) LeaksLongWord() bool { return r.Hits[class4Plus] > 0 || r.Glued > 0 }
 
 func (r crossResult) String() string {
 	return fmt.Sprintf("input words: short=%d len3=%d len4+=%d; output runs=%d; hits len4+=%d len3=%d short=%d; "+
@@ -284,13 +284,13 @@ func TestCrossCheck(t *testing.T) {
 	dict := dictionaryOf(files)
 	r := crossCheck(input, dict, files)
 	t.Logf("corpus: %s", r)
-	if r.Leaks4PlusOrGluedWord() || r.Input[class4Plus] == 0 || r.Output == 0 || len(dict) == 0 {
+	if r.LeaksLongWord() || r.Input[class4Plus] == 0 || r.Output == 0 || len(dict) == 0 {
 		t.Errorf("pseudonymized corpus: %s", r)
 	}
 	planted := map[string][]byte{nameTokens: files[nameTokens],
 		"anon-live/case.json": []byte(`{"icloud": [{"title": "Пельменевых", "zinaida": 1, "path": "a/ыыЗинаидыы.jpg"}]}`)}
 	p := crossCheck(input, dict, planted)
-	if p.Hits[class4Plus] != 2 || p.Glued != 1 || !p.Leaks4PlusOrGluedWord() {
+	if p.Hits[class4Plus] != 2 || p.Glued != 1 || !p.LeaksLongWord() {
 		t.Errorf("planted words: %s", p)
 	}
 	for _, w := range []string{"пельменевых", "zinaida", "зинаиды"} {

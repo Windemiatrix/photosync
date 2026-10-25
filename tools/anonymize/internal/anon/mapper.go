@@ -278,7 +278,8 @@ func (m *Mapper) number(s string, keptTime bool) (string, error) {
 		}
 		return string(out)
 	}
-	// An 8-digit output never looks like a shifted or an epoch date.
+	// An 8-digit output that looks like a shifted or an epoch date would be taken
+	// for a date by the relation check and the leak tests.
 	accept := func(c string) bool {
 		y, ok := compactDateYear(c)
 		if !ok {

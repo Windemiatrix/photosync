@@ -260,7 +260,8 @@ func corpusTable() ([]corpusAsset, []anon.File) {
 	return as, fs
 }
 
-// personal fields of the catalog and the inventory that are never decoded.
+// The personal fields are planted so that the tests prove they never reach the
+// output.
 func catalogExtras(n int) map[string]any {
 	return map[string]any{
 		"latitude":    55.7539 + float64(n)/1e4,

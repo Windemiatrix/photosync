@@ -32,6 +32,7 @@ func relationSet() *Set {
 	a0.LivePhoto = true
 	a0.Albums = []AlbumRef{{FolderNames: []string{"2023"}, Title: "07/14 Мырдон"}}
 	a1 := photo(2, "PXL_20210305_101112345.jpg", "1970-01-01T03:00:00+03:00", 1000)
+	// A burst whose other frame is not in the set.
 	a1.Burst, a1.BurstPhotos = true, []string{uuidN(9)}
 	a2 := photo(3, "IMG_0001.HEIC", "2019-12-31T23:59:59+03:00", 5000)
 	a2.Albums = []AlbumRef{{FolderNames: []string{"2019"}, Title: "12/31 НГ"}, {FolderNames: []string{}, Title: "Путешествия / Море"}}
@@ -107,8 +108,6 @@ func TestCheckRelationsCorrectImage(t *testing.T) {
 	}
 }
 
-// A changed stem of a file next to its pair breaks both the name and the
-// folder partitions by nature.
 func TestCheckRelationsBreakers(t *testing.T) {
 	t.Parallel()
 	m := newTestMapper(t)
@@ -157,6 +156,8 @@ func TestCheckRelationsBreakers(t *testing.T) {
 		{"same lower name, different images", func(_, img *Set) {
 			img.Files[lowerNameFile].Path = replaceStemDigits(img.Files[lowerNameFile].Path, "9999")
 		}, []string{RelNames}},
+		// A changed stem of a file next to its pair breaks both the name and the
+		// folder partitions by nature.
 		{"MOV stem changed", func(_, img *Set) {
 			img.Files[liveVideoFile].Path = replaceStemDigits(img.Files[liveVideoFile].Path, "0002")
 		}, []string{RelFolders, RelNames}},

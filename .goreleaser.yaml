@@ -31,9 +31,8 @@ builds:
       - -s -w -X main.version={{ .Tag }} -X main.commit={{ .Commit }}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-# lipo joins the two slices into one binary. The ad-hoc signature must be made
-# after lipo (lipo invalidates it) and before the archive is packed. No
-# "--options runtime": the hardened runtime without an entitlement closes access
+# The ad-hoc signature must be made after lipo (lipo invalidates it) and before
+# the archive is packed. No "--options runtime": the hardened runtime without an entitlement closes access
 # to Photos. binary_signs and signs do not fit: they write separate signature
 # files (cosign, gpg) and do not sign the binary in place. "--identifier" is
 # required: without it the ad-hoc signature carries the Go linker's identifier
@@ -49,7 +48,8 @@ universal_binaries:
 archives:
   - id: photosync
     ids: [photosync]
-    # There is a single archive, the universal binary, so the name is fixed: photosync_<version>_darwin_universal.tar.gz.
+    # tar.gz is the default format. There is a single archive, the universal
+    # binary, so the name is fixed: photosync_<version>_darwin_universal.tar.gz.
     name_template: "photosync_{{ .Version }}_darwin_universal"
     builds_info:
       mtime: "{{ .CommitDate }}"

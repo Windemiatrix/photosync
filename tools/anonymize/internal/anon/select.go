@@ -42,9 +42,8 @@ const (
 	RuleEpochGap      = "epoch-gap"       // a 1969-1970 date within 14 h 2 s of 1971, where shifted dates start
 )
 
-// lateEpoch is the first epoch date within epochGap (bound included) of the
-// first shifted date (1971 and later); it and every later epoch date are not
-// supported, so a case never breaks the epoch_gap relation.
+// Epoch dates from lateEpoch on are not supported, so a case never breaks the
+// epoch_gap relation.
 var lateEpoch = time.Date(minShiftedYear, 1, 1, 0, 0, 0, 0, time.UTC).Add(-epochGap)
 
 func epochRule(t time.Time) string {
@@ -202,10 +201,6 @@ type pairRef struct {
 	level string
 }
 
-// graph indexes the records of a material: assets are records 0..nA-1 and
-// files are records nA.. in inventory order. Trashed assets and files of
-// kind other are excluded from every unit.
-//
 // A component holds an asset with all its linked files, a file with its
 // owner and a file with all files of the same neighbor key. A union of
 // components is closed for the reference matching: the reference script, run
@@ -390,14 +385,11 @@ func (g *graph) candidates(c Category) [][]int {
 	return out
 }
 
-// pickUnits orders the candidates by a keyed hash of the category and the
-// key of their first record (neither by date nor by name) and takes
-// min(8, ceil(n/2)) of them while the case has at most 60 records, so a case
-// never shows how many units of a category the library has. Each unit is
-// mapped before it is taken: a unit the mapping runs out of space for or
-// whose image breaks a relation is skipped; the outputs it registered stay,
-// so the mapping stays injective and the mapping of the whole case only
-// repeats registered outputs.
+// The pick order is keyed, neither by date nor by name, and at most half of
+// the candidates are taken, so a case never shows how many units of a
+// category the library has. A skipped unit keeps the outputs it registered, so
+// the mapping stays injective and the mapping of the whole case only repeats
+// registered outputs.
 func (g *graph) pickUnits(m *Mapper, category string, cands [][]int) ([]int, error) {
 	type cand struct {
 		key  [32]byte
@@ -759,7 +751,7 @@ var Categories = []Category{
 type UnitStats struct {
 	Total       int
 	Unsupported int
-	TooLarge    int
+	TooLarge    int // supported units over maxCaseRecords records
 	// Exhausted counts the candidate units the mapping found no free output
 	// for, by their first record: a union unit and one of its components can
 	// both count.

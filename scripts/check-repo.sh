@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Rules that neither the compiler nor the linter enforce. Only files tracked by
 # git are examined, so build output and local junk never matter.
+# Run from the repository root: the paths below are relative to it.
 set -euo pipefail
 
 cgo_allowed_dir="cmd/photosync/"

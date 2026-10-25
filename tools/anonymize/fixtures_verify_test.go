@@ -87,7 +87,7 @@ func TestFixturesNoInputWords(t *testing.T) {
 	if len(dict) == 0 {
 		t.Error("no dictionary of generated words in the fixtures")
 	}
-	if r.Leaks4PlusOrGluedWord() {
+	if r.LeaksLongWord() {
 		t.Errorf("input words in the fixtures: %d equal, %d glued", r.Hits[class4Plus], r.Glued)
 	}
 }

@@ -344,8 +344,8 @@ func (r relations) sizes(orig *Set, assets []Asset, files []File) {
 	}
 }
 
-// The bound is included as in the reference; the shift would move the shifted
-// date away from the epoch one.
+// The epochGap bound is included as in the reference; the shift would move the
+// shifted date away from the epoch one.
 func epochGaps(assets []Asset, files []File) int {
 	var epoch, shifted []time.Time
 	add := func(t time.Time) {

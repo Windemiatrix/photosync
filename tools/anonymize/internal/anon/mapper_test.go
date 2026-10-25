@@ -206,7 +206,7 @@ func TestTextNFD(t *testing.T) {
 	}
 }
 
-func macWithFirstDigits(date string) func(purpose string, input []byte, counter uint64) [32]byte {
+func macWithFirstDigits(date string) macFunc {
 	return func(purpose string, input []byte, counter uint64) [32]byte {
 		firstAttempt := counter>>32 == 0
 		if purpose == purposeDigits && firstAttempt {

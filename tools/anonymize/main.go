@@ -12,9 +12,11 @@
 // icloud_catalog.json, yandex_inventory.json (yandex_inventory.prev.json
 // when the current inventory does not pass the partition check),
 // plan/plan.json, plan-rerun/plan.json and plan-rerun/links.json, and writes
-// <out>/anon-<category>/case.json and <out>/tokens.json. --out is created
-// when missing, must be empty and lie outside --in and any git working tree;
-// the salt file (64 hex digits, mode 0600) is created when missing and must
+// <out>/anon-<category>/case.json and <out>/tokens.json. The build fails
+// unless the rerun plan equals the reviewed plan and the links partition the
+// records (the partition check), and it fails when the leak scanner finds
+// anything in its own output. --out is created when missing, must be empty
+// and lie outside --in and any git working tree; the salt file (64 hex digits, mode 0600) is created when missing and must
 // lie outside any git working tree.
 //
 // Example:

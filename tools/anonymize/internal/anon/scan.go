@@ -178,6 +178,8 @@ func isLocalPath(v string) bool {
 	return false
 }
 
+// A padded base64 form contains the raw one, so the raw encodings also find
+// padded salts.
 func hasSalt(data, salt []byte) bool {
 	h := hex.EncodeToString(salt)
 	forms := [][]byte{
