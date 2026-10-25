@@ -1,6 +1,8 @@
 # A step that also runs locally calls one Makefile target; event values reach
 # it only through env:. "ci-ok" is the check the ruleset of main requires.
-# Every push to main that passes ci-ok is released by the "release" job.
+# Every push to main is released by the "release" job. The tests do not run
+# again on that push: the ruleset of main merges only a branch that is up to
+# date with main and green, so main gets exactly the tree the PR tested.
 name: ci
 
 on:
@@ -43,6 +45,7 @@ jobs:
         run: make pr-title
 
   linux:
+    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -63,6 +66,7 @@ jobs:
         run: make cover
 
   macos:
+    if: github.event_name != 'push'
     runs-on: macos-15
     timeout-minutes: 40
     permissions:
@@ -88,6 +92,7 @@ jobs:
         run: make release-snapshot
 
   repo-checks:
+    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -162,7 +167,11 @@ jobs:
   release:
     needs: [ci-ok]
     # A manual run without "major" is a check (govulncheck), not a release.
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.major))
+    # !cancelled(): without a status function GitHub adds success(), which is
+    # false when any job before ci-ok was skipped (pr-title on a push).
+    if: >-
+      !cancelled() && needs.ci-ok.result == 'success' && github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.major))
     runs-on: macos-15
     timeout-minutes: 60
     environment: release
