@@ -3,16 +3,23 @@
 package main
 
 import (
+	"bytes"
 	"flag"
+	"io"
 	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
 
 var (
 	materialsDir = flag.String("anonymize.in", "", "absolute path to the manual-sync materials")
-	fixturesDir  = flag.String("anonymize.out", "", "absolute path to the fixtures written by the tool")
+	saltFile     = flag.String("anonymize.salt", "", "absolute path to the salt file the fixtures were built with")
 )
+
+// committedFixtures is testdata/fixtures of the repository.
+const committedFixtures = "../../testdata/fixtures"
 
 func isDir(p string) bool {
 	st, err := os.Stat(p)
@@ -26,17 +33,58 @@ func TestFixturesVerify(t *testing.T) {
 	verifyMaterials(t, *materialsDir)
 }
 
-// TestFixturesNoInputWords cross-checks the fixtures with the real
+// TestFixturesRebuild builds the fixtures again from the materials with the
+// salt they were built with: the output must equal testdata/fixtures byte
+// for byte, or a change of the tool changed the fixtures. The log names only
+// the differing files; the names are anonymized.
+func TestFixturesRebuild(t *testing.T) {
+	if !isDir(*materialsDir) || *saltFile == "" {
+		t.Skip("pass -anonymize.in and -anonymize.salt")
+	}
+	if _, err := os.Stat(*saltFile); err != nil {
+		t.Fatal("salt file: not readable")
+	}
+	out := filepath.Join(t.TempDir(), "fixtures")
+	if err := build(*materialsDir, out, *saltFile, io.Discard, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	want, err := readTree(committedFixtures)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := readTree(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var differ []string
+	for name, w := range want {
+		if g, ok := got[name]; !ok || !bytes.Equal(g, w) {
+			differ = append(differ, name)
+		}
+	}
+	for name := range got {
+		if _, ok := want[name]; !ok {
+			differ = append(differ, name)
+		}
+	}
+	slices.Sort(differ)
+	t.Logf("files=%d differ=%d", len(want), len(differ))
+	if len(differ) > 0 {
+		t.Errorf("rebuilt fixtures differ from testdata/fixtures: %s", strings.Join(differ, ", "))
+	}
+}
+
+// TestFixturesNoInputWords cross-checks the committed fixtures with the real
 // materials: no input word of four and more letters is in the fixtures,
 // alone or glued to other letters. Equal words of three letters and
 // pseudonyms that happen to equal an input word are counted only. The log
 // holds aggregates only.
 func TestFixturesNoInputWords(t *testing.T) {
-	if !isDir(*materialsDir) || !isDir(*fixturesDir) {
-		t.Skip("pass -anonymize.in and -anonymize.out")
+	if !isDir(*materialsDir) {
+		t.Skip("no materials directory: pass -anonymize.in")
 	}
 	input := inputWords(materialOf(t, *materialsDir))
-	files, err := readTree(*fixturesDir)
+	files, err := readTree(committedFixtures)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,13 +99,10 @@ func TestFixturesNoInputWords(t *testing.T) {
 	}
 }
 
-// TestFixturesDigest prints a one-screen sample of the fixtures for the
-// owner: anonymized values only.
+// TestFixturesDigest prints a one-screen sample of the committed fixtures
+// for the owner: anonymized values only.
 func TestFixturesDigest(t *testing.T) {
-	if !isDir(*fixturesDir) {
-		t.Skip("pass -anonymize.out")
-	}
-	files, err := readTree(*fixturesDir)
+	files, err := readTree(committedFixtures)
 	if err != nil {
 		t.Fatal(err)
 	}
