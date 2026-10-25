@@ -1,7 +1,8 @@
 # GoReleaser OSS configuration:
 #   make release-snapshot   builds the archive locally and on every pull request,
 #                           publishes nothing
-#   release.yml             builds and creates a draft GitHub Release by a tag
+#   the release job of ci.yml  builds and publishes the GitHub Release after
+#                              every merge to main
 #
 # This file and docs/release-notes-header.md run inside the release job with
 # write access, so changes to them are reviewed like changes to a workflow.
@@ -95,9 +96,10 @@ changelog:
     - title: Other
       order: 999
 
-# A draft: the maintainer reads the notes, checks the files and publishes.
+# Published at once: the merge of the PR is the maintainer's decision. The tag
+# does not exist yet: GitHub creates it on the commit that was built.
 release:
-  draft: true
+  target_commitish: "{{ .FullCommit }}"
   github:
     owner: Windemiatrix
     name: photosync

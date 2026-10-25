@@ -3,7 +3,8 @@ GOLANGCI_LINT_VERSION ?= v2.15.0
 ACTIONLINT_VERSION ?= v1.7.12
 GOVULNCHECK_VERSION ?= v1.9.0
 SHFMT_VERSION ?= v3.14.1
-# Bump together with the GoReleaser version in .github/workflows/release.yml.
+SVU_VERSION ?= v3.4.1
+# Bump together with the GoReleaser version in the release job of ci.yml.
 GORELEASER_VERSION ?= v2.18.3
 GORELEASER = go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
 
@@ -30,15 +31,13 @@ vet: ## go vet, the fixtures_verify build tag included
 # not lower it. The per-package threshold of 95 % for internal/domain comes
 # with the first package there.
 COVERAGE_MIN := 80
-# Left out of the total: the composition root is wiring only, and the main
-# package of the developer tool is driven through its commands.
-COVERAGE_EXCLUDE := ^github\.com/Windemiatrix/photosync/(cmd/|tools/anonymize/[^/]+\.go:)
 
 .PHONY: cover
 cover: ## Tests with the race detector and the coverage threshold
 	go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
-	grep -vE '$(COVERAGE_EXCLUDE)' coverage.out >coverage.gate.out
-	go tool cover -func=coverage.gate.out | awk '/^total:/ { found = 1; sub(/%/, "", $$3); print; exit ($$3 + 0 < $(COVERAGE_MIN)) } END { if (!found) exit 1 }'
+	@pct=$$(go tool cover -func=coverage.out | tail -n 1 | tr -dc '0-9.'); \
+	echo "coverage: $$pct% (minimum $(COVERAGE_MIN)%)"; \
+	test "$${pct%.*}" -ge $(COVERAGE_MIN)
 
 .PHONY: lint
 lint: ## Run golangci-lint
@@ -80,20 +79,6 @@ fixtures-verify: ## Anonymizer check on the private materials; rebuilt fixtures 
 			-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.salt="$(ANONYMIZE_SALT)"; \
 	fi
 
-##@ Yandex test account
-
-# Values from .env are exported only to the targets that need them.
-yandex-token-create yandex-token-delete: export YANDEX_CLIENT_ID := $(YANDEX_CLIENT_ID)
-yandex-token-create yandex-token-delete: export YANDEX_CLIENT_SECRET := $(YANDEX_CLIENT_SECRET)
-
-.PHONY: yandex-token-create
-yandex-token-create: ## Sign in to the Yandex test account, save the local dev token
-	bash scripts/yandex-token.sh create
-
-.PHONY: yandex-token-delete
-yandex-token-delete: ## Revoke and delete the local dev token
-	bash scripts/yandex-token.sh delete
-
 ##@ Pull requests
 
 .PHONY: pr-title
@@ -101,6 +86,13 @@ pr-title: ## PR_TITLE follows the title convention (make pr-title PR_TITLE='...'
 	bash scripts/check-pr-title.sh
 
 ##@ Release
+
+# BUMP=major gives 1.0.0: from 0.x the only way there.
+BUMP ?= next
+
+.PHONY: next-version
+next-version: ## The version that the next merge to main releases (svu, .svu.yml; needs a tag)
+	@go run github.com/caarlos0/svu/v3@$(SVU_VERSION) $(BUMP)
 
 .PHONY: release-snapshot
 release-snapshot: ## Build the release archive into dist/ without publishing

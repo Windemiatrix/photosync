@@ -61,9 +61,9 @@ Tests tagged `photokit_live` import, change and delete objects in a real library
 
 ## Releases
 
-Only the maintainer creates the tag, with `scripts/release.sh [--major]` on their own machine. The script checks that `main` is up to date, the work tree is clean, CI on this commit is green and the tag does not exist yet; then it shows the computed version and the class of every title and, after confirmation, creates a signed tag and pushes it to `origin`. Workflows do not create tags.
+A release comes out by itself after every merge of a PR into `main`. Once CI on that commit is green, the `release` job of `ci.yml` computes the version, builds the universal binary, signs it ad hoc, packs the archive, computes `checksums.txt`, publishes the GitHub Release (which creates the tag on that commit) and attests the provenance. The notes are built from PR titles; there is no `CHANGELOG.md`.
 
-Nobody assigns a version: `scripts/next-version.sh` computes it from the PR titles since the last tag.
+Nobody assigns a version: [svu](https://github.com/caarlos0/svu) computes it from the PR titles since the last tag, with the rules in `.svu.yml`. `make next-version` shows the next one.
 
 | Titles since the last tag | before `1.0.0` | from `1.0.0` |
 |---|---|---|
@@ -71,8 +71,6 @@ Nobody assigns a version: `scripts/next-version.sh` computes it from the PR titl
 | otherwise there is `feat(…)` | minor | minor |
 | otherwise any others | patch | patch |
 
-A title outside the rule counts as a patch change. Version `1.0.0` is not inferred from titles: it is released by `scripts/release.sh --major`. No commits since the last tag means no release.
-
-The tag starts `release.yml`: it builds the universal binary, signs it ad hoc, packs the archive, computes `checksums.txt`, attests the provenance and creates a draft GitHub Release. The notes are built from PR titles; there is no `CHANGELOG.md`. The maintainer reads the draft and publishes it.
+The first release is `v0.1.0`. Version `1.0.0` is not inferred from titles: the maintainer releases it by running `ci.yml` by hand (Run workflow) with the `major` flag.
 
 A published tag is never moved; a faulty version is superseded by the next one.

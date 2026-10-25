@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Checks that a pull request title follows the repository rule. The title of a
-# PR becomes the title of its squash commit on main, and scripts/next-version.sh
-# computes the next version from those titles, so a bad title is stopped before
-# the merge.
+# PR becomes the title of its squash commit on main, and the release job of
+# ci.yml computes the next version from those titles (.svu.yml), so a bad title
+# is stopped before the merge.
 #
 # Run:    make pr-title PR_TITLE='feat(plan): add match levels'
 #         scripts/check-pr-title.sh 'feat(config)!: rename the remotes key'
@@ -29,8 +29,6 @@ set -euo pipefail
 # In the C locale [ -~] is the printable ASCII range and ${#title} counts bytes.
 export LC_ALL=C
 
-# scripts/next-version.sh has the same rule with capture groups: change both
-# together.
 title_re='^(feat|fix|docs|style|refactor|test|chore)\([a-z0-9._/-]+\)!?: [ -~]+$'
 max_length=70
 

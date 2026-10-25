@@ -1,5 +1,6 @@
 # A step that also runs locally calls one Makefile target; event values reach
 # it only through env:. "ci-ok" is the check the ruleset of main requires.
+# Every push to main that passes ci-ok is released by the "release" job.
 name: ci
 
 on:
@@ -10,6 +11,11 @@ on:
   schedule:
     - cron: "23 3 * * 0"
   workflow_dispatch:
+    inputs:
+      major:
+        description: "Release 1.0.0 (the move from 0.x is never made by a PR title)"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -149,3 +155,54 @@ jobs:
         run: |
           printf '%s' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           printf '%s' "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null
+
+  # The version comes from the PR titles since the last tag (.svu.yml). The
+  # GitHub Release creates the tag on the tested commit. No caches: they could
+  # be poisoned.
+  release:
+    needs: [ci-ok]
+    # A manual run without "major" is a check (govulncheck), not a release.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.major))
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      CGO_ENABLED: "1"
+      MACOSX_DEPLOYMENT_TARGET: "13.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: govulncheck
+        run: make vuln
+      # svu needs a previous tag, so the first release is named here.
+      - name: Version
+        env:
+          BUMP: ${{ inputs.major && 'major' || 'next' }}
+        run: |
+          if git describe --tags --abbrev=0 --match 'v*' >/dev/null 2>&1; then
+            tag="$(make -s next-version BUMP="$BUMP")"
+          else
+            tag=v0.1.0
+          fi
+          echo "Release $tag"
+          git tag "$tag"
+      - name: Build and publish the Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        # Bump together with GORELEASER_VERSION in the Makefile, which runs it
+        # locally (make release-snapshot).
+        run: go run github.com/goreleaser/goreleaser/v2@v2.18.3 release --clean --release-header-tmpl docs/release-notes-header.md
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/checksums.txt

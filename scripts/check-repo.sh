@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Repository hygiene checks: rules that neither the compiler nor the linter
-# enforce, plus the self-tests of the scripts that decide titles, versions and
-# releases. Only files tracked by git are examined, so build output and local
+# enforce, plus the self-test of the PR title check. Only files tracked by git are examined, so build output and local
 # junk never matter.
 #
 # Run:    make check-repo (which also runs actionlint), or
@@ -75,11 +74,8 @@ check_actions_pinned() {
   fi
 }
 
-# The scripts that decide titles, versions and releases.
 run_self_tests() {
   bash scripts/check-pr-title-test.sh || failed=1
-  bash scripts/next-version-test.sh || failed=1
-  bash scripts/check-release-deps-test.sh || failed=1
 }
 
 check_no_spike_code
