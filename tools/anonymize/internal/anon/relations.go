@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Violation is one broken relation and the number of breaks; it holds no
@@ -22,7 +23,7 @@ type Violation struct {
 // the matching of the application needs on top (NFC, " (N)", albums and
 // folders, Live, RAW, bursts, duplicates).
 const (
-	RelShape      = "shape"       // the image has other records
+	RelShape      = "shape"       // the image has another number of assets or files
 	RelFields     = "fields"      // 1: extension, kind, frame size, tzoffset, flags, burst_photos count, live_pair
 	RelDate       = "date"        // 2: shift, form and fraction of dates and of the 1970 fix
 	RelFolderInfo = "folder_info" // 3: year, event month and day of the folder
@@ -32,11 +33,10 @@ const (
 	RelFolders    = "folders"     // 7: folder, (folder, stem) and neighbor key partitions of files
 	RelAlbums     = "albums"      // 8: album keys of assets and of file folders together
 	RelSize       = "size"        // 9: order and equality of sizes
-	RelOrder      = "order"       // 10: relative order of the records
-	RelEpochGap   = "epoch_gap"   // 11: no shifted date within 14 h 2 s of an epoch date
+	RelEpochGap   = "epoch_gap"   // 10: no shifted date within 14 h 2 s of an epoch date
 )
 
-var relationOrder = []string{RelShape, RelFields, RelDate, RelFolderInfo, RelStrings, RelIDs, RelNames, RelFolders, RelAlbums, RelSize, RelOrder, RelEpochGap}
+var relationOrder = []string{RelShape, RelFields, RelDate, RelFolderInfo, RelStrings, RelIDs, RelNames, RelFolders, RelAlbums, RelSize, RelEpochGap}
 
 // epochGap is the largest time difference the reference matching links,
 // itself included.
@@ -68,43 +68,19 @@ func (b *bijection) add(o, i string) {
 	b.fwd[o], b.rev[i] = i, o
 }
 
-// CheckRelations compares a set with its image: records are paired by their
-// source index, shift is the date shift in years. It returns the broken
-// relations in a fixed order, with counts only.
+// CheckRelations compares a set with its image record by record; shift is
+// the date shift in years. It returns the broken relations in a fixed order,
+// with counts only.
 func CheckRelations(orig, img *Set, shift int) []Violation {
-	c := map[string]int{}
-	if bad := pairShape(orig, img); bad {
+	if len(img.Assets) != len(orig.Assets) || len(img.Files) != len(orig.Files) {
 		return []Violation{{RelShape, 1}}
 	}
-	pos := map[int]int{}
-	for k, s := range img.Src {
-		pos[s] = k
-	}
-	for k := range orig.Src {
-		if img.Src[k] != orig.Src[k] {
-			c[RelOrder]++
-		}
-	}
-	nA := len(orig.Assets)
-	assets := make([]Asset, nA)
-	files := make([]File, len(orig.Files))
-	for k, s := range orig.Src {
-		p := pos[s]
-		if k < nA {
-			assets[k] = img.Assets[p]
-		} else {
-			files[k-nA] = img.Files[p-nA]
-		}
-	}
-	days := time.Duration(shift/4*1461) * 24 * time.Hour
-	if shift%4 != 0 {
-		days = -1
-	}
-	r := relations{shift: shift, days: days, c: c}
-	r.records(orig, assets, files)
-	r.partitions(orig, assets, files)
-	r.sizes(orig, assets, files)
-	c[RelEpochGap] += epochGaps(orig.Assets, orig.Files) + epochGaps(assets, files)
+	c := map[string]int{}
+	r := relations{shift: shift, days: time.Duration(shift/4*1461) * 24 * time.Hour, c: c}
+	r.records(orig, img.Assets, img.Files)
+	r.partitions(orig, img.Assets, img.Files)
+	r.sizes(orig, img.Assets, img.Files)
+	c[RelEpochGap] += epochGaps(orig.Assets, orig.Files) + epochGaps(img.Assets, img.Files)
 	var out []Violation
 	for _, name := range relationOrder {
 		if c[name] > 0 {
@@ -112,28 +88,6 @@ func CheckRelations(orig, img *Set, shift int) []Violation {
 		}
 	}
 	return out
-}
-
-// pairShape reports whether the image has other records than the set.
-func pairShape(orig, img *Set) bool {
-	nA, n := len(orig.Assets), len(orig.Assets)+len(orig.Files)
-	if len(img.Assets) != nA || len(img.Files) != len(orig.Files) || len(orig.Src) != n || len(img.Src) != n {
-		return true
-	}
-	pos := map[int]int{}
-	for k, s := range img.Src {
-		if _, dup := pos[s]; dup {
-			return true
-		}
-		pos[s] = k
-	}
-	for k, s := range orig.Src {
-		p, ok := pos[s]
-		if !ok || (k < nA) != (p < nA) {
-			return true
-		}
-	}
-	return false
 }
 
 type relations struct {
@@ -233,7 +187,7 @@ func extSame(o, i string) bool {
 func runeCaseMask(s string) string {
 	var b strings.Builder
 	for _, r := range s {
-		if r != toLowerRune(r) {
+		if r != unicode.ToLower(r) {
 			b.WriteByte('U')
 		} else {
 			b.WriteByte('l')
@@ -241,8 +195,6 @@ func runeCaseMask(s string) string {
 	}
 	return b.String()
 }
-
-func toLowerRune(r rune) rune { return []rune(strings.ToLower(string(r)))[0] }
 
 // strSame compares the properties of a string the mapping keeps.
 func strSame(o, i string) bool {

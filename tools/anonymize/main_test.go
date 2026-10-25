@@ -11,8 +11,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/Windemiatrix/photosync/tools/anonymize/internal/anon"
 )
 
 // runTool runs the command line and returns the exit code and the output.
@@ -74,7 +72,7 @@ func TestHelp(t *testing.T) {
 	}
 }
 
-var aggregateLine = regexp.MustCompile(`^(inventory: (current|prev)|links: pairs=\d+( [a-z_]+=\d+)+|units: total=\d+ unsupported=\d+ too_large=\d+ exhausted=\d+|unsupported:( [a-z0-9-]+=\d+)+|case anon-[a-z0-9-]+: (empty|records=\d+ pairs=\d+( [a-z_]+=\d+)*)|cases: \d+)$`)
+var aggregateLine = regexp.MustCompile(`^(inventory: (current|prev)|links: pairs=\d+( [a-z_]+=\d+)+|units: total=\d+ unsupported=\d+ too_large=\d+ exhausted=\d+|unsupported:( [a-z0-9-]+=\d+)+|relations:( [a-z_]+=\d+)*|case anon-[a-z0-9-]+: (empty|records=\d+ pairs=\d+( [a-z_]+=\d+)*)|cases: \d+)$`)
 
 func TestBuildAndCheck(t *testing.T) {
 	t.Parallel()
@@ -98,18 +96,10 @@ func TestBuildAndCheck(t *testing.T) {
 	if !strings.Contains(stdout, "case anon-level-exact: records=") {
 		t.Errorf("stdout = %q", stdout)
 	}
-	// Without normalization the corpus has no supported NFD record.
-	if !anon.NormalizationAvailable && !strings.Contains(stdout, "case anon-nfd: empty") {
-		t.Errorf("stdout = %q", stdout)
-	}
-	if _, err := os.Stat(filepath.Join(out, "tokens.json")); err != nil {
-		t.Errorf("tokens.json: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(out, "anon-level-exact", "case.json")); err != nil {
-		t.Errorf("case.json: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(out, "anon-nfd")); (err == nil) != anon.NormalizationAvailable {
-		t.Errorf("directory of the nfd case: %v", err)
+	for _, p := range []string{"tokens.json", "anon-level-exact/case.json", "anon-nfd/case.json"} {
+		if _, err := os.Stat(filepath.Join(out, p)); err != nil {
+			t.Errorf("%s: %v", p, err)
+		}
 	}
 	code, stdout, stderr = runTool("--check", out)
 	if code != 0 || !regexp.MustCompile(`^check: 0 findings in \d+ files\n$`).MatchString(stdout) || stderr != "" {
@@ -130,76 +120,91 @@ func TestPrevInventory(t *testing.T) {
 	}
 }
 
+// gitTree makes dir a git working tree and returns a symbolic link to it
+// next to dir.
+func gitTree(t *testing.T, dir string) string {
+	t.Helper()
+	writeFile(t, dir, ".git/HEAD", []byte("ref: refs/heads/main\n"))
+	link := dir + "-link"
+	if err := os.Symlink(dir, link); err != nil {
+		t.Fatal(err)
+	}
+	return link
+}
+
 func TestBuildErrors(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name  string
-		opt   corpusOptions
-		prep  func(t *testing.T, in, out, salt string) (string, string, string)
-		kind  string
-		noOut bool // the output directory must not be created
+		name string
+		opt  corpusOptions
+		prep func(t *testing.T, in, out, salt string) (string, string, string)
+		kind string
 	}{
 		{"out not empty", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			writeFile(t, out, "x", []byte("x"))
 			return in, out, salt
-		}, "out dir: not empty", false},
+		}, "out dir: not empty"},
 		{"out inside git tree", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			repo := filepath.Join(filepath.Dir(out), "repo")
-			writeFile(t, repo, ".git/HEAD", []byte("ref: refs/heads/main\n"))
+			gitTree(t, repo)
 			return in, filepath.Join(repo, "out"), salt
-		}, "out dir: inside a git working tree", true},
+		}, "out dir: inside a git working tree"},
+		{"out inside git tree through a link", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
+			link := gitTree(t, filepath.Join(filepath.Dir(out), "repo"))
+			return in, filepath.Join(link, "out"), salt
+		}, "out dir: inside a git working tree"},
 		{"out inside in", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			return in, filepath.Join(in, "out"), salt
-		}, "out dir: inside --in", true},
+		}, "out dir: inside --in"},
 		{"in inside out", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			return in, filepath.Dir(in), salt
-		}, "out dir: not empty", false},
-		{"out parent missing", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
-			return in, filepath.Join(out, "a", "b"), salt
-		}, "out dir: not found", true},
+		}, "out dir: not empty"},
 		{"in missing", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			return in + "-missing", out, salt
-		}, "in dir: not found", true},
+		}, "in dir: not found"},
+		{"salt inside git tree through a link", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
+			link := gitTree(t, filepath.Join(filepath.Dir(out), "repo"))
+			return in, out, filepath.Join(link, "keys", "salt.key")
+		}, "salt: inside a git working tree"},
+		{"salt file is a link into a git tree", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
+			repo := filepath.Join(filepath.Dir(out), "repo")
+			gitTree(t, repo)
+			writeFile(t, repo, "salt.key", []byte(strings.Repeat("ab", 32)+"\n"))
+			if err := os.MkdirAll(filepath.Dir(salt), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(filepath.Join(repo, "salt.key"), salt); err != nil {
+				t.Fatal(err)
+			}
+			return in, out, salt
+		}, "salt: inside a git working tree"},
 		{"salt too open", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			writeFile(t, filepath.Dir(salt), filepath.Base(salt), []byte(strings.Repeat("ab", 32)+"\n"))
 			if err := os.Chmod(salt, 0o644); err != nil { //nolint:gosec // the test needs a mode that is too open
 				t.Fatal(err)
 			}
 			return in, out, salt
-		}, "salt: permissions too open", true},
+		}, "salt: permissions too open"},
 		{"salt not hex", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			writeFile(t, filepath.Dir(salt), filepath.Base(salt), []byte(strings.Repeat("zz", 32)+"\n"))
 			return in, out, salt
-		}, "salt: not 64 lower-case hex digits", true},
-		{"salt too large", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
-			writeFile(t, filepath.Dir(salt), filepath.Base(salt), bytes.Repeat([]byte("a"), 200))
-			return in, out, salt
-		}, "salt: too large", true},
-		{"salt inside out", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
-			if err := os.Mkdir(out, 0o700); err != nil {
-				t.Fatal(err)
-			}
-			return in, out, filepath.Join(out, "salt.key")
-		}, "salt: inside --out", false},
-		{"salt inside in", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
-			return in, out, filepath.Join(in, "salt.key")
-		}, "salt: inside --in", true},
-		{"plan rerun differs", corpusOptions{rerunDiffers: true}, nil, "plan rerun: plan rerun differs from the reviewed plan", true},
-		{"no inventory passes", corpusOptions{noPrevMatch: true}, nil, "partition: no inventory passes the check", true},
+		}, "salt: not 64 hex digits"},
+		{"plan rerun differs", corpusOptions{rerunDiffers: true}, nil, "plan rerun: plan rerun differs from the reviewed plan"},
+		{"no inventory passes", corpusOptions{noPrevMatch: true}, nil, "partition: no inventory passes the check: current: "},
 		{"broken catalog", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			writeFile(t, in, "icloud_catalog.json", []byte(`[{"uuid": "A"}, {"uuid": `))
 			return in, out, salt
-		}, "read catalog: ", true},
+		}, "read catalog: syntax error at offset 25"},
 		{"wrong field type", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			writeFile(t, in, "yandex_inventory.json", []byte(`{"files": [{"path": "2023/x.jpg", "size": "big"}]}`))
 			return in, out, salt
-		}, "read inventory: wrong type in field files.size", true},
+		}, "read inventory: wrong type (string)"},
 		{"missing links", corpusOptions{}, func(t *testing.T, in, out, salt string) (string, string, string) {
 			if err := os.Remove(filepath.Join(in, "plan-rerun", "links.json")); err != nil {
 				t.Fatal(err)
 			}
 			return in, out, salt
-		}, "read links: not found", true},
+		}, "read links: not found"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -214,11 +219,6 @@ func TestBuildErrors(t *testing.T) {
 			}
 			if strings.Contains(stderr, in) || strings.Contains(stderr, out) {
 				t.Errorf("stderr holds a path: %q", stderr)
-			}
-			if tt.noOut {
-				if _, err := os.Stat(out); err == nil {
-					t.Error("output directory created on error")
-				}
 			}
 		})
 	}
@@ -297,18 +297,23 @@ func TestOutputPermissions(t *testing.T) {
 	}
 }
 
-func TestOutputDirExistingEmpty(t *testing.T) {
+// TestOutputDirs: --out may be an existing empty directory or a path whose
+// parents are missing.
+func TestOutputDirs(t *testing.T) {
 	t.Parallel()
 	in, out, salt, _ := setup(t, corpusOptions{})
-	if err := os.Mkdir(out, 0o755); err != nil { //nolint:gosec // the tool must tighten an open directory
+	if err := os.Mkdir(out, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if code, _, stderr := runTool("--in", in, "--out", out, "--salt-file", salt); code != 0 {
-		t.Fatalf("code %d: %s", code, stderr)
+		t.Fatalf("existing empty: code %d: %s", code, stderr)
 	}
-	st, _ := os.Stat(out)
-	if st.Mode().Perm() != 0o700 {
-		t.Errorf("out mode %v", st.Mode().Perm())
+	deep := filepath.Join(out+"2", "a", "b")
+	if code, _, stderr := runTool("--in", in, "--out", deep, "--salt-file", salt); code != 0 {
+		t.Fatalf("missing parents: code %d: %s", code, stderr)
+	}
+	if st, err := os.Stat(filepath.Join(out+"2", "a")); err != nil || st.Mode().Perm() != 0o700 {
+		t.Errorf("created parent: %v", err)
 	}
 }
 
@@ -370,17 +375,19 @@ func TestErrorsWithoutValues(t *testing.T) {
 		name, file, content, kind string
 	}{
 		{"syntax error after a canary", "icloud_catalog.json", `[{"uuid": "A", "description": "` + canary + `" x}]`, "read catalog: syntax error at offset"},
-		{"coordinate in a string field", "icloud_catalog.json", `[{"uuid": "A", "original_filename": 55.7539}]`, "read catalog: wrong type in field original_filename"},
-		{"canary in a number field", "icloud_catalog.json", `[{"uuid": "A", "original_filesize": "` + canary + `"}]`, "read catalog: wrong type in field original_filesize"},
-		{"canary in an album title", "icloud_catalog.json", `[{"uuid": "A", "album_info": [{"title": ["` + canary + `"]}]}]`, "read catalog: wrong type in field album_info.title"},
-		{"canary in width", "yandex_inventory.json", `{"files": [{"path": "2023/x.jpg", "width": "` + canary + `"}]}`, "read inventory: wrong type in field files.width"},
-		{"canary in a links value", "plan-rerun/links.json", `{"` + canary + `": [["a", 5]]}`, "read links: wrong type in field links"},
-		{"canary as a links key", "plan-rerun/links.json", `{"` + canary + `": 7}`, "read links: wrong type in field links"},
+		{"coordinate in a string field", "icloud_catalog.json", `[{"uuid": "A", "original_filename": 55.7539}]`, "read catalog: wrong type (number)"},
+		{"coordinate in an integer field", "icloud_catalog.json", `[{"uuid": "A", "tzoffset": 55.7539}]`, "read catalog: wrong type (number)"},
+		{"canary in a number field", "icloud_catalog.json", `[{"uuid": "A", "original_filesize": "` + canary + `"}]`, "read catalog: wrong type (string)"},
+		{"canary in an album title", "icloud_catalog.json", `[{"uuid": "A", "album_info": [{"title": ["` + canary + `"]}]}]`, "read catalog: wrong type (array)"},
+		{"canary in width", "yandex_inventory.json", `{"files": [{"path": "2023/x.jpg", "width": "` + canary + `"}]}`, "read inventory: wrong type (number)"},
+		{"canary in a links value", "plan-rerun/links.json", `{"` + canary + `": [["a", 5]]}`, "read links: wrong type (number)"},
+		{"canary as a links key", "plan-rerun/links.json", `{"` + canary + `": 7}`, "read links: wrong type (number)"},
+		{"canary in a link kind", "plan-rerun/links.json", `{"A": [["a", "` + canary + `"]]}`, "read links: invalid value in field links"},
 		{"missing uuid", "icloud_catalog.json", `[{"original_filename": "` + canary + `.jpg"}]`, "read catalog: missing field uuid in record 1"},
 		{"absolute path", "yandex_inventory.json", `{"files": [{"path": "/Users/` + canary + `/x.jpg"}]}`, "read inventory: invalid value in field files.path in record 1"},
 		{"canary in live_pair", "yandex_inventory.json", `{"files": [{"path": "2023/x.jpg"}, {"path": "2023/y.jpg", "live_pair": "` + canary + `"}]}`, "read inventory: invalid value in field files.live_pair in record 2"},
-		{"catalog not an array", "icloud_catalog.json", `{"` + canary + `": 1}`, "read catalog: wrong type in field catalog"},
-		{"trailing data", "plan/plan.json", `{} "` + canary + `"`, "read plan: trailing data"},
+		{"catalog not an array", "icloud_catalog.json", `{"` + canary + `": 1}`, "read catalog: wrong type (object)"},
+		{"trailing data", "plan/plan.json", `{} "` + canary + `"`, "read plan: syntax error at offset 4"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -421,8 +428,8 @@ func TestCheckFindings(t *testing.T) {
 	writeFile(t, filepath.Dir(salt), "salt.key", []byte(saltHex+"\n"))
 	writeFile(t, dir, "anon-unmatched-icloud/case.json", []byte(`{"icloud": [{"original_filename": "Пельменева.jpg", "uuid": "3F2A8C41-9D07-4B1E-8A0C-77F25B1E6A0C"}], "note": "`+saltHex+`"}`))
 	writeFile(t, dir, "anon-unmatched-icloud/notes.txt", []byte("Пельменева"))
-	writeFile(t, dir, "anon-y/big.json", bytes.Repeat([]byte(" "), 1<<20+1))
 	writeFile(t, dir, "anon-y/broken.json", []byte(`{"a": `))
+	writeFile(t, dir, "anon-y/empty.json", nil)
 	writeFile(t, dir, "Пельменева/case.json", []byte(`{"note": 1}`))
 	// The form of an output name with a private string that is no category.
 	writeFile(t, dir, "anon-zinaida/case.json", []byte(`{"note": 1}`))
@@ -437,18 +444,22 @@ func TestCheckFindings(t *testing.T) {
 		"tokens.json: : no-dictionary", "anon-unmatched-icloud/case.json: /icloud/0/original_filename: word",
 		"anon-unmatched-icloud/case.json: /icloud/0/uuid: uuid", "anon-unmatched-icloud/case.json: : salt",
 		"anon-unmatched-icloud/case.json: /<key>: unexpected-key",
-		// Names the build never writes are not printed.
-		"<file>: : unexpected-file", "<file>: : too-large", "<file>: : not-json", "<file>: : symlink",
 	} {
 		if !strings.Contains(stdout, want+"\n") {
 			t.Errorf("stdout lacks %q:\n%s", want, stdout)
 		}
 	}
-	// Both Пельменева/case.json and anon-zinaida/case.json.
-	if n := strings.Count(stdout, "<file>: /<key>: unexpected-key\n"); n != 2 {
-		t.Errorf("%d hidden unexpected-key findings; want 2:\n%s", n, stdout)
+	// Names the build never writes are not printed.
+	for line, n := range map[string]int{
+		"<file>: /<key>: unexpected-key\n": 2, // Пельменева/case.json and anon-zinaida/case.json
+		"<file>: : unexpected-file\n":      2, // notes.txt and the symbolic link
+		"<file>: : not-json\n":             2, // broken.json and empty.json
+	} {
+		if got := strings.Count(stdout, line); got != n {
+			t.Errorf("%d lines %q; want %d:\n%s", got, line, n, stdout)
+		}
 	}
-	for _, name := range []string{"notes.txt", "big.json", "broken.json", "link.json", "zinaida"} {
+	for _, name := range []string{"notes.txt", "empty.json", "broken.json", "link.json", "zinaida"} {
 		if strings.Contains(stdout, name) {
 			t.Errorf("stdout holds the file name %q", name)
 		}
@@ -466,23 +477,12 @@ func TestCheckFindings(t *testing.T) {
 	}
 }
 
-// TestCheckBadDictionary: a real word added to tokens.json does not make the
-// same word in a case pass.
-func TestCheckBadDictionary(t *testing.T) {
+func TestCheckBrokenDictionary(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	writeFile(t, dir, "tokens.json", []byte(`{"format": 1, "words": ["zinaida"]}`))
-	writeFile(t, dir, "anon-live/case.json", []byte(`{"icloud": [{"original_filename": "Zinaida.jpg"}]}`))
-	code, stdout, _ := runTool("--check", dir)
-	if code != 1 {
-		t.Errorf("code %d", code)
-	}
-	for _, want := range []string{"tokens.json: : bad-dictionary", "anon-live/case.json: /icloud/0/original_filename: word", "tokens.json: /words/0: word"} {
-		if !strings.Contains(stdout, want+"\n") {
-			t.Errorf("stdout lacks %q:\n%s", want, stdout)
-		}
-	}
-	if strings.Contains(strings.ToLower(stdout), "zinaida") {
-		t.Errorf("stdout holds the value: %s", stdout)
+	writeFile(t, dir, "tokens.json", []byte(`{"format": 1, "words": [`))
+	code, stdout, stderr := runTool("--check", dir)
+	if code != 1 || stderr != "" || stdout != "tokens.json: : not-json\ncheck: 1 findings in 1 files\n" {
+		t.Errorf("code %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 }

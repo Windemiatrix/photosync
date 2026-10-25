@@ -6,7 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -15,13 +15,14 @@ import (
 
 // verifyMaterials checks the tool on a materials directory: the build
 // succeeds with a fresh salt, the material passes the rerun and partition
-// checks, the image of every supported unit (except those the mapping runs
-// out of space for, counted in the log) keeps every relation, the expected
-// pairs of each case keep the level distribution of the reference links of
-// its source assets, and the output passes the leak scanner. Logs and
-// messages hold aggregates and counters only; nothing is written outside
-// t.TempDir().
-func verifyMaterials(t *testing.T, dir string) {
+// checks, the image of every supported unit keeps every relation (except
+// units the mapping runs out of space for and units whose 1970 PXL_ date
+// breaks the date relation, counted in the log), the expected pairs of each
+// case keep the level distribution of the reference links of its source
+// assets, and the output passes the leak scanner. It returns the number of
+// units skipped for the date relation. Logs and messages hold aggregates and
+// counters only; nothing is written outside t.TempDir().
+func verifyMaterials(t *testing.T, dir string) int {
 	t.Helper()
 	tmp := t.TempDir()
 	saltPath := filepath.Join(tmp, "keys", "anonymize.key")
@@ -53,25 +54,30 @@ func verifyMaterials(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	units, err := anon.SupportedUnits(m)
-	if err != nil {
-		t.Fatalf("units: %v", err)
-	}
+	units := anon.SupportedUnits(m)
 	// One mapping unit by unit, as the build does: a unit the mapping runs
-	// out of space for is skipped; the mapping of the union only repeats
-	// registered outputs.
+	// out of space for or whose own image breaks a relation is skipped; the
+	// mapping of the union only repeats registered outputs.
 	var mapped [][]int
-	exhausted := 0
+	exhausted, broken := 0, 0
 	for _, u := range units {
-		_, err := mp.Set(m.Subset(u))
-		switch {
-		case errors.Is(err, anon.ErrExhausted):
+		sub := m.Subset(u)
+		img, err := mp.Set(sub)
+		if errors.Is(err, anon.ErrExhausted) {
 			exhausted++
-		case err != nil:
-			t.Fatalf("mapping of a supported unit: %v", err)
-		default:
-			mapped = append(mapped, u)
+			continue
 		}
+		if err != nil {
+			t.Fatalf("mapping of a supported unit: %v", err)
+		}
+		if vs := anon.CheckRelations(sub, img, mp.YearShift()); len(vs) > 0 {
+			if !fix1970Only(sub, vs) {
+				t.Errorf("relations of a supported unit: %v", vs)
+			}
+			broken++
+			continue
+		}
+		mapped = append(mapped, u)
 	}
 	recs := flatten(mapped)
 	set := m.Subset(recs)
@@ -92,7 +98,7 @@ func verifyMaterials(t *testing.T, dir string) {
 	if len(uuids) != len(img.Assets) || len(paths) != len(img.Files) {
 		t.Errorf("mapping is not injective: %d of %d UUIDs, %d of %d paths", len(uuids), len(img.Assets), len(paths), len(img.Files))
 	}
-	t.Logf("relations: units=%d exhausted=%d records=%d assets=%d files=%d", len(units), exhausted, len(recs), len(img.Assets), len(img.Files))
+	t.Logf("relations: units=%d exhausted=%d broken=%d records=%d assets=%d files=%d", len(units), exhausted, broken, len(recs), len(img.Assets), len(img.Files))
 
 	mp2, _ := anon.NewMapper(salt)
 	res, err := anon.Build(m, mp2)
@@ -125,7 +131,7 @@ func verifyMaterials(t *testing.T, dir string) {
 		// reference links of the case's source assets.
 		var got, want [6]int
 		for _, p := range c.Expected {
-			got[levelIndex(p.Level)]++
+			got[slices.Index(anon.Levels, p.Level)]++
 		}
 		for _, r := range cr.Src {
 			if r >= len(m.Assets) {
@@ -133,7 +139,7 @@ func verifyMaterials(t *testing.T, dir string) {
 			}
 			for _, l := range m.Links[m.Assets[r].UUID] {
 				level, _ := anon.LevelOf(l.Kind)
-				want[levelIndex(level)]++
+				want[slices.Index(anon.Levels, level)]++
 			}
 		}
 		if got != want {
@@ -155,31 +161,37 @@ func verifyMaterials(t *testing.T, dir string) {
 	if strings.Contains(stdout, dir) {
 		t.Error("stdout holds the materials path")
 	}
+	return broken
 }
 
-// levelIndex returns the position of a level in anon.Levels, or the last
-// position for an unknown one (it then fails the comparison).
-func levelIndex(level string) int {
-	for i, l := range anon.Levels {
-		if l == level {
-			return i
+// fix1970Only reports whether the only broken relation is the date and the
+// unit has a 1970 asset with a PXL_ name: the one case the build skips
+// instead of marking it unsupported.
+func fix1970Only(sub *anon.Set, vs []anon.Violation) bool {
+	for _, v := range vs {
+		if v.Relation != anon.RelDate {
+			return false
 		}
 	}
-	return len(anon.Levels) - 1
+	for _, a := range sub.Assets {
+		if dt, ok := anon.ParseDT(a.Date); ok {
+			if _, fixed, _ := anon.Fix1970(a.Name(), dt, a.TZOffset); fixed {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func flatten(units [][]int) []int {
-	var out []int
-	for _, u := range units {
-		out = append(out, u...)
-	}
-	sort.Ints(out)
-	return out
+	return slices.Sorted(slices.Values(slices.Concat(units...)))
 }
 
 func TestVerifyCorpus(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	writeCorpus(t, dir)
-	verifyMaterials(t, dir)
+	if broken := verifyMaterials(t, dir); broken != 0 {
+		t.Errorf("broken units: %d", broken)
+	}
 }

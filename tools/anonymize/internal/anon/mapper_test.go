@@ -179,14 +179,11 @@ func TestTextWords(t *testing.T) {
 	}
 }
 
-// TestTextNFD needs Unicode normalization: the NFC and the NFD form of one
-// word share the lower key, so their images are equal after NFC and lower
-// case, differ as bytes, and the NFD image is decomposed.
+// TestTextNFD: the NFC and the NFD form of one word share the lower key, so
+// their images are equal after NFC and lower case, differ as bytes, and the
+// NFD image is decomposed.
 func TestTextNFD(t *testing.T) {
 	t.Parallel()
-	if !NormalizationAvailable {
-		t.Skip("no Unicode normalization in this build")
-	}
 	m := newTestMapper(t)
 	composed := "Ёлка"
 	decomposed := nfd(composed)
@@ -369,7 +366,7 @@ func TestPathAndFolder(t *testing.T) {
 	if _, err := m.Folder("2031"); !errors.Is(err, ErrUnsupported) {
 		t.Errorf("Folder(2031) = %v", err)
 	}
-	ti, err := m.Title("07/14 Мырдон / Пляж")
+	ti, err := m.Text("07/14 Мырдон / Пляж")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +379,7 @@ func TestPathAndFolder(t *testing.T) {
 	if k.Folders[0] != f || !strings.HasPrefix(k.Title, "07/14 ") {
 		t.Errorf("album of the image folder = %+v", k)
 	}
-	tt, _ := m.Title("07/14 Мырдон")
+	tt, _ := m.Text("07/14 Мырдон")
 	if k.Title != tt {
 		t.Errorf("album title %q, title image %q", k.Title, tt)
 	}
@@ -513,8 +510,8 @@ func TestMapperUnsupportedText(t *testing.T) {
 			t.Errorf("Text(%q) = %v; want ErrUnsupported", bad, err)
 		}
 	}
-	if _, err := m.Text("е́"); errors.Is(err, ErrUnsupported) == NormalizationAvailable {
-		t.Errorf("Text(mark) = %v with normalization %v", err, NormalizationAvailable)
+	if _, err := m.Text("е́"); err != nil {
+		t.Errorf("Text(mark) = %v", err)
 	}
 }
 

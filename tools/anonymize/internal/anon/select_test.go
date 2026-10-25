@@ -9,16 +9,7 @@ import (
 	"testing"
 )
 
-func mustGraph(t *testing.T, m *Material) *graph {
-	t.Helper()
-	g, err := newGraph(m)
-	if err != nil {
-		t.Fatalf("newGraph: %v", err)
-	}
-	return g
-}
-
-func TestClosure(t *testing.T) {
+func TestComponentsOf(t *testing.T) {
 	t.Parallel()
 	trash := photo(9, "IMG_0009.HEIC", "2023-01-01T09:00:00+00:00", 9)
 	trash.InTrash = true
@@ -49,7 +40,7 @@ func TestClosure(t *testing.T) {
 			uuidN(3): {{"2023/c/IMG_0003.JPG", LevelSameShot}},
 		},
 	}
-	g := mustGraph(t, tm.build())
+	g := newGraph(tm.build())
 	tests := []struct {
 		name string
 		seed []int
@@ -65,9 +56,9 @@ func TestClosure(t *testing.T) {
 		{"union", []int{9, 12}, []int{9, 12}},
 	}
 	for _, tt := range tests {
-		got := g.closure(tt.seed)
+		got := g.componentsOf(tt.seed)
 		if !reflect.DeepEqual(got, tt.want) {
-			t.Errorf("%s: closure(%v) = %v; want %v", tt.name, tt.seed, got, tt.want)
+			t.Errorf("%s: componentsOf(%v) = %v; want %v", tt.name, tt.seed, got, tt.want)
 		}
 	}
 	if n := len(g.members); n != 4 {
@@ -209,12 +200,10 @@ func TestCategoryPredicates(t *testing.T) {
 			continue
 		}
 		covered[cc.category] = true
-		if cc.category != "nfd" || NormalizationAvailable {
-			if got := mustGraph(t, cc.yes.build()).candidates(c); len(got) == 0 {
-				t.Errorf("%s: no candidate in the yes example", cc.category)
-			}
+		if got := newGraph(cc.yes.build()).candidates(c); len(got) == 0 {
+			t.Errorf("%s: no candidate in the yes example", cc.category)
 		}
-		if got := mustGraph(t, cc.no.build()).candidates(c); len(got) != 0 {
+		if got := newGraph(cc.no.build()).candidates(c); len(got) != 0 {
 			t.Errorf("%s: candidates %v in the no example", cc.category, got)
 		}
 	}
@@ -236,7 +225,7 @@ func TestUnionCategoryPullsGroups(t *testing.T) {
 	f2 := cloudFile("2023/a/IMG_0002.HEIC", "", 2)
 	tm := testMaterial{assets: []Asset{b1, b2}, files: []File{f2, cloudFile("2023/a/IMG_0002.xmp", "", 1)},
 		links: Links{b2.UUID: {{f2.Path, LevelExact}}}}
-	g := mustGraph(t, tm.build())
+	g := newGraph(tm.build())
 	c, _ := categoryByName("burst")
 	got := g.candidates(c)
 	if len(got) != 1 || !reflect.DeepEqual(got[0], []int{0, 1, 2, 3}) {
@@ -274,7 +263,7 @@ func mustPick(t *testing.T, g *graph, mp *Mapper, category string, cands [][]int
 // salt and the category, not the record order.
 func TestPickOrderIsKeyed(t *testing.T) {
 	t.Parallel()
-	g := mustGraph(t, manyUnits(40, 1))
+	g := newGraph(manyUnits(40, 1))
 	c, _ := categoryByName("unmatched-icloud")
 	cands := g.candidates(c)
 	m1, _ := NewMapper(bytes.Repeat([]byte{1}, 32))
@@ -302,7 +291,7 @@ func TestPickUnits(t *testing.T) {
 	mp := newTestMapper(t)
 	c, _ := categoryByName("unmatched-icloud")
 	for _, tt := range []struct{ units, want int }{{0, 0}, {1, 1}, {2, 1}, {5, 3}, {16, 8}, {40, 8}} {
-		g := mustGraph(t, manyUnits(tt.units, 1))
+		g := newGraph(manyUnits(tt.units, 1))
 		cands := g.candidates(c)
 		got := mustPick(t, g, mp, c.Name, cands)
 		if len(got) != tt.want {
@@ -317,15 +306,14 @@ func TestPickUnits(t *testing.T) {
 		}
 	}
 	// Units of 25 records: at most two fit into 60.
-	m := manyUnits(10, 25)
-	g := mustGraph(t, m)
+	g := newGraph(manyUnits(10, 25))
 	c2, _ := categoryByName("level-same-shot")
 	got := mustPick(t, g, mp, c2.Name, g.candidates(c2))
 	if len(got) != 50 {
 		t.Errorf("picked %d records; want 50", len(got))
 	}
 	// A unit over 60 records is never a candidate.
-	g = mustGraph(t, manyUnits(1, 61))
+	g = newGraph(manyUnits(1, 61))
 	if cands := g.candidates(c2); len(cands) != 0 {
 		t.Errorf("too large unit is a candidate")
 	}
@@ -355,15 +343,13 @@ func TestAssetAndFileRules(t *testing.T) {
 		{RuleRootPath, func(a *Asset) { a.Albums = []AlbumRef{{FolderNames: []string{"~x"}, Title: "y"}} }},
 		{RuleDrive, func(a *Asset) { a.Albums = []AlbumRef{{Title: "C:/Photos"}} }},
 		{RuleDecimal, func(a *Asset) { a.Albums = []AlbumRef{{Title: "at 55.75393"}} }},
-		{RuleMark, func(a *Asset) { a.OriginalFilename = "e\u0301.jpg" }},
+		{"", func(a *Asset) { a.OriginalFilename = "e\u0301.jpg" }},
+		{RuleCaseFold, func(a *Asset) { a.Albums = []AlbumRef{{Title: "i\u0307zmir"}} }},
 		{RuleFix1970, func(a *Asset) {
 			a.Date, a.OriginalFilename = "1970-01-01T00:00:00+00:00", "PXL_20301305_101112.jpg"
 		}},
 		{RuleFix1970, func(a *Asset) {
 			a.Date, a.OriginalFilename = "1970-01-01T00:00:00+00:00", "PXL_20300105_101112.jpg"
-		}},
-		{RuleFix1970, func(a *Asset) {
-			a.Date, a.OriginalFilename = "1970-01-01T00:00:00+00:00", "PXL_20210305_1011123.jpg"
 		}},
 		{"", func(a *Asset) {
 			a.Date, a.OriginalFilename = "1970-01-01T00:00:00+00:00", "PXL_20210305_101112.jpg"
@@ -389,48 +375,12 @@ func TestAssetAndFileRules(t *testing.T) {
 		{"", func(a *Asset) {
 			a.Date, a.OriginalFilename = "1970-01-01T00:00:00+00:00", "PXL_19701231_065957.jpg"
 		}},
-		// The name date keeps its year class: a 1970 name date fixed into
-		// 1971 would be kept in the name and shifted in the date.
-		{RuleFix1970, func(a *Asset) {
-			a.Date, a.OriginalFilename = "1970-01-01T00:00:00+00:00", "PXL_19701231_230000.jpg"
-		}},
-		// A name date the mapping does not keep (1968), fixed into 1969.
-		{RuleFix1970, func(a *Asset) {
-			a.Date, a.OriginalFilename = "1970-01-01T00:00:00+00:00", "PXL_19681231_230000.jpg"
-		}},
 	}
 	for _, tt := range assetTests {
 		a := base
 		tt.mutate(&a)
-		want := tt.rule
-		if tt.rule == RuleMark && NormalizationAvailable {
-			want = ""
-		}
-		if got := AssetRule(a); got != want {
-			t.Errorf("AssetRule(%+v) = %q; want %q", a, got, want)
-		}
-	}
-	// Rules that depend on Unicode normalization: a mark is not supported
-	// without it; with it, a mark continues a letter run before PXL_ and
-	// "i" + U+0307 is the Python lower case of "İ".
-	gated := []struct {
-		without, with string
-		mutate        func(a *Asset)
-	}{
-		{RuleMark, RuleFix1970, func(a *Asset) {
-			a.Date, a.OriginalFilename = "1970-01-01T00:00:00+00:00", "éPXL_20210305_101112.jpg"
-		}},
-		{RuleMark, RuleCaseFold, func(a *Asset) { a.Albums = []AlbumRef{{Title: "i̇zmir"}} }},
-	}
-	for _, tt := range gated {
-		a := base
-		tt.mutate(&a)
-		want := tt.without
-		if NormalizationAvailable {
-			want = tt.with
-		}
-		if got := AssetRule(a); got != want {
-			t.Errorf("AssetRule(%+v) = %q; want %q", a, got, want)
+		if got := AssetRule(a); got != tt.rule {
+			t.Errorf("AssetRule(%+v) = %q; want %q", a, got, tt.rule)
 		}
 	}
 	fbase := cloudFile("2023/07-14 - A/IMG_0001.HEIC", "2023-07-14T18:03:27", 1)
@@ -476,9 +426,6 @@ func TestAssetAndFileRules(t *testing.T) {
 func TestBuild(t *testing.T) {
 	t.Parallel()
 	for _, cc := range categoryCases() {
-		if cc.category == "nfd" && !NormalizationAvailable {
-			continue
-		}
 		m := cc.yes.build()
 		if c := CheckPartition(m); !c.Zero() {
 			t.Fatalf("%s: test material: %s", cc.category, c)
@@ -587,14 +534,10 @@ func TestBuildSkipsUnits(t *testing.T) {
 }
 
 // TestClustersRule: a letter run whose lower NFC form has another number of
-// clusters (Hangul jamo compose) is not supported; without normalization
-// the forms never differ.
+// clusters (Hangul jamo compose) is not supported.
 func TestClustersRule(t *testing.T) {
 	t.Parallel()
 	jamo := string([]rune{0x1100, 0x1161})
-	if !NormalizationAvailable {
-		t.Skip("no Unicode normalization in this build")
-	}
 	if r := textRule(jamo + " x"); r != RuleClusters {
 		t.Errorf("textRule(jamo) = %q; want %q", r, RuleClusters)
 	}
@@ -632,9 +575,8 @@ func TestUnsupportedRecordDropsItsUnit(t *testing.T) {
 			t.Fatalf("record %d breaks %s: the test needs a supported partner", i, r)
 		}
 	}
-	units, err := SupportedUnits(m)
-	if err != nil || !reflect.DeepEqual(units, [][]int{{2}}) {
-		t.Errorf("SupportedUnits = %v, %v", units, err)
+	if units := SupportedUnits(m); !reflect.DeepEqual(units, [][]int{{2}}) {
+		t.Errorf("SupportedUnits = %v", units)
 	}
 	res, err := Build(m, newTestMapper(t))
 	if err != nil {
@@ -664,9 +606,8 @@ func TestSupportedUnits(t *testing.T) {
 	tm := testMaterial{assets: []Asset{bad, photo(2, "IMG_0002.HEIC", "2023-07-14T18:03:27+03:00", 2)},
 		files: []File{cloudFile("2023/a/x.txt", "", 1), cloudFile("2023/a/y.jpg", "", 1)}}
 	m := tm.build()
-	got, err := SupportedUnits(m)
-	if err != nil || !reflect.DeepEqual(got, [][]int{{1}, {3}}) {
-		t.Errorf("SupportedUnits = %v, %v", got, err)
+	if got := SupportedUnits(m); !reflect.DeepEqual(got, [][]int{{1}, {3}}) {
+		t.Errorf("SupportedUnits = %v", got)
 	}
 	s := m.Subset([]int{1, 3})
 	if len(s.Assets) != 1 || len(s.Files) != 1 || !reflect.DeepEqual(s.Src, []int{1, 3}) || s.Files[0].Path != "2023/a/y.jpg" {
@@ -724,17 +665,43 @@ func TestBuildCaseFailsClosed(t *testing.T) {
 		cloudFile("1971/01-01/IMG_0001.JPG", "1971-01-01T02:00:00", 1),
 		cloudFile("1971/01-01/IMG_0001 (1).JPG", "1970-12-31T20:00:00", 2),
 	}}
-	g, err := newGraph(tm.build())
-	if err != nil {
-		t.Fatal(err)
-	}
-	cr, err := g.buildCase(newTestMapper(t), "x", []int{0, 1})
-	var re *RelationError
-	if !errors.As(err, &re) || re.Category != "x" || !reflect.DeepEqual(re.Violations, []Violation{{RelEpochGap, 1}}) {
+	cr, err := newGraph(tm.build()).buildCase(newTestMapper(t), "x", []int{0, 1})
+	if !errors.Is(err, ErrRelations) || err.Error() != "relations broken: epoch_gap=1" {
 		t.Fatalf("buildCase = %v", err)
 	}
 	if cr.Case != nil {
 		t.Error("a case with a broken relation")
+	}
+}
+
+// TestBuildSkipsBrokenUnits: a 1970 fix the mapping does not keep is
+// supported by the rules; the pick maps the unit, finds the broken date
+// relation and skips the unit, counted once whatever the categories it is a
+// candidate of.
+func TestBuildSkipsBrokenUnits(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{
+		"PXL_20210305_1011123.jpg", // a time of 7 digits is mapped
+		"PXL_19701231_230000.jpg",  // a 1970 name date fixed into 1971
+		"PXL_19681231_230000.jpg",  // a name date the mapping does not keep
+		"éPXL_20210305_101112.jpg",
+	} {
+		a := photo(1, name, "1970-01-01T00:00:00+00:00", 1)
+		if r := AssetRule(a); r != "" {
+			t.Fatalf("%s: AssetRule = %q", name, r)
+		}
+		res, err := Build(testMaterial{assets: []Asset{a}}.build(), newTestMapper(t))
+		if err != nil {
+			t.Fatalf("%s: Build: %v", name, err)
+		}
+		if res.Units != (UnitStats{Total: 1}) || !reflect.DeepEqual(res.Rules, map[string]int{"relation:" + RelDate: 1}) {
+			t.Errorf("%s: units %+v, rules %v", name, res.Units, res.Rules)
+		}
+		for _, cr := range res.Cases {
+			if cr.Case != nil {
+				t.Errorf("%s: case %s holds a unit with a broken relation", name, cr.Category)
+			}
+		}
 	}
 }
 
@@ -755,17 +722,6 @@ func TestEpochRuleBound(t *testing.T) {
 		if gap := epochGaps(nil, []File{f, first}) > 0; gap != tt.gap || (FileRule(f) == RuleEpochGap) != tt.gap {
 			t.Errorf("%s: gap %v, rule %q", tt.date, gap, FileRule(f))
 		}
-	}
-}
-
-// TestRelationErrorMessage: a broken relation is reported with the relation
-// names and counts only.
-func TestRelationErrorMessage(t *testing.T) {
-	t.Parallel()
-	err := fmt.Errorf("build: %w", &RelationError{Category: "unmatched-cloud", Violations: []Violation{{RelEpochGap, 1}, {RelSize, 2}}})
-	var re *RelationError
-	if !errors.As(err, &re) || re.Error() != "case anon-unmatched-cloud: relations broken: epoch_gap=1 size=2" {
-		t.Errorf("Error() = %q", err.Error())
 	}
 }
 

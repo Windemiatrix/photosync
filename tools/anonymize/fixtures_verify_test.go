@@ -36,7 +36,7 @@ func TestFixturesNoInputWords(t *testing.T) {
 		t.Skip("pass -anonymize.in and -anonymize.out")
 	}
 	input := inputWords(materialOf(t, *materialsDir))
-	files, err := readOutput(*fixturesDir)
+	files, err := readTree(*fixturesDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestFixturesDigest(t *testing.T) {
 	if !isDir(*fixturesDir) {
 		t.Skip("pass -anonymize.out")
 	}
-	files, err := readOutput(*fixturesDir)
+	files, err := readTree(*fixturesDir)
 	if err != nil {
 		t.Fatal(err)
 	}

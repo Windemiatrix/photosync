@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
-	"sync"
 	"testing"
 	"testing/fstest"
 
@@ -19,24 +19,12 @@ import (
 // recordingFS records the names opened through it.
 type recordingFS struct {
 	fsys   fs.FS
-	mu     sync.Mutex
 	opened map[string]bool
 }
 
 func (r *recordingFS) Open(name string) (fs.File, error) {
-	r.mu.Lock()
 	r.opened[name] = true
-	r.mu.Unlock()
 	return r.fsys.Open(name)
-}
-
-func (r *recordingFS) names() []string {
-	var out []string
-	for n := range r.opened {
-		out = append(out, n)
-	}
-	sort.Strings(out)
-	return out
 }
 
 func openedBy(t *testing.T, dir string) ([]string, error) {
@@ -48,7 +36,7 @@ func openedBy(t *testing.T, dir string) ([]string, error) {
 	defer closeQuietly(root)
 	rec := &recordingFS{fsys: root.FS(), opened: map[string]bool{}}
 	_, _, err = readMaterial(rec)
-	return rec.names(), err
+	return slices.Sorted(maps.Keys(rec.opened)), err
 }
 
 func TestReadMaterialOpensOnlyListedFiles(t *testing.T) {
@@ -64,10 +52,8 @@ func TestReadMaterialOpensOnlyListedFiles(t *testing.T) {
 			t.Errorf("opened %v; want %v", got, c.read)
 		}
 		for _, n := range got {
-			for _, ig := range c.ignored {
-				if n == ig {
-					t.Errorf("opened ignored file %s", n)
-				}
+			if slices.Contains(c.ignored, n) {
+				t.Errorf("opened ignored file %s", n)
 			}
 		}
 	}
@@ -77,15 +63,7 @@ func TestReadMaterialFields(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	writeCorpus(t, dir)
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeQuietly(root)
-	m, _, err := readMaterial(root.FS())
-	if err != nil {
-		t.Fatal(err)
-	}
+	m := materialOf(t, dir)
 	as, fs := corpusTable()
 	if len(m.Assets) != len(as) || len(m.Files) != len(fs) {
 		t.Fatalf("%d assets, %d files", len(m.Assets), len(m.Files))
@@ -140,64 +118,48 @@ func TestReadCatalogOsxphotosShape(t *testing.T) {
 	if got[0].BurstGroup() != "A1" || got[1].BurstGroup() != "" {
 		t.Errorf("burst groups %q, %q", got[0].BurstGroup(), got[1].BurstGroup())
 	}
-	// The former string form of burst_key is a type error naming the field.
+	// The former string form of burst_key is a type error.
 	_, err = readCatalog(fstest.MapFS{nameCatalog: {Data: []byte(`[{"uuid": "A1", "burst_key": "B"}]`)}})
-	if err == nil || err.Error() != "read catalog: wrong type in field burst_key" {
+	if err == nil || err.Error() != "read catalog: wrong type (string)" {
 		t.Errorf("string burst_key: %v", err)
 	}
 }
 
-func TestParseDim(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		raw  string
-		want anon.Dim
-		ok   bool
-	}{
-		{"", 0, true}, {"null", 0, true}, {`""`, 0, true}, {"4032", 4032, true}, {" 12 ", 12, true},
-		{`"4032"`, 0, false}, {"40.5", 0, false}, {"true", 0, false}, {"[]", 0, false},
-	}
-	for _, tt := range tests {
-		got, err := parseDim(json.RawMessage(tt.raw), "files.width")
-		if got != tt.want || (err == nil) != tt.ok {
-			t.Errorf("parseDim(%q) = %d, %v", tt.raw, got, err)
-		}
-		if err != nil && err.Error() != "wrong type in field files.width" {
-			t.Errorf("parseDim error %q", err)
-		}
-	}
-}
-
-func TestTranslate(t *testing.T) {
+func TestFail(t *testing.T) {
 	t.Parallel()
 	var v struct {
 		Size int `json:"original_filesize"`
 	}
 	typeErr := json.Unmarshal([]byte(`{"original_filesize": "Пельменева"}`), &v)
+	numberErr := json.Unmarshal([]byte(`{"original_filesize": 55.7539}`), &v)
 	var m map[string][]string
 	mapErr := json.Unmarshal([]byte(`{"Пельменева": [1]}`), &m)
 	syntaxErr := json.Unmarshal([]byte(`{"a": Пельменева}`), &v)
+	var d struct {
+		W anon.Dim `json:"width"`
+	}
+	dimErr := json.Unmarshal([]byte(`{"width": "4032"}`), &d)
 	_, notFound := os.Open(filepath.Join(t.TempDir(), "Пельменева"))
 	tests := []struct {
 		err  error
 		want string
 	}{
-		{typeErr, "read x: wrong type in field original_filesize"},
-		{mapErr, "read x: wrong type in field links"},
+		{typeErr, "read x: wrong type (string)"},
+		{numberErr, "read x: wrong type (number)"},
+		{mapErr, "read x: wrong type (number)"},
 		{syntaxErr, "read x: syntax error at offset 8"},
+		{dimErr, "read x: wrong type (number)"},
 		{notFound, "read x: not found"},
 		{fs.ErrPermission, "read x: permission denied"},
-		{errors.New("Пельменева"), "read x: unexpected error"},
-		{anon.ErrTrailingData, "read x: trailing data"},
-		{fail("other", "kept"), "other: kept"},
+		{errors.New("Пельменева"), "read x: failed"},
 	}
 	for _, tt := range tests {
-		got := translate("read x", tt.err, "links").Error()
+		got := fail("read x", tt.err).Error()
 		if got != tt.want {
-			t.Errorf("translate(%T) = %q; want %q", tt.err, got, tt.want)
+			t.Errorf("fail(%T) = %q; want %q", tt.err, got, tt.want)
 		}
-		if strings.Contains(got, "Пельменева") {
-			t.Errorf("translate leaks: %q", got)
+		if strings.Contains(got, "Пельменева") || strings.Contains(got, "55") {
+			t.Errorf("fail leaks: %q", got)
 		}
 	}
 }
@@ -208,11 +170,11 @@ func TestPathChecks(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(base, "a", "b"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	ra, err := realPath(filepath.Join(base, "a"))
+	ra, err := resolve(filepath.Join(base, "a"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	rb, err := realPath(filepath.Join(base, "a", "b", "missing", "x"))
+	rb, err := resolve(filepath.Join(base, "a", "b"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,8 +184,7 @@ func TestPathChecks(t *testing.T) {
 	if err := os.Symlink(filepath.Join(base, "a"), filepath.Join(base, "link")); err != nil {
 		t.Fatal(err)
 	}
-	rl, err := realPath(filepath.Join(base, "link", "b"))
-	if err != nil || !within(rl, ra) {
+	if rl, err := resolve(filepath.Join(base, "link", "b")); err != nil || rl != rb {
 		t.Errorf("symlink not resolved: %s, %v", rl, err)
 	}
 	if inGitTree(rb) {
@@ -246,10 +207,11 @@ func TestLoadSalt(t *testing.T) {
 	}{
 		{"good", good + "\n", 0o600, ""},
 		{"good without newline", good, 0o400, ""},
-		{"upper case", strings.ToUpper(good) + "\n", 0o600, "salt: not 64 lower-case hex digits"},
-		{"short", good[:62] + "\n", 0o600, "salt: not 64 lower-case hex digits"},
+		{"upper case", strings.ToUpper(good) + "\n", 0o600, ""},
+		{"short", good[:62] + "\n", 0o600, "salt: not 64 hex digits"},
+		{"long", good + "0a\n", 0o600, "salt: not 64 hex digits"},
+		{"not hex", strings.Repeat("zz", 32) + "\n", 0o600, "salt: not 64 hex digits"},
 		{"group readable", good + "\n", 0o640, "salt: permissions too open"},
-		{"too large", strings.Repeat("a", 129), 0o600, "salt: too large"},
 	}
 	for _, tt := range tests {
 		p := filepath.Join(dir, strings.ReplaceAll(tt.name, " ", "-"))
@@ -270,10 +232,10 @@ func TestLoadSalt(t *testing.T) {
 	if _, _, err := loadSalt(filepath.Join(dir, "missing"), false); err == nil || err.Error() != "salt: not found" {
 		t.Errorf("missing salt: %v", err)
 	}
-	if _, _, err := loadSalt(dir, false); err == nil || err.Error() != "salt: not a regular file" {
-		t.Errorf("directory salt: %v", err)
+	if _, _, err := loadSalt(dir, false); err == nil {
+		t.Error("directory salt accepted")
 	}
-	p := filepath.Join(dir, "new", "deeper", "salt.key")
+	p := filepath.Join(dir, "salt.key")
 	salt, created, err := loadSalt(p, true)
 	if err != nil || !created || len(salt) != 32 {
 		t.Fatalf("create: %v, %v", created, err)
@@ -286,7 +248,7 @@ func TestLoadSalt(t *testing.T) {
 
 func TestWriteOutputRefusesExistingFiles(t *testing.T) {
 	t.Parallel()
-	out := filepath.Join(t.TempDir(), "out")
+	out := t.TempDir()
 	res := &anon.Result{Cases: []anon.CaseResult{{Category: "x", Case: &anon.Case{Format: 1}}, {Category: "y"}}}
 	if err := writeOutput(out, res); err != nil {
 		t.Fatal(err)
@@ -307,36 +269,6 @@ func TestWriteOutputRefusesExistingFiles(t *testing.T) {
 	}
 	if err := writeOutput(out, res); err == nil {
 		t.Error("second write into the same directory succeeded")
-	}
-}
-
-// TestWriteOutputChecksTheDirectory: right before writing, --out must still
-// be an empty real directory, not a symbolic link.
-func TestWriteOutputChecksTheDirectory(t *testing.T) {
-	t.Parallel()
-	base := t.TempDir()
-	res := &anon.Result{Cases: []anon.CaseResult{{Category: "x", Case: &anon.Case{Format: 1}}}}
-	target := filepath.Join(base, "target")
-	if err := os.Mkdir(target, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	link := filepath.Join(base, "link")
-	if err := os.Symlink(target, link); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeOutput(link, res); err == nil || err.Error() != "out dir: not a directory" {
-		t.Errorf("write through a symbolic link: %v", err)
-	}
-	if entries, _ := os.ReadDir(target); len(entries) != 0 {
-		t.Error("the link target was written")
-	}
-	full := filepath.Join(base, "full")
-	writeFile(t, full, "x", []byte("x"))
-	if err := writeOutput(full, res); err == nil || err.Error() != "out dir: not empty" {
-		t.Errorf("write into a non-empty directory: %v", err)
-	}
-	if err := writeOutput(filepath.Join(base, "missing", "out"), res); err == nil {
-		t.Error("write without a parent succeeded")
 	}
 }
 

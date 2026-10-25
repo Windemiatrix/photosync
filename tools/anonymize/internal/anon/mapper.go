@@ -7,8 +7,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -328,7 +329,7 @@ func clusters(s string) []string {
 // and form cluster by cluster.
 func (m *Mapper) word(w string) (string, error) {
 	in := clusters(w)
-	if len(in) == 1 || structuralSet[strings.ToLower(w)] {
+	if len(in) == 1 || slices.Contains(structuralWords, strings.ToLower(w)) {
 		return w, nil
 	}
 	key := lowerNFC(w)
@@ -373,12 +374,7 @@ func (m *Mapper) word(w string) (string, error) {
 // Words returns the sorted base forms (lower case, NFC) of all generated
 // words.
 func (m *Mapper) Words() []string {
-	out := make([]string, 0, len(m.words.owner))
-	for w := range m.words.owner {
-		out = append(out, w)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(m.words.owner))
 }
 
 // Name maps a file name: the stem by the text rule, the extension as it is
@@ -399,15 +395,7 @@ func (m *Mapper) Name(s string) (string, error) {
 	return ms + me, nil
 }
 
-func isKnownExt(e string) bool {
-	e = strings.ToLower(e)
-	for _, k := range knownExts {
-		if k == e {
-			return true
-		}
-	}
-	return false
-}
+func isKnownExt(e string) bool { return slices.Contains(knownExts, strings.ToLower(e)) }
 
 // year maps a year segment: 1971..2027 shifted, 1969 and 1970 kept.
 func (m *Mapper) year(s string) (string, error) {
@@ -450,9 +438,6 @@ func (m *Mapper) Path(p string) (string, error) {
 	}
 	return strings.Join(out, "/"), nil
 }
-
-// Title maps an album title by the text rule.
-func (m *Mapper) Title(s string) (string, error) { return m.Text(s) }
 
 // Folder maps one element of folder_names: four digits are a year, anything
 // else is text.
@@ -583,7 +568,7 @@ func (m *Mapper) Asset(a Asset) (Asset, error) {
 				return Asset{}, err
 			}
 		}
-		title, err := m.Title(al.Title)
+		title, err := m.Text(al.Title)
 		if err != nil {
 			return Asset{}, err
 		}

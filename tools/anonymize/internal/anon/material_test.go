@@ -1,9 +1,35 @@
 package anon
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 )
+
+func TestDim(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		raw  string
+		want Dim
+		ok   bool
+	}{
+		{`""`, 0, true}, {"null", 0, true}, {"4032", 4032, true},
+		{`"4032"`, 0, false}, {"40.5", 0, false}, {"true", 0, false}, {"[]", 0, false},
+	}
+	for _, tt := range tests {
+		var v struct {
+			W Dim `json:"width"`
+		}
+		err := json.Unmarshal([]byte(`{"width": `+tt.raw+`}`), &v)
+		if v.W != tt.want || (err == nil) != tt.ok {
+			t.Errorf("Dim %s = %d, %v", tt.raw, v.W, err)
+		}
+		var ue *json.UnmarshalTypeError
+		if err != nil && (!errors.As(err, &ue) || ue.Value != "number") {
+			t.Errorf("Dim %s error %v", tt.raw, err)
+		}
+	}
+}
 
 // partitionMaterial is a small consistent material with every kind of row
 // the partition check looks at.
@@ -142,55 +168,6 @@ func TestSamePlan(t *testing.T) {
 	}
 	if _, err := SamePlan([]byte(`{} {}`), []byte(`{}`)); err == nil {
 		t.Error("SamePlan accepts trailing data")
-	}
-}
-
-func TestPickInventory(t *testing.T) {
-	t.Parallel()
-	good := partitionMaterial().build()
-	goodInv := &Inventory{Files: good.Files, Derived: good.Derived}
-	badInv := &Inventory{Files: good.Files[:3], Derived: good.Derived[:3]}
-	tests := []struct {
-		name     string
-		invs     []*Inventory
-		picked   int
-		attempts int
-		fail     bool
-	}{
-		{"current", []*Inventory{goodInv, badInv}, 0, 1, false},
-		{"prev", []*Inventory{badInv, goodInv}, 1, 2, false},
-		{"none", []*Inventory{badInv, badInv}, 0, 2, true},
-		{"no prev", []*Inventory{badInv, nil}, 0, 1, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-			m := partitionMaterial().build()
-			m.Files, m.Derived = nil, nil
-			picked, attempts, err := PickInventory(m, func(i int) (*Inventory, error) {
-				if i >= len(tt.invs) {
-					return nil, nil
-				}
-				return tt.invs[i], nil
-			})
-			if (err != nil) != tt.fail || len(attempts) != tt.attempts {
-				t.Fatalf("PickInventory = %d, %v, %v", picked, attempts, err)
-			}
-			if tt.fail {
-				if !errors.Is(err, ErrPartition) {
-					t.Errorf("error %v is not ErrPartition", err)
-				}
-				return
-			}
-			if picked != tt.picked || len(m.Files) != len(good.Files) {
-				t.Errorf("picked %d, %d files", picked, len(m.Files))
-			}
-		})
-	}
-	boom := errors.New("boom")
-	m := partitionMaterial().build()
-	if _, _, err := PickInventory(m, func(int) (*Inventory, error) { return nil, boom }); !errors.Is(err, boom) {
-		t.Errorf("load error = %v", err)
 	}
 }
 

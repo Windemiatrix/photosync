@@ -6,6 +6,10 @@
 package anon
 
 import (
+	"encoding/json"
+	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -73,6 +77,21 @@ func (a Asset) Name() string {
 // Dim is a frame dimension of a cloud file; 0 means unknown.
 type Dim int
 
+// UnmarshalJSON decodes an integer; "" and null are unknown (0).
+func (d *Dim) UnmarshalJSON(data []byte) error {
+	s := string(data)
+	if s == "null" || s == `""` {
+		*d = 0
+		return nil
+	}
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return &json.UnmarshalTypeError{Value: "number", Type: reflect.TypeOf(Dim(0))}
+	}
+	*d = Dim(n)
+	return nil
+}
+
 // File is one row of the cloud inventory. Name, stem, ext, folder, year,
 // event_month and event_day are not stored: they derive from Path.
 type File struct {
@@ -90,13 +109,14 @@ type File struct {
 // Derived holds the derived columns of one inventory row as the inventory
 // wrote them; they are compared with the values derived from the path.
 type Derived struct {
-	Stem       string
-	Folder     string
-	Year       string
-	EventMonth string
+	Stem       string `json:"stem"`
+	Folder     string `json:"folder"`
+	Year       string `json:"year"`
+	EventMonth string `json:"event_month"`
 }
 
-// Inventory is one version of the cloud inventory.
+// Inventory is one version of the cloud inventory: Derived[i] holds the
+// derived columns of Files[i].
 type Inventory struct {
 	Files   []File
 	Derived []Derived
@@ -140,11 +160,10 @@ type Plan struct {
 // Material is everything the tool reads: the catalog, the chosen inventory,
 // the reviewed plan and the reference links.
 type Material struct {
-	Assets  []Asset
-	Files   []File
-	Derived []Derived
-	Plan    Plan
-	Links   Links
+	Assets []Asset
+	Inventory
+	Plan  Plan
+	Links Links
 }
 
 // Set is a subset of the material records in material order. Src holds the
@@ -219,12 +238,11 @@ var refKinds = []string{LevelExact, LevelSameShot, LevelSameShotWeak, LevelSameT
 // LevelOf converts a reference link kind to a match level; ok is false for an
 // unknown kind.
 func LevelOf(kind string) (level string, ok bool) {
-	for i, k := range refKinds {
-		if k == kind {
-			return Levels[i], true
-		}
+	i := slices.Index(refKinds, kind)
+	if i < 0 {
+		return "", false
 	}
-	return "", false
+	return Levels[i], true
 }
 
 // Kinds of an inventory row.
@@ -284,28 +302,14 @@ func formatStrings() []string {
 	return s
 }
 
-// lookup is a set of lower-case words.
-type lookup map[string]bool
-
-func newLookup(words ...[]string) lookup {
-	l := lookup{}
-	for _, ws := range words {
-		for _, w := range ws {
-			l[w] = true
-		}
-	}
-	return l
-}
-
 var (
-	structuralSet = newLookup(structuralWords)
-	extSet        = runSet(knownExts)
-	formatSet     = runSet(formatStrings())
+	extSet    = runSet(knownExts)
+	formatSet = runSet(formatStrings())
 )
 
 // runSet returns the lower-case letter runs of the strings.
-func runSet(ss []string) lookup {
-	l := lookup{}
+func runSet(ss []string) map[string]bool {
+	l := map[string]bool{}
 	for _, s := range ss {
 		for _, r := range letterRuns(s) {
 			l[lowerNFC(r)] = true
@@ -317,16 +321,8 @@ func runSet(ss []string) lookup {
 // AllowedWord reports whether a lower-case NFC letter run may appear in the
 // output without being a generated word: a structural word, a known
 // extension or a word of the format dictionary.
-func AllowedWord(w string) bool { return structuralSet[w] || extSet[w] || formatSet[w] }
-
-// LowerRuns returns the letter runs of s in the form words are compared in:
-// lower case NFC.
-func LowerRuns(s string) []string {
-	runs := letterRuns(s)
-	for i, r := range runs {
-		runs[i] = lowerNFC(r)
-	}
-	return runs
+func AllowedWord(w string) bool {
+	return slices.Contains(structuralWords, w) || extSet[w] || formatSet[w]
 }
 
 // letterRuns returns the letter runs of s: a letter followed by marks.
