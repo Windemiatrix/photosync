@@ -13,13 +13,10 @@ import (
 	"github.com/Windemiatrix/photosync/tools/anonymize/internal/anon"
 )
 
-// The synthetic corpus looks like personal material: invented people and
-// places, example.com addresses, local paths, coordinates of well-known
-// squares, a login, descriptions, keywords and faces. Every value is made up.
-// Links and the plan are driven by one table: the tool does no matching, so
-// the corpus needs consistency, not a correct matching algorithm.
+// Every value of the synthetic corpus is made up. Links and the plan are
+// driven by one table: the tool does no matching, so the corpus needs
+// consistency, not a correct matching algorithm.
 
-// corpusAsset is one catalog record of the table with its links.
 type corpusAsset struct {
 	a     anon.Asset
 	links []corpusLink
@@ -30,28 +27,24 @@ type corpusLink struct {
 	plan       string // "", replace, keep_cloud
 }
 
-// corpusOptions selects a corpus variant.
 type corpusOptions struct {
-	// prev writes the full inventory as yandex_inventory.prev.json and a
-	// current inventory without one row, which fails the partition check.
-	prev bool
-	// rerunDiffers writes a rerun plan that differs from the reviewed plan.
+	// prev drops a row from the current inventory so that it fails the
+	// partition check.
+	prev         bool
 	rerunDiffers bool
-	// noPrevMatch writes a previous inventory that fails too.
+	// noPrevMatch makes the previous inventory fail too.
 	noPrevMatch bool
 }
 
-// corpus describes a written corpus.
 type corpus struct {
-	canaries []string // strings that must never reach any output
+	canaries []string
 	read     []string // file names the tool opens, sorted
 	ignored  []string // file names the tool never opens, sorted
-	uuids    []string // all UUIDs and other identifiers of the input
+	uuids    []string
 	sha1s    []string
 	years    []string // years of the corpus dates except 1970
 }
 
-// cid returns the invented UUID of corpus asset n (two digits).
 func cid(n string) string { return "5E1F" + n + "AB-0000-4000-8000-0000000000" + n }
 
 var canaryRE = regexp.MustCompile(`Kanareyka[A-Za-z]+`)
@@ -70,7 +63,6 @@ func cfile(path, date string, size int64) anon.File {
 	return anon.File{Path: path, Kind: anon.KindOf(anon.BaseName(path)), Size: size, DateTaken: date, Width: 4032, Height: 3024}
 }
 
-// corpusTable returns the catalog and the inventory of the corpus.
 func corpusTable() ([]corpusAsset, []anon.File) {
 	var as []corpusAsset
 	var fs []anon.File
@@ -268,7 +260,8 @@ func corpusTable() ([]corpusAsset, []anon.File) {
 	return as, fs
 }
 
-// personal fields of the catalog and the inventory that are never decoded.
+// The personal fields are planted so that the tests prove they never reach the
+// output.
 func catalogExtras(n int) map[string]any {
 	return map[string]any{
 		"latitude":    55.7539 + float64(n)/1e4,
@@ -293,7 +286,6 @@ func catalogExtras(n int) map[string]any {
 	}
 }
 
-// writeCorpus writes the corpus files into dir.
 func writeCorpus(t *testing.T, dir string) corpus { return writeCorpusWith(t, dir, corpusOptions{}) }
 
 func writeCorpusWith(t *testing.T, dir string, opt corpusOptions) corpus {
@@ -410,8 +402,7 @@ func writeCorpusWith(t *testing.T, dir string, opt corpusOptions) corpus {
 	return c
 }
 
-// inventoryRows writes the rows as the inventory script does, with the
-// derived columns and the personal ones.
+// inventoryRows builds the rows as the inventory script does.
 func inventoryRows(fs []anon.File) []map[string]any {
 	var rows []map[string]any
 	for _, f := range fs {
@@ -433,7 +424,6 @@ func inventoryRows(fs []anon.File) []map[string]any {
 	return rows
 }
 
-// planFor writes a reviewed plan consistent with the table.
 func planFor(as []corpusAsset, fs []anon.File) map[string]any {
 	download := []map[string]any{}
 	replace := []map[string]any{}

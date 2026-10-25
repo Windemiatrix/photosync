@@ -100,7 +100,6 @@ func TestTextDigits(t *testing.T) {
 			}
 		}
 	}
-	// Same input, same output; different inputs, different outputs.
 	a1, _ := m.Text("x 4821")
 	a2, _ := m.Text("y 4821")
 	if a1[2:] != a2[2:] {
@@ -179,9 +178,6 @@ func TestTextWords(t *testing.T) {
 	}
 }
 
-// TestTextNFD: the NFC and the NFD form of one word share the lower key, so
-// their images are equal after NFC and lower case, differ as bytes, and the
-// NFD image is decomposed.
 func TestTextNFD(t *testing.T) {
 	t.Parallel()
 	m := newTestMapper(t)
@@ -210,25 +206,27 @@ func TestTextNFD(t *testing.T) {
 	}
 }
 
-// TestNumberRejectsDates forces the first attempt of an 8-digit output to a
-// date: shifted and epoch dates are retried, other dates are kept.
+func macWithFirstDigits(date string) macFunc {
+	return func(purpose string, input []byte, counter uint64) [32]byte {
+		firstAttempt := counter>>32 == 0
+		if purpose == purposeDigits && firstAttempt {
+			var out [32]byte
+			for i := 0; i < 8; i++ {
+				out[i] = date[i] - '0'
+			}
+			return out
+		}
+		return counterMAC(purpose, input, counter)
+	}
+}
+
 func TestNumberRejectsDates(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct {
 		date  string
 		retry bool
 	}{{"20500101", true}, {"19990101", true}, {"20991231", true}, {"19700101", true}, {"19691231", true}, {"21000101", false}, {"19980101", false}} {
-		mac := func(purpose string, input []byte, counter uint64) [32]byte {
-			if purpose == purposeDigits && counter>>32 == 0 {
-				var out [32]byte
-				for i := 0; i < 8; i++ {
-					out[i] = tt.date[i] - '0'
-				}
-				return out
-			}
-			return counterMAC(purpose, input, counter)
-		}
-		m := newMapperMAC(mac)
+		m := newMapperMAC(macWithFirstDigits(tt.date))
 		out, err := m.Text("12345678")
 		if err != nil {
 			t.Fatal(err)
@@ -301,7 +299,6 @@ func TestTextUUIDAndHex(t *testing.T) {
 	if !strings.HasPrefix(ho, "00000000") || len(ho) != len(h)+4 || strings.Contains(ho, h[8:]) {
 		t.Errorf("Name(hex.jpg) = %q", ho)
 	}
-	// A short hex-looking run is ordinary text.
 	if o, _ := m.Text("ab12"); strings.HasPrefix(o, "00000000") {
 		t.Errorf("Text(ab12) = %q", o)
 	}
@@ -355,7 +352,6 @@ func TestPathAndFolder(t *testing.T) {
 			t.Errorf("Path(%q) = %v; want ErrUnsupported", bad, err)
 		}
 	}
-	// Four digits outside the first segment are ordinary text.
 	if p, err := m.Path("Archive/2019/x.jpg"); err != nil || !regexp.MustCompile(`^[^/]+/[0-9]{4}/x\.jpg$`).MatchString(p) {
 		t.Errorf("Path(Archive/2019) = %q, %v", p, err)
 	}
@@ -373,7 +369,6 @@ func TestPathAndFolder(t *testing.T) {
 	if !strings.HasPrefix(ti, "07/14 ") || strings.Count(ti, " / ") != 1 || strings.Contains(ti, "Мырдон") {
 		t.Errorf("Title = %q", ti)
 	}
-	// The album of a folder and the folder of an album stay one key.
 	fo, _ := m.Path("2023/07-14 - Мырдон/x.jpg")
 	k, _ := FolderToAlbum(FolderOf(fo))
 	if k.Folders[0] != f || !strings.HasPrefix(k.Title, "07/14 ") {
@@ -486,7 +481,6 @@ func TestSize(t *testing.T) {
 	if m.Size(5e9) != newTestMapper(t).Size(5e9) {
 		t.Error("Size not deterministic")
 	}
-	// Neither the exact bytes nor the differences are kept.
 	if a, b := int64(1e6), int64(1e9); m.Size(b)-m.Size(a) == b-a {
 		t.Errorf("Size keeps the difference of %d and %d", a, b)
 	}
@@ -573,8 +567,6 @@ func TestMapperAssetAndFile(t *testing.T) {
 		ma.Albums[0].FolderNames[0] != shifted(m, 2023) {
 		t.Errorf("Asset = %+v", ma)
 	}
-	// burst_photos: mapped in place as the UUIDs of those photos map, also
-	// outside the set.
 	id2, _ := m.ID(uuidN(2))
 	id3, _ := m.ID(uuidN(3))
 	if !reflect.DeepEqual(ma.BurstPhotos, []string{id3, id2}) || id2 == uuidN(2) || !markerUUIDRE.MatchString(id3) {

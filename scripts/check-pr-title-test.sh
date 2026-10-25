@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# Self-test for scripts/check-pr-title.sh: feeds it valid and invalid titles
-# and checks the verdict. Run by the repo-checks job and by "make check-repo".
 set -euo pipefail
 
 here="$(dirname "${BASH_SOURCE[0]}")"
 checker="$here/check-pr-title.sh"
 failures=0
 
-# expect <ok|fail> <title>
 expect() {
   local want="$1" title="$2" got
   if bash "$checker" "$title" >/dev/null 2>&1; then got=ok; else got=fail; fi
@@ -38,7 +35,6 @@ expect ok "$pad70bang"
 expect fail ""
 expect fail "$pad71"
 expect fail "$pad71bang"
-# "!" needs a scope, stands right after it, and only once
 expect fail "feat!: rename the remotes key"
 expect fail "feat(config)!!: rename the remotes key"
 expect fail "feat(config) !: rename the remotes key"

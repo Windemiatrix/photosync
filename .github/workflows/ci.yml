@@ -2,9 +2,9 @@
 # same tool and version; event values reach it only through env:. "ci-ok" is
 # a check the ruleset of main requires; the PR title has its own workflow,
 # pr-title.yml.
-# Every push to main is released by the "release" job. The tests do not run
-# again on that push: the ruleset of main merges only a branch that is up to
-# date with main and green, so main gets exactly the tree the PR tested.
+# The tests do not run again on a push to main: the ruleset of main merges
+# only a branch that is up to date with main and green, so main gets exactly
+# the tree the PR tested.
 name: ci
 
 on:
@@ -133,9 +133,8 @@ jobs:
           printf '%s' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
           printf '%s' "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")' >/dev/null
 
-  # The version comes from the PR titles since the last tag (.svu.yml). The
-  # GitHub Release creates the tag on the tested commit. No caches: they could
-  # be poisoned.
+  # The GitHub Release creates the tag on the tested commit. No caches: they
+  # could be poisoned.
   release:
     needs: [ci-ok]
     # A manual run without "major" is a check (govulncheck), not a release.

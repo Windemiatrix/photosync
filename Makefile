@@ -27,9 +27,8 @@ vet: ## go vet, the fixtures_verify build tag included
 	go vet ./...
 	go vet -tags fixtures_verify ./tools/anonymize
 
-# The minimum total test coverage, in percent. Not "?=": the environment must
-# not lower it. The per-package threshold of 95 % for internal/domain comes
-# with the first package there.
+# In percent. Not "?=": the environment must not lower it. The per-package
+# threshold of 95 % for internal/domain comes with the first package there.
 COVERAGE_MIN := 80
 
 .PHONY: cover

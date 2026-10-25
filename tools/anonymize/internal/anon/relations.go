@@ -42,8 +42,6 @@ var relationOrder = []string{RelShape, RelFields, RelDate, RelFolderInfo, RelStr
 // itself included.
 const epochGap = 14*time.Hour + 2*time.Second
 
-// bijection counts the breaks of a one-to-one map between keys of a set and
-// keys of its image.
 type bijection struct {
 	fwd, rev map[string]string
 	bad      int
@@ -110,7 +108,7 @@ func (r relations) records(orig *Set, assets []Asset, files []File) {
 			r.c[RelDate]++
 		}
 		bad := !nameStrSame(o.OriginalFilename, i.OriginalFilename) || !nameStrSame(o.Filename, i.Filename)
-		var albumStrs [][2]string // titles and folder_names
+		var albumStrs [][2]string
 		if sameAlbumShape(o.Albums, i.Albums) {
 			for a := range o.Albums {
 				albumStrs = append(albumStrs, [2]string{o.Albums[a].Title, i.Albums[a].Title})
@@ -146,7 +144,6 @@ func (r relations) records(orig *Set, assets []Asset, files []File) {
 	}
 }
 
-// yearOf returns the expected image of a year string.
 func (r relations) yearOf(y string) string {
 	n, err := strconv.Atoi(y)
 	if err != nil || n == 1969 || n == 1970 {
@@ -167,8 +164,6 @@ func sameAlbumShape(a, b []AlbumRef) bool {
 	return true
 }
 
-// extSame compares the extensions of two names: a known extension stays as
-// it is; another one keeps its case pattern and stays unknown.
 func extSame(o, i string) bool {
 	_, eo := Splitext(o)
 	_, ei := Splitext(i)
@@ -196,14 +191,11 @@ func runeCaseMask(s string) string {
 	return b.String()
 }
 
-// strSame compares the properties of a string the mapping keeps.
 func strSame(o, i string) bool {
 	return (o == "") == (i == "") && isASCII(o) == isASCII(i) && (o == nfc(o)) == (i == nfc(i)) &&
 		strings.Count(o, "/") == strings.Count(i, "/")
 }
 
-// nameStrSame compares the properties of a file name the mapping keeps,
-// including the " (N)" and "_edited" tails of the stem.
 func nameStrSame(o, i string) bool {
 	so, _ := Splitext(o)
 	si, _ := Splitext(i)
@@ -211,15 +203,11 @@ func nameStrSame(o, i string) bool {
 		strings.HasSuffix(strings.ToLower(so), "_edited") == strings.HasSuffix(strings.ToLower(si), "_edited")
 }
 
-// tailSame compares two " (N)" tails: equal, or numbers of the same length
-// over two digits (such numbers are mapped).
+// Numbers over two digits are mapped, so only their length is compared.
 func tailSame(o, i string) bool {
 	return o == i || o != "" && i != "" && len(o) == len(i) && len(o) > len(" (00)")
 }
 
-// dateSame checks a date and its image: both empty or both parse, the same
-// form byte by byte apart from digits, and the wall clock moved by exactly
-// the shift (or kept for 1969 and 1970).
 func (r relations) dateSame(o, i string) bool {
 	if (o == "") != (i == "") || len(o) != len(i) {
 		return false
@@ -248,7 +236,6 @@ func (r relations) want(t time.Time) time.Duration {
 	return r.days
 }
 
-// fixSame checks the 1970 fix of an asset and of its image.
 func (r relations) fixSame(o, i Asset) bool {
 	to, ok1 := ParseDT(o.Date)
 	ti, ok2 := ParseDT(i.Date)
@@ -357,9 +344,8 @@ func (r relations) sizes(orig *Set, assets []Asset, files []File) {
 	}
 }
 
-// epochGaps counts the epoch dates (1969, 1970) within 14 h 2 s of a shifted
-// date, the bound included as in the reference: the shift would move one of
-// them away from the other.
+// The epochGap bound is included as in the reference; the shift would move the
+// shifted date away from the epoch one.
 func epochGaps(assets []Asset, files []File) int {
 	var epoch, shifted []time.Time
 	add := func(t time.Time) {

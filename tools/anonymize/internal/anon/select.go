@@ -15,7 +15,6 @@ import (
 	"unicode"
 )
 
-// Limits of the unit selection.
 const (
 	maxCaseRecords = 60
 	maxPicks       = 8
@@ -43,12 +42,10 @@ const (
 	RuleEpochGap      = "epoch-gap"       // a 1969-1970 date within 14 h 2 s of 1971, where shifted dates start
 )
 
-// lateEpoch is the first epoch date within epochGap (bound included) of the
-// first shifted date (1971 and later); it and every later epoch date are not
-// supported, so a case never breaks the epoch_gap relation.
+// Epoch dates from lateEpoch on are not supported, so a case never breaks the
+// epoch_gap relation.
 var lateEpoch = time.Date(minShiftedYear, 1, 1, 0, 0, 0, 0, time.UTC).Add(-epochGap)
 
-// epochRule returns the rule an effective date (after the 1970 fix) breaks.
 func epochRule(t time.Time) string {
 	if (t.Year() == 1969 || t.Year() == 1970) && !t.Before(lateEpoch) {
 		return RuleEpochGap
@@ -62,7 +59,6 @@ var (
 	driveRE       = regexp.MustCompile(`^[A-Za-z]:[\\/]`)
 )
 
-// textRule returns the rule a string of a name, path or title breaks.
 func textRule(s string) string {
 	if strings.HasPrefix(s, "/") || strings.HasPrefix(s, "~") {
 		return RuleRootPath
@@ -106,7 +102,6 @@ func textRule(s string) string {
 	return ""
 }
 
-// dateRule returns the rule a date breaks.
 func dateRule(s string) string {
 	if s == "" {
 		return ""
@@ -201,16 +196,11 @@ func FileRule(f File) string {
 	return ""
 }
 
-// pairRef is one link of an asset record.
 type pairRef struct {
 	file  int
 	level string
 }
 
-// graph indexes the records of a material: assets are records 0..nA-1 and
-// files are records nA.. in inventory order. Trashed assets and files of
-// kind other are excluded from every unit.
-//
 // A component holds an asset with all its linked files, a file with its
 // owner and a file with all files of the same neighbor key. A union of
 // components is closed for the reference matching: the reference script, run
@@ -225,10 +215,10 @@ type graph struct {
 	nA       int
 	excluded []bool
 	rules    []string
-	owner    []int       // per file record: the owning asset record or -1
-	links    [][]pairRef // per asset record
-	comp     []int       // component index per record, -1 when excluded
-	members  [][]int     // records of each component in order
+	owner    []int // per file record: the owning asset record or -1
+	links    [][]pairRef
+	comp     []int // -1 when excluded
+	members  [][]int
 	plan     planIndex
 	// exhausted holds the first records of the units the mapping ran out
 	// of space for; they are never picked again.
@@ -321,8 +311,6 @@ func newGraph(m *Material) *graph {
 	return g
 }
 
-// componentsOf returns the sorted records of the components of the seed
-// records; excluded records add nothing.
 func (g *graph) componentsOf(seed []int) []int {
 	seen := map[int]bool{}
 	var out []int
@@ -340,7 +328,6 @@ func (g *graph) isAsset(i int) bool { return i < g.nA }
 func (g *graph) asset(i int) Asset  { return g.m.Assets[i] }
 func (g *graph) file(i int) File    { return g.m.Files[i-g.nA] }
 
-// name returns the file name of a record.
 func (g *graph) name(i int) string {
 	if g.isAsset(i) {
 		return g.asset(i).Name()
@@ -375,8 +362,6 @@ type Category struct {
 	groups func(g *graph) [][]int
 }
 
-// candidates returns the supported units of a category, without duplicates
-// (by the smallest record index).
 func (g *graph) candidates(c Category) [][]int {
 	var out [][]int
 	seen := map[int]bool{}
@@ -400,14 +385,11 @@ func (g *graph) candidates(c Category) [][]int {
 	return out
 }
 
-// pickUnits orders the candidates by a keyed hash of the category and the
-// key of their first record (neither by date nor by name) and takes
-// min(8, ceil(n/2)) of them while the case has at most 60 records, so a case
-// never shows how many units of a category the library has. Each unit is
-// mapped before it is taken: a unit the mapping runs out of space for or
-// whose image breaks a relation is skipped; the outputs it registered stay,
-// so the mapping stays injective and the mapping of the whole case only
-// repeats registered outputs.
+// The pick order is keyed, neither by date nor by name, and at most half of
+// the candidates are taken, so a case never shows how many units of a
+// category the library has. A skipped unit keeps the outputs it registered, so
+// the mapping stays injective and the mapping of the whole case only repeats
+// registered outputs.
 func (g *graph) pickUnits(m *Mapper, category string, cands [][]int) ([]int, error) {
 	type cand struct {
 		key  [32]byte
@@ -460,8 +442,6 @@ func (g *graph) pickUnits(m *Mapper, category string, cands [][]int) ([]int, err
 	return slices.Sorted(maps.Keys(chosen)), nil
 }
 
-// Predicates and feature groups of the categories.
-
 func anyRecord(f func(g *graph, i int) bool) func(*graph, []int) bool {
 	return func(g *graph, u []int) bool {
 		for _, i := range u {
@@ -481,7 +461,6 @@ func anyFile(f func(fl File) bool) func(*graph, []int) bool {
 	return anyRecord(func(g *graph, i int) bool { return !g.isAsset(i) && f(g.file(i)) })
 }
 
-// anyPair tests every link of the unit.
 func anyPair(f func(g *graph, a Asset, fl File, level string) bool) func(*graph, []int) bool {
 	return anyRecord(func(g *graph, i int) bool {
 		if !g.isAsset(i) {
@@ -518,7 +497,6 @@ func isASCII(s string) bool {
 	return true
 }
 
-// recordStrings returns the names, paths and titles of a record.
 func (g *graph) recordStrings(i int) []string {
 	if !g.isAsset(i) {
 		return []string{g.file(i).Path}
@@ -611,8 +589,6 @@ func predYearBoundary(g *graph, u []int) bool {
 	return false
 }
 
-// groupBy groups the included records by a key in the order of their first
-// record; groups smaller than two are dropped.
 func groupBy(g *graph, key func(i int) (string, bool)) [][]int {
 	idx := map[string]int{}
 	var groups [][]int
@@ -774,8 +750,8 @@ var Categories = []Category{
 // UnitStats counts the units of a material.
 type UnitStats struct {
 	Total       int
-	Unsupported int // units with a record that is not supported
-	TooLarge    int // supported units over 60 records
+	Unsupported int
+	TooLarge    int // supported units over maxCaseRecords records
 	// Exhausted counts the candidate units the mapping found no free output
 	// for, by their first record: a union unit and one of its components can
 	// both count.
@@ -793,7 +769,7 @@ type CaseResult struct {
 
 // Result is the outcome of a run: aggregates and the cases.
 type Result struct {
-	Links [6]int // reference links of the whole material by level
+	Links [6]int // in the order of Levels
 	Units UnitStats
 	// Rules counts the unsupported units by the rule of their first
 	// unsupported record, and under "relation:<relation>" the candidate
@@ -807,9 +783,8 @@ type Result struct {
 // message lists the broken relations with their counts only.
 var ErrRelations = errors.New("relations broken")
 
-// Build builds the cases of a material that passed the partition check:
-// for each category in order it picks units, maps their records and checks
-// that the image keeps every relation.
+// Build builds the cases of a material that passed the partition check. It
+// fails with ErrRelations when the image of a case breaks a relation.
 func Build(m *Material, mp *Mapper) (*Result, error) {
 	g := newGraph(m)
 	res := &Result{}
@@ -850,8 +825,6 @@ func Build(m *Material, mp *Mapper) (*Result, error) {
 	return res, nil
 }
 
-// unsupportedRule returns the rule of the first unsupported record of a
-// unit, or "".
 func unsupportedRule(g *graph, u []int) string {
 	for _, i := range u {
 		if g.rules[i] != "" {
@@ -874,7 +847,7 @@ func (g *graph) buildCase(mp *Mapper, category string, recs []int) (CaseResult, 
 		}
 		return CaseResult{}, fmt.Errorf("%w: %s", ErrRelations, strings.Join(parts, " "))
 	}
-	imgOf := map[int]int{} // record -> position in the set
+	imgOf := map[int]int{}
 	for pos, r := range orig.Src {
 		imgOf[r] = pos
 	}

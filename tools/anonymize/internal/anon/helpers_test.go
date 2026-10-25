@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-// testSalt is a fixed salt: tests that compare outputs are deterministic.
+// Fixed, so that tests comparing outputs are deterministic.
 var testSalt = []byte("0123456789abcdef0123456789abcdef")
 
 func newTestMapper(t *testing.T) *Mapper {
@@ -22,19 +22,16 @@ func newTestMapper(t *testing.T) *Mapper {
 	return m
 }
 
-// counterMAC is a fake MAC that ignores the input: every key gets the same
-// output for the same counter, so the second key always collides once.
+// The output ignores the input, so the second key always collides once.
 func counterMAC(_ string, _ []byte, counter uint64) [32]byte {
 	var b [8]byte
 	binary.BigEndian.PutUint64(b[:], counter)
 	return sha256.Sum256(b[:])
 }
 
-// constantMAC is a fake MAC with a single output: the space is exhausted for
-// the second key.
+// A single output exhausts the space for the second key.
 func constantMAC(string, []byte, uint64) [32]byte { return sha256.Sum256([]byte("x")) }
 
-// caseMask returns the upper-case pattern of s rune by rune.
 func caseMask(s string) string {
 	var b strings.Builder
 	for _, r := range s {
@@ -49,15 +46,14 @@ func caseMask(s string) string {
 
 func runeLen(s string) int { return utf8.RuneCountInString(s) }
 
-// testMaterial is a small consistent material: assets, files, links and a
-// plan derived from them.
+type replacePair struct{ assetUUID, cloudPath string }
+
 type testMaterial struct {
-	assets []Asset
-	files  []File
-	links  Links
-	// replace and keep list the (asset index, path) pairs with a plan decision.
-	replace [][2]string
-	keep    []string
+	assets         []Asset
+	files          []File
+	links          Links
+	replacePairs   []replacePair
+	keepCloudPaths []string
 }
 
 func (tm testMaterial) build() *Material {
@@ -83,10 +79,10 @@ func (tm testMaterial) build() *Material {
 			m.Plan.Upload = append(m.Plan.Upload, PlanUpload{Path: f.Path})
 		}
 	}
-	for _, r := range tm.replace {
-		for _, l := range tm.links[r[0]] {
-			if l.Path == r[1] {
-				m.Plan.Replace = append(m.Plan.Replace, PlanReplace{UUID: r[0], YandexPath: r[1], Match: l.Kind})
+	for _, r := range tm.replacePairs {
+		for _, l := range tm.links[r.assetUUID] {
+			if l.Path == r.cloudPath {
+				m.Plan.Replace = append(m.Plan.Replace, PlanReplace{UUID: r.assetUUID, YandexPath: r.cloudPath, Match: l.Kind})
 			}
 		}
 	}
@@ -97,7 +93,7 @@ func (tm testMaterial) build() *Material {
 			}
 		}
 	}
-	for _, p := range tm.keep {
+	for _, p := range tm.keepCloudPaths {
 		m.Plan.Conflicts = append(m.Plan.Conflicts, []string{ConflictYandexBetter, "x", p, "note"})
 	}
 	m.Plan.Conflicts = append(m.Plan.Conflicts, []string{"yandex_duplicate", "a", "b", "note"})
@@ -111,8 +107,7 @@ func photo(n int, name, date string, size int64) Asset {
 		OriginalFilesize: size, OriginalWidth: 4032, OriginalHeight: 3024, Width: 4032, Height: 3024, Albums: []AlbumRef{}}
 }
 
-// burstOf makes the assets one burst in the osxphotos shape: burst on every
-// frame, burst_key on the first, burst_photos with the UUIDs of the others.
+// The burst has the osxphotos shape.
 func burstOf(as ...*Asset) {
 	for i, a := range as {
 		a.Burst, a.BurstKeyPhoto, a.BurstPhotos = true, i == 0, []string{}

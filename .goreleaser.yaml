@@ -1,9 +1,3 @@
-# GoReleaser OSS configuration:
-#   make release-snapshot   builds the archive locally (part of make test),
-#                           publishes nothing
-#   the release job of ci.yml  builds and publishes the GitHub Release after
-#                              every merge to main
-#
 # This file and docs/release-notes-header.md run inside the release job with
 # write access, so changes to them are reviewed like changes to a workflow.
 # Only the open-source features are used: no monorepo, no changelog.paths, no
@@ -37,9 +31,8 @@ builds:
       - -s -w -X main.version={{ .Tag }} -X main.commit={{ .Commit }}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-# lipo joins the two slices into one binary. The ad-hoc signature must be made
-# after lipo (lipo invalidates it) and before the archive is packed. No
-# "--options runtime": the hardened runtime without an entitlement closes access
+# The ad-hoc signature must be made after lipo (lipo invalidates it) and before
+# the archive is packed. No "--options runtime": the hardened runtime without an entitlement closes access
 # to Photos. binary_signs and signs do not fit: they write separate signature
 # files (cosign, gpg) and do not sign the binary in place. "--identifier" is
 # required: without it the ad-hoc signature carries the Go linker's identifier

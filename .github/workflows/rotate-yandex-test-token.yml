@@ -1,4 +1,3 @@
-# Monthly refresh of the Yandex test-account token for the integration tests.
 # The refresh token works once, so the new one goes back to the secrets before
 # the access token. Only this job sees the refresh token and the GitHub token
 # that writes secrets; the integration tests get the access token alone.

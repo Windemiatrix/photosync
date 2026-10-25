@@ -29,10 +29,8 @@ var ErrUnsupported = errors.New("unsupported value")
 // stays injective because the registered outputs are kept.
 var ErrExhausted = errors.New("mapping space exhausted")
 
-// maxAttempts bounds the attempts to find a free output for one value.
 const maxAttempts = 1_000_000
 
-// Purposes of the derived keys.
 const (
 	purposeWord   = "word"
 	purposeDigits = "digits"
@@ -43,14 +41,12 @@ const (
 	purposePick   = "pick"
 )
 
-// Year range the mapping shifts and the epoch years it keeps.
 const (
 	minShiftedYear = 1971
 	maxShiftedYear = 2027
 	minYear        = 1969
 )
 
-// Output alphabets of the word pseudonyms by the class of a cluster.
 var (
 	alphaASCII        = []rune("ghijklmnopqrstuvwxyz")
 	alphaDecomposable = []rune("йёéèêëáàâäóòôöúü")
@@ -78,10 +74,9 @@ func hmacFunc(salt []byte) macFunc {
 	}
 }
 
-// registry keeps an injective mapping of keys to outputs.
 type registry struct {
-	out   map[string]string // key -> output
-	owner map[string]string // output -> key
+	out   map[string]string
+	owner map[string]string
 }
 
 func newRegistry() *registry {
@@ -94,17 +89,17 @@ func newRegistry() *registry {
 // fixed order.
 type Mapper struct {
 	mac    macFunc
-	limit  uint32 // attempts per value; maxAttempts outside tests
+	limit  uint32 // lowered in tests
 	shift  int
 	sizeA  int64
 	sizeC  int64
 	words  *registry
-	digits map[int]*registry // by length
+	digits map[int]*registry
 	ids    *registry
 	hashes *registry
 }
 
-// NewMapper returns the mapping keyed by a 32-byte salt.
+// NewMapper returns the mapping keyed by salt; it fails unless salt is 32 bytes.
 func NewMapper(salt []byte) (*Mapper, error) {
 	if len(salt) != 32 {
 		return nil, fmt.Errorf("salt: %d bytes, want 32", len(salt))
@@ -127,12 +122,10 @@ func newMapperMAC(mac macFunc) *Mapper {
 // 1461k days, which keeps the calendar date and the time of day in 1901-2099.
 func (m *Mapper) YearShift() int { return m.shift }
 
-// pick returns the selection key of a unit.
 func (m *Mapper) pick(category, key string) [32]byte {
 	return m.mac(purposePick, []byte(category+"\x00"+key), 0)
 }
 
-// stream returns n derived bytes for one attempt.
 func (m *Mapper) stream(purpose string, input []byte, attempt uint32, n int) []byte {
 	out := make([]byte, 0, n+32)
 	for block := uint32(0); len(out) < n; block++ {
@@ -142,8 +135,6 @@ func (m *Mapper) stream(purpose string, input []byte, attempt uint32, n int) []b
 	return out[:n]
 }
 
-// unique returns the registered output of key or finds a free one: gen makes
-// the candidate of an attempt, accept rejects reserved candidates.
 func (m *Mapper) unique(r *registry, key string, gen func(attempt uint32) string, accept func(string) bool) (string, error) {
 	if out, ok := r.out[key]; ok {
 		return out, nil
@@ -167,11 +158,10 @@ var (
 	hexRunRE = regexp.MustCompile(`[0-9A-Fa-f]{16,}`)
 )
 
-// Text maps free text (a stem, a path segment, an album title): UUIDs and
-// long hexadecimal runs become marked identifiers; then the text is cut into
-// letter, digit and other runs and each run is mapped by its own rule (the
-// structure of names, events and albums is kept because separators, short
-// numbers and structural words stay as they are).
+// Text maps free text (a stem, a path segment, an album title). The structure
+// of names, events and albums is kept: separators, short numbers and
+// structural words stay as they are. It returns ErrUnsupported for a string
+// that breaks a "not supported" rule.
 func (m *Mapper) Text(s string) (string, error) {
 	if rule := textRule(s); rule != "" {
 		return "", ErrUnsupported
@@ -195,8 +185,6 @@ func (m *Mapper) Text(s string) (string, error) {
 	return b.String(), nil
 }
 
-// textHex maps the hexadecimal runs of 16 and more characters with a letter
-// and a digit, then the runs of the rest.
 func (m *Mapper) textHex(b *strings.Builder, s string) error {
 	last := 0
 	for _, loc := range hexRunRE.FindAllStringIndex(s, -1) {
@@ -241,10 +229,8 @@ func (m *Mapper) textRuns(b *strings.Builder, s string) error {
 	return nil
 }
 
-// isKeptTime reports whether a digit run after a kept date is a time the
-// mapping keeps: a valid HHMMSS or HHMMSSmmm (the PXL_ and Android names).
-// Any other run is mapped, so a number after a date that is not a time of
-// day never reaches the output.
+// Only a time of day after a date is kept (the PXL_ and Android names); any
+// other number there is mapped, so it never reaches the output.
 func isKeptTime(s string) bool {
 	if len(s) != 6 && len(s) != 9 {
 		return false
@@ -253,14 +239,11 @@ func isKeptTime(s string) bool {
 	return err == nil
 }
 
-// isKeptDate reports whether an 8-digit run is a date the mapping shifts or
-// keeps: YYYYMMDD with the year in 1969..2027.
 func isKeptDate(s string) bool {
 	y, ok := compactDateYear(s)
 	return ok && y >= minYear && y <= maxShiftedYear
 }
 
-// compactDateYear returns the year of a valid YYYYMMDD date.
 func compactDateYear(s string) (int, bool) {
 	if len(s) != 8 {
 		return 0, false
@@ -272,7 +255,6 @@ func compactDateYear(s string) (int, bool) {
 	return d.Year(), true
 }
 
-// number maps an ASCII digit run; keptTime marks the time after a kept date.
 func (m *Mapper) number(s string, keptTime bool) (string, error) {
 	if len(s) <= 2 || keptTime {
 		return s, nil
@@ -296,7 +278,8 @@ func (m *Mapper) number(s string, keptTime bool) (string, error) {
 		}
 		return string(out)
 	}
-	// An 8-digit output never looks like a shifted or an epoch date.
+	// An 8-digit output that looks like a shifted or an epoch date would be taken
+	// for a date by the relation check and the leak tests.
 	accept := func(c string) bool {
 		y, ok := compactDateYear(c)
 		if !ok {
@@ -308,7 +291,6 @@ func (m *Mapper) number(s string, keptTime bool) (string, error) {
 	return m.unique(r, s, gen, accept)
 }
 
-// clusters cuts a letter run into clusters: a rune and the marks after it.
 func clusters(s string) []string {
 	var out []string
 	start := 0
@@ -324,9 +306,6 @@ func clusters(s string) []string {
 	return out
 }
 
-// word maps a letter run: one cluster and structural words stay, any other
-// word becomes a pseudonym of the same length in clusters with the same case
-// and form cluster by cluster.
 func (m *Mapper) word(w string) (string, error) {
 	in := clusters(w)
 	if len(in) == 1 || slices.Contains(structuralWords, strings.ToLower(w)) {
@@ -377,8 +356,8 @@ func (m *Mapper) Words() []string {
 	return slices.Sorted(maps.Keys(m.words.owner))
 }
 
-// Name maps a file name: the stem by the text rule, the extension as it is
-// when it is a known media or sidecar extension, by the text rule otherwise.
+// Name maps a file name; the extension stays as it is when it is a known
+// media or sidecar extension.
 func (m *Mapper) Name(s string) (string, error) {
 	stem, ext := Splitext(s)
 	ms, err := m.Text(stem)
@@ -397,7 +376,6 @@ func (m *Mapper) Name(s string) (string, error) {
 
 func isKnownExt(e string) bool { return slices.Contains(knownExts, strings.ToLower(e)) }
 
-// year maps a year segment: 1971..2027 shifted, 1969 and 1970 kept.
 func (m *Mapper) year(s string) (string, error) {
 	y, err := strconv.Atoi(s)
 	if err != nil || y < minYear || y > maxShiftedYear {
@@ -488,8 +466,6 @@ func (m *Mapper) ID(s string) (string, error) {
 	return matchCase(s, out), nil
 }
 
-// hexID maps a long hexadecimal run of a name to 00000000 and hex digits of
-// the same total length.
 func (m *Mapper) hexID(s string) (string, error) {
 	key := "hex\x00" + strings.ToUpper(s)
 	out, err := m.unique(m.ids, key, func(attempt uint32) string {
@@ -502,8 +478,6 @@ func (m *Mapper) hexID(s string) (string, error) {
 	return matchCase(s, out), nil
 }
 
-// matchCase returns out in lower case when the input has a lower-case hex
-// letter and no upper-case one.
 func matchCase(in, out string) string {
 	if strings.ContainsAny(in, "abcdef") && !strings.ContainsAny(in, "ABCDEF") {
 		return strings.ToLower(out)

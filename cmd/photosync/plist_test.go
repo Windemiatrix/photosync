@@ -9,9 +9,9 @@ import (
 	"testing"
 )
 
-// TestInfoPlistSection checks that the test binary, which is linked with the
-// same cgo flags as the command, carries Info.plist in __TEXT,__info_plist.
-// The release binary is checked by hand with "otool -l" before a release.
+// The test binary is linked with the same cgo flags as the command and stands
+// in for it; the release binary is checked by hand with "otool -l" before a
+// release.
 func TestInfoPlistSection(t *testing.T) {
 	exe, err := os.Executable()
 	if err != nil {

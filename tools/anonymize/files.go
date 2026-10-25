@@ -31,14 +31,12 @@ const (
 	nameTokens        = "tokens.json"
 )
 
-// toolError is an error of the tool: a stage and a kind, both built from
-// code constants and numbers only. Errors of other packages may hold paths
-// or input values and are never printed themselves.
+// A toolError is built from code constants and numbers only. Errors of other
+// packages may hold paths or input values and are never printed themselves.
 type toolError struct{ stage, kind string }
 
 func (e *toolError) Error() string { return e.stage + ": " + e.kind }
 
-// fail converts an error of another package into a toolError of the stage.
 func fail(stage string, err error) *toolError {
 	var se *json.SyntaxError
 	var ue *json.UnmarshalTypeError
@@ -58,11 +56,10 @@ func fail(stage string, err error) *toolError {
 	return &toolError{stage, kind}
 }
 
-// closeQuietly closes a file or a root that holds no unwritten data: a close
+// closeQuietly is for a file or a root that holds no unwritten data: a close
 // error loses nothing there.
 func closeQuietly(c io.Closer) { _ = c.Close() }
 
-// readCatalog reads the catalog into the whitelisted asset type.
 func readCatalog(fsys fs.FS) ([]anon.Asset, error) {
 	var assets []anon.Asset
 	if err := decodeFile(fsys, nameCatalog, &assets); err != nil {
@@ -76,48 +73,44 @@ func readCatalog(fsys fs.FS) ([]anon.Asset, error) {
 	return assets, nil
 }
 
-// inventoryRow is one row of the inventory with the derived columns the
-// tool compares; every other column (root, created, camera, mtime, ...) is
+// Every other column of the inventory (root, created, camera, mtime, ...) is
 // never decoded.
 type inventoryRow struct {
 	anon.File
 	anon.Derived
 }
 
-// readInventory reads one inventory; an optional one that does not exist
-// gives nil.
-func readInventory(fsys fs.FS, name string, optional bool) (*anon.Inventory, error) {
+func readInventory(fsys fs.FS, name string, optional bool) (inv *anon.Inventory, found bool, err error) {
 	var doc struct {
 		Files *[]inventoryRow `json:"files"`
 	}
-	err := decodeFile(fsys, name, &doc)
+	err = decodeFile(fsys, name, &doc)
 	switch {
 	case optional && errors.Is(err, fs.ErrNotExist):
-		return nil, nil
+		return nil, false, nil
 	case err != nil:
-		return nil, fail("read inventory", err)
+		return nil, false, fail("read inventory", err)
 	case doc.Files == nil:
-		return nil, &toolError{"read inventory", "missing field files"}
+		return nil, false, &toolError{"read inventory", "missing field files"}
 	}
-	inv := &anon.Inventory{}
+	inv = &anon.Inventory{}
 	for i, r := range *doc.Files {
 		n := strconv.Itoa(i + 1)
 		switch {
 		case r.Path == "":
-			return nil, &toolError{"read inventory", "missing field files.path in record " + n}
+			return nil, false, &toolError{"read inventory", "missing field files.path in record " + n}
 		case strings.HasPrefix(r.Path, "/") || strings.Contains(r.Path, `\`):
-			return nil, &toolError{"read inventory", "invalid value in field files.path in record " + n}
+			return nil, false, &toolError{"read inventory", "invalid value in field files.path in record " + n}
 		case r.LivePair != "" && r.LivePair != anon.LivePairCID && r.LivePair != anon.LivePairName:
 			// The value is copied into case.json: only the known markers.
-			return nil, &toolError{"read inventory", "invalid value in field files.live_pair in record " + n}
+			return nil, false, &toolError{"read inventory", "invalid value in field files.live_pair in record " + n}
 		}
 		inv.Files = append(inv.Files, r.File)
 		inv.Derived = append(inv.Derived, r.Derived)
 	}
-	return inv, nil
+	return inv, true, nil
 }
 
-// readLinks reads the reference links of the rerun.
 func readLinks(fsys fs.FS) (anon.Links, error) {
 	var raw map[string][][]string
 	if err := decodeFile(fsys, nameLinks, &raw); err != nil {
@@ -140,11 +133,7 @@ func readLinks(fsys fs.FS) (anon.Links, error) {
 	return links, nil
 }
 
-// readMaterial reads the material from the input directory: the reviewed
-// plan and its rerun (they must be equal), the reference links, the catalog
-// and the first inventory that passes the partition check. It returns which
-// inventory was taken: "current" or "prev".
-func readMaterial(fsys fs.FS) (*anon.Material, string, error) {
+func readMaterial(fsys fs.FS) (m *anon.Material, usedInventory string, err error) {
 	reviewed, err := readInput(fsys, namePlan)
 	if err != nil {
 		return nil, "", fail("read plan", err)
@@ -173,17 +162,17 @@ func readMaterial(fsys fs.FS) (*anon.Material, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	m := &anon.Material{Assets: assets, Plan: plan, Links: links}
+	m = &anon.Material{Assets: assets, Plan: plan, Links: links}
 	var parts []string
 	for _, c := range []struct {
 		name, file string
 		optional   bool
 	}{{"current", nameInventory, false}, {"prev", namePrevInventory, true}} {
-		inv, err := readInventory(fsys, c.file, c.optional)
+		inv, found, err := readInventory(fsys, c.file, c.optional)
 		if err != nil {
 			return nil, "", err
 		}
-		if inv == nil {
+		if !found {
 			break
 		}
 		m.Inventory = *inv
@@ -196,8 +185,6 @@ func readMaterial(fsys fs.FS) (*anon.Material, string, error) {
 	return nil, "", &toolError{"partition", "no inventory passes the check: " + strings.Join(parts, "; ")}
 }
 
-// resolve returns the absolute path of an existing file with symbolic links
-// resolved.
 func resolve(p string) (string, error) {
 	abs, err := filepath.Abs(p)
 	if err != nil {
@@ -206,13 +193,11 @@ func resolve(p string) (string, error) {
 	return filepath.EvalSymlinks(abs)
 }
 
-// within reports whether child is parent or lies below it.
 func within(child, parent string) bool {
 	rel, err := filepath.Rel(parent, child)
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// inGitTree reports whether dir or one of its parents holds .git.
 func inGitTree(dir string) bool {
 	for d := dir; ; d = filepath.Dir(d) {
 		if _, err := os.Lstat(filepath.Join(d, ".git")); err == nil {
@@ -224,8 +209,6 @@ func inGitTree(dir string) bool {
 	}
 }
 
-// makeOut creates out (0700) when it is missing and returns its real path;
-// it must be empty and outside realIn and any git working tree.
 func makeOut(out, realIn string) (string, error) {
 	if err := os.MkdirAll(out, 0o700); err != nil {
 		return "", fail("out dir", err)
@@ -248,8 +231,6 @@ func makeOut(out, realIn string) (string, error) {
 	return real, nil
 }
 
-// makeSaltDir creates the directory of the salt file (0700) when it is
-// missing; it must be outside any git working tree.
 func makeSaltDir(saltPath string) error {
 	dir := filepath.Dir(saltPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -265,9 +246,6 @@ func makeSaltDir(saltPath string) error {
 	return nil
 }
 
-// loadSalt reads the salt file (32 bytes in hex and a newline, mode 0600 or
-// stricter, outside any git working tree) or, when create is set and the
-// file is missing, creates it with 32 random bytes.
 func loadSalt(path string, create bool) (salt []byte, created bool, err error) {
 	st, err := os.Stat(path)
 	switch {
@@ -301,8 +279,6 @@ func loadSalt(path string, create bool) (salt []byte, created bool, err error) {
 	return salt, false, nil
 }
 
-// writeNew writes data into a new file of mode 0600; an existing file is an
-// error.
 func writeNew(path string, data []byte) error {
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // a path under --out or the --salt-file flag of the developer running the tool
 	if err != nil {
@@ -312,8 +288,6 @@ func writeNew(path string, data []byte) error {
 	return errors.Join(err, f.Close())
 }
 
-// encodeJSON encodes a value as the output files are written: one space of
-// indent, no HTML escaping, UTF-8 as it is, a newline at the end.
 func encodeJSON(v any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
@@ -336,9 +310,6 @@ func writeOutputFile(path string, v any) error {
 	return nil
 }
 
-// writeOutput writes tokens.json and one directory per non-empty case into
-// the directory out: directories 0700, files 0600, never over an existing
-// file.
 func writeOutput(out string, res *anon.Result) error {
 	words := res.Words
 	if words == nil {
@@ -362,16 +333,13 @@ func writeOutput(out string, res *anon.Result) error {
 	return nil
 }
 
-// scanDir runs the leak scanner over a directory through os.Root. It returns
-// the findings in a fixed order and the number of files seen.
-func scanDir(dir string, salt []byte) ([]anon.Finding, int, error) {
+func scanDir(dir string, salt []byte) (findings []anon.Finding, filesSeen int, err error) {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, 0, fail("check dir", err)
 	}
 	defer closeQuietly(root)
 	fsys := root.FS()
-	var findings []anon.Finding
 	words := map[string]bool{}
 	data, err := fs.ReadFile(fsys, nameTokens)
 	switch {
@@ -388,12 +356,11 @@ func scanDir(dir string, salt []byte) ([]anon.Finding, int, error) {
 			}
 		}
 	}
-	files := 0
 	err = fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		files++
+		filesSeen++
 		if !d.Type().IsRegular() || !strings.HasSuffix(p, ".json") {
 			findings = append(findings, anon.Finding{File: p, Rule: anon.RuleUnexpectedFile})
 			return nil
@@ -408,11 +375,11 @@ func scanDir(dir string, salt []byte) ([]anon.Finding, int, error) {
 	if err != nil {
 		return nil, 0, fail("check", err)
 	}
-	return findings, files, nil
+	return findings, filesSeen, nil
 }
 
-// outputNames are the file names the build can write. Any other name in the
-// checked directory may be a private string, so it is printed as "<file>".
+// A name outside outputNames may be a private string, so it is printed as
+// "<file>".
 var outputNames = func() map[string]bool {
 	names := map[string]bool{nameTokens: true}
 	for _, c := range anon.Categories {
@@ -432,7 +399,6 @@ func printFindings(w io.Writer, findings []anon.Finding, files int) {
 	_, _ = fmt.Fprintf(w, "check: %d findings in %d files\n", len(findings), files)
 }
 
-// runCheck is the --check mode; it returns the number of findings.
 func runCheck(dir, saltPath string, stdout io.Writer) (int, error) {
 	var salt []byte
 	if saltPath != "" {
@@ -450,7 +416,6 @@ func runCheck(dir, saltPath string, stdout io.Writer) (int, error) {
 	return len(findings), nil
 }
 
-// build is the build mode: paths, salt, material, cases, output, self-check.
 func build(in, out, saltPath string, stdout, stderr io.Writer) error {
 	root, err := os.OpenRoot(in)
 	if err != nil {
@@ -505,7 +470,7 @@ func build(in, out, saltPath string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// printAggregates prints the numbers of a build; they never hold values.
+// printAggregates prints numbers only, never values.
 func printAggregates(w io.Writer, which string, res *anon.Result) {
 	var b strings.Builder
 	total := 0

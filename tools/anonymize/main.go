@@ -1,10 +1,9 @@
 // Command anonymize is a developer tool; it is not needed to use photosync.
-// It builds test fixtures from a real photo-sync setup without leaking
-// personal data: names, paths and hashes are replaced by keyed pseudonyms,
-// dates and sizes are mapped, keeping the relations the matching tests need. Its
-// input is the materials of an earlier script-based sync (a Photos catalog,
-// a cloud file inventory, the reviewed plan and a rerun of that plan with its
-// links). It also scans fixture directories for leaks (--check).
+// It builds test fixtures from the materials of an earlier script-based sync
+// (a Photos catalog, a cloud file inventory, the reviewed plan and a rerun of
+// that plan with its links) without leaking personal data, keeping the
+// relations the matching tests need. It also scans fixture directories for
+// leaks (--check).
 //
 //	anonymize --in <dir> --out <dir> --salt-file <file>
 //	anonymize --check <dir> [--salt-file <file>]
@@ -12,16 +11,13 @@
 // The build mode reads only the known files of --in through os.Root:
 // icloud_catalog.json, yandex_inventory.json (yandex_inventory.prev.json
 // when the current inventory does not pass the partition check),
-// plan/plan.json, plan-rerun/plan.json and plan-rerun/links.json. It checks
-// that the rerun plan equals the reviewed plan and that the links partition
-// the records, picks small closed units per category, maps every name,
-// path, title, identifier, hash, size and date with HMAC-SHA-256 keyed by the
-// salt (keeping every relation the matching depends on), and writes
-// <out>/anon-<category>/case.json and <out>/tokens.json. --out is created
-// when missing, must be empty and lie outside --in and any git working tree;
-// the salt file (64 hex digits, mode 0600) is created when missing and must
-// lie outside any git working tree. The build ends with the leak scanner over
-// its own output.
+// plan/plan.json, plan-rerun/plan.json and plan-rerun/links.json, and writes
+// <out>/anon-<category>/case.json and <out>/tokens.json. The build fails
+// unless the rerun plan equals the reviewed plan and the links partition the
+// records (the partition check), and it fails when the leak scanner finds
+// anything in its own output. --out is created when missing, must be empty
+// and lie outside --in and any git working tree; the salt file (64 hex digits, mode 0600) is created when missing and must
+// lie outside any git working tree.
 //
 // Example:
 //
@@ -54,8 +50,7 @@ func main() {
 	os.Exit(safely(func() int { return run(os.Args[1:], os.Stdout, os.Stderr) }, os.Stderr)) //nolint:forbidigo // the exit code of the command
 }
 
-// safely runs f and turns a panic into exit code 1 with a fixed message: the
-// panic value and the stack may hold input values and are never printed.
+// The panic value and the stack may hold input values and are never printed.
 func safely(f func() int, stderr io.Writer) (code int) {
 	defer func() {
 		if recover() != nil {
@@ -66,7 +61,6 @@ func safely(f func() int, stderr io.Writer) (code int) {
 	return f()
 }
 
-// run executes one command line and returns the process exit code.
 func run(args []string, stdout, stderr io.Writer) int {
 	fl := flag.NewFlagSet("anonymize", flag.ContinueOnError)
 	fl.SetOutput(io.Discard)
@@ -113,8 +107,8 @@ func usageError(stderr io.Writer) int {
 	return 2
 }
 
-// report prints an error of the tool; any other error is printed as a fixed
-// message because its text may hold a path or an input value.
+// Any error but a toolError is printed as a fixed message because its text may
+// hold a path or an input value.
 func report(stderr io.Writer, err error) int {
 	msg := "unexpected error"
 	var te *toolError

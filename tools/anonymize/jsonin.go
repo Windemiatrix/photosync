@@ -6,17 +6,13 @@ import (
 	"io/fs"
 )
 
-// nanTokens are the bare tokens Python json.dump writes for NaN and the
-// infinities, with their replacements; the infinities keep their length.
+// Python json.dump writes NaN and the infinities as bare tokens.
 var nanTokens = []struct{ token, repl string }{
 	{"NaN", "null"},
 	{"Infinity", "null    "},
 	{"-Infinity", "null     "},
 }
 
-// nanToNull replaces the bare NaN, Infinity and -Infinity tokens outside
-// strings with null. Anything else passes through unchanged, so a broken
-// input stays broken.
 func nanToNull(data []byte) []byte {
 	out := make([]byte, 0, len(data))
 	inStr, esc := false, false
@@ -58,8 +54,6 @@ func readInput(fsys fs.FS, name string) ([]byte, error) {
 	return nanToNull(data), nil
 }
 
-// decodeFile decodes an input file; data after the JSON value is a syntax
-// error.
 func decodeFile(fsys fs.FS, name string, v any) error {
 	data, err := readInput(fsys, name)
 	if err != nil {
