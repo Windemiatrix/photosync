@@ -10,7 +10,7 @@ The path is the same for everyone: the maintainer, AI agents acting on the maint
 
 1. Branch from an up-to-date `main`: `<type>/<topic>`, for example `feat/schema-photos12`, `fix/rest-retry`. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`.
 2. Test first, then code (TDD): a test that fails for the right reason, then the code that makes it pass. A bug fix starts with a test that reproduces the bug.
-3. Before the PR, `make test` is green locally: it runs every check, the linter included.
+3. Before the PR, `make test` is green locally: it runs every check, the linters included. The shell scripts are checked with `shellcheck`, which you install yourself (`brew install shellcheck`); every other tool is fetched by `go run`.
 4. Open a PR into `main`. The description says what changes and why. There are no direct pushes to `main`.
 5. `ci-ok` is green: it aggregates all required checks into one.
 6. Only squash merge, done by the maintainer. No approvals are required for now because there is a single developer; merging stays the maintainer's decision.

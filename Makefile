@@ -2,6 +2,7 @@
 GOLANGCI_LINT_VERSION ?= v2.15.0
 ACTIONLINT_VERSION ?= v1.7.12
 GOVULNCHECK_VERSION ?= v1.9.0
+SHFMT_VERSION ?= v3.14.1
 # Bump together with the GoReleaser version in .github/workflows/release.yml.
 GORELEASER_VERSION ?= v2.18.3
 GORELEASER = go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
@@ -13,7 +14,7 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: test
-test: mod vet cover lint check-repo release-snapshot fixtures-check fixtures-verify ## Run every check (before a PR)
+test: mod vet cover lint lint-sh check-repo release-snapshot fixtures-check fixtures-verify ## Run every check (before a PR)
 
 .PHONY: mod
 mod: ## go.mod is tidy and the modules match go.sum
@@ -34,9 +35,15 @@ cover: ## Tests with the race detector and the coverage thresholds
 lint: ## Run golangci-lint
 	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION) run ./...
 
+.PHONY: lint-sh
+lint-sh: ## shellcheck and the shfmt format check of scripts/ (needs shellcheck installed)
+	shellcheck scripts/*.sh
+	go run mvdan.cc/sh/v3/cmd/shfmt@$(SHFMT_VERSION) -d -i 2 -ci scripts
+
 .PHONY: fmt
-fmt: ## Format the code
+fmt: ## Format the code and the scripts
 	gofmt -s -w .
+	go run mvdan.cc/sh/v3/cmd/shfmt@$(SHFMT_VERSION) -w -i 2 -ci scripts
 
 ##@ Checks
 

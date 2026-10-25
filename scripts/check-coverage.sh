@@ -26,8 +26,8 @@ other_min=80
 # Packages relative to the module root. Their code is composition-only wiring
 # or a developer tool, so a percentage would say nothing about its quality.
 excluded=(
-  "cmd/..."          # composition root: wiring only
-  "tools/anonymize"  # main package of a developer tool
+  "cmd/..."         # composition root: wiring only
+  "tools/anonymize" # main package of a developer tool
 )
 
 profile="${1:-}"

@@ -96,6 +96,9 @@ jobs:
           cache: false
       - name: Repository checks
         run: make check-repo
+      # shellcheck is preinstalled on the Ubuntu runner.
+      - name: Shell scripts
+        run: make lint-sh
       - name: Fixtures leak scan
         run: make fixtures-check
 
