@@ -61,7 +61,7 @@ type testMaterial struct {
 }
 
 func (tm testMaterial) build() *Material {
-	m := &Material{Assets: tm.assets, Files: tm.files, Links: tm.links}
+	m := &Material{Assets: tm.assets, Inventory: Inventory{Files: tm.files}, Links: tm.links}
 	for _, f := range tm.files {
 		stem, _ := Splitext(BaseName(f.Path))
 		fi := FolderInfoOf(f.Path)

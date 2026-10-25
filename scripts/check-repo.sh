@@ -11,8 +11,6 @@ max_go_minor=27
 # Packages that may use cgo ('import "C"'), as path prefixes.
 cgo_allowed=(
   "cmd/photosync/"
-  "internal/adapters/space/macos/"
-  "internal/adapters/network/macos/"
 )
 
 failed=0

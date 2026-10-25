@@ -2,9 +2,12 @@ package anon
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,8 +36,7 @@ const (
 	RuleRootPath      = "root-path"       // a string starting with "/" or "~"
 	RuleDrive         = "drive-letter"    // a string starting with "X:/" or "X:\"
 	RuleDecimal       = "decimal"         // a number like 55.7539 outside dates
-	RuleMark          = "mark"            // a combining mark without Unicode normalization
-	RuleFix1970       = "fix-1970"        // a 1970 date fixed from a PXL_ name the mapping cannot keep
+	RuleFix1970       = "fix-1970"        // an invalid 1970 fix of a PXL_ name, or a fixed year outside 1969..2027
 	RuleNegativeSize  = "negative-size"   // a negative file size
 	RuleCaseFold      = "case-fold"       // "İ", "Σ", "ς" or "i" + U+0307: lower case differs between Python and Go
 	RuleClusters      = "clusters"        // a letter run whose lower NFC form has another cluster count
@@ -76,9 +78,6 @@ func textRule(s string) string {
 		case unicode.Is(unicode.M, r):
 			if !prevLetter {
 				return RuleLeadingMark
-			}
-			if !NormalizationAvailable {
-				return RuleMark
 			}
 			if r == '̇' && (prev == 'i' || prev == 'I') {
 				// The Python lower case of "İ": Go lowers "İ" to "i".
@@ -132,18 +131,10 @@ func yearRule(s string) string {
 	return ""
 }
 
-func firstRule(rules ...string) string {
-	for _, r := range rules {
-		if r != "" {
-			return r
-		}
-	}
-	return ""
-}
-
-// AssetRule returns the "not supported" rule an asset breaks, or "".
+// AssetRule returns the "not supported" rule an asset breaks, or "". A 1970
+// fix the mapping does not keep is left to the relation check of the pick.
 func AssetRule(a Asset) string {
-	if r := firstRule(dateRule(a.Date), textRule(a.OriginalFilename), textRule(a.Filename)); r != "" {
+	if r := cmp.Or(dateRule(a.Date), textRule(a.OriginalFilename), textRule(a.Filename)); r != "" {
 		return r
 	}
 	for _, al := range a.Albums {
@@ -151,36 +142,17 @@ func AssetRule(a Asset) string {
 			return r
 		}
 		for _, f := range al.FolderNames {
-			if r := firstRule(textRule(f), yearRule(f)); r != "" {
+			if r := cmp.Or(textRule(f), yearRule(f)); r != "" {
 				return r
 			}
 		}
 	}
 	if dt, ok := ParseDT(a.Date); ok {
-		name := a.Name()
-		fixed, applies, invalid := Fix1970(name, dt, a.TZOffset)
+		fixed, applies, invalid := Fix1970(a.Name(), dt, a.TZOffset)
 		if invalid || applies && (fixed.Year() < minYear || fixed.Year() > maxShiftedYear) {
 			return RuleFix1970
 		}
 		if applies {
-			// The image keeps the fix only when PXL_ starts a letter run (a
-			// letter or a mark before it continues the run), the name date is
-			// kept and in the year class of the fixed date (both kept or both
-			// shifted), and the time digits are kept.
-			i := pxlRE.FindStringIndex(name)[0]
-			if i > 0 {
-				if r := lastRune(name[:i]); unicode.IsLetter(r) || unicode.Is(unicode.M, r) {
-					return RuleFix1970
-				}
-			}
-			date := name[i+len("PXL_") : i+len("PXL_YYYYMMDD")]
-			y, _ := compactDateYear(date)
-			if !isKeptDate(date) || (y < minShiftedYear) != (fixed.Year() < minShiftedYear) {
-				return RuleFix1970
-			}
-			if !isKeptTime(digitRun(name[i+len("PXL_YYYYMMDD_"):])) {
-				return RuleFix1970
-			}
 			dt = fixed
 		}
 		if r := epochRule(dt); r != "" {
@@ -191,20 +163,6 @@ func AssetRule(a Asset) string {
 		return RuleNegativeSize
 	}
 	return ""
-}
-
-// digitRun returns the leading ASCII digits of s.
-func digitRun(s string) string {
-	n := 0
-	for n < len(s) && s[n] >= '0' && s[n] <= '9' {
-		n++
-	}
-	return s[:n]
-}
-
-func lastRune(s string) rune {
-	r := []rune(s)
-	return r[len(r)-1]
 }
 
 // FileRule returns the "not supported" rule an inventory row breaks, or "".
@@ -252,6 +210,16 @@ type pairRef struct {
 // graph indexes the records of a material: assets are records 0..nA-1 and
 // files are records nA.. in inventory order. Trashed assets and files of
 // kind other are excluded from every unit.
+//
+// A component holds an asset with all its linked files, a file with its
+// owner and a file with all files of the same neighbor key. A union of
+// components is closed for the reference matching: the reference script, run
+// on it, gives exactly the links of the full run restricted to it. A file
+// linked in the full run enters only with its owner, so the first captures of
+// phases 1-2 and the greedy assignment repeat; two records left unlinked by
+// the full run do not fit each other under the reference rules (otherwise the
+// full run would have linked them); and the "last MOV" of a (folder,
+// lower(stem)) key is held by the neighbors.
 type graph struct {
 	m        *Material
 	nA       int
@@ -265,14 +233,16 @@ type graph struct {
 	// exhausted holds the first records of the units the mapping ran out
 	// of space for; they are never picked again.
 	exhausted map[int]bool
+	// broken holds the first records of the units whose image breaks a
+	// relation, with the first broken relation; they are never picked again.
+	broken map[int]string
 }
 
-var errInconsistentLinks = errors.New("links do not match the material")
-
-func newGraph(m *Material) (*graph, error) {
+// newGraph indexes a material that passed the partition check.
+func newGraph(m *Material) *graph {
 	nA, n := len(m.Assets), len(m.Assets)+len(m.Files)
 	g := &graph{m: m, nA: nA, excluded: make([]bool, n), rules: make([]string, n), owner: make([]int, n),
-		links: make([][]pairRef, nA), comp: make([]int, n), plan: newPlanIndex(m.Plan), exhausted: map[int]bool{}}
+		links: make([][]pairRef, nA), comp: make([]int, n), plan: newPlanIndex(m.Plan), exhausted: map[int]bool{}, broken: map[int]string{}}
 	fileIdx := map[string]int{}
 	for j, f := range m.Files {
 		i := nA + j
@@ -308,18 +278,12 @@ func newGraph(m *Material) (*graph, error) {
 	for i, a := range m.Assets {
 		if a.InTrash {
 			g.excluded[i] = true
-			if len(m.Links[a.UUID]) > 0 {
-				return nil, errInconsistentLinks
-			}
 			continue
 		}
 		g.rules[i] = AssetRule(a)
 		for _, l := range m.Links[a.UUID] {
-			fi, ok := fileIdx[l.Path]
-			level, known := LevelOf(l.Kind)
-			if !ok || !known || g.owner[fi] >= 0 {
-				return nil, errInconsistentLinks
-			}
+			fi := fileIdx[l.Path]
+			level, _ := LevelOf(l.Kind)
 			g.owner[fi] = i
 			g.links[i] = append(g.links[i], pairRef{fi, level})
 			union(i, fi)
@@ -354,37 +318,21 @@ func newGraph(m *Material) (*graph, error) {
 		g.comp[i] = c
 		g.members[c] = append(g.members[c], i)
 	}
-	return g, nil
+	return g
 }
 
-// closure returns the unit of a seed: the smallest set that holds the seed
-// records, every asset with all its linked files, every file with its owner
-// and every file with all files of the same neighbor key, repeated until the
-// set stops growing (the union of the connected components of the seed).
-//
-// A unit is closed for the reference matching: the reference script, run on
-// a union of units, gives exactly the links of the full run restricted to
-// that union. A file linked in the full run enters only with its owner, so
-// the first captures of phases 1-2 and the greedy assignment repeat; two
-// records left unlinked by the full run do not fit each other under the
-// reference rules (otherwise the full run would have linked them); and the
-// "last MOV" of a (folder, lower(stem)) key is held by the neighbors. The
-// closure itself does no matching.
-func (g *graph) closure(seed []int) []int {
+// componentsOf returns the sorted records of the components of the seed
+// records; excluded records add nothing.
+func (g *graph) componentsOf(seed []int) []int {
 	seen := map[int]bool{}
-	var comps []int
-	for _, i := range seed {
-		if i < 0 || i >= len(g.comp) || g.comp[i] < 0 || seen[g.comp[i]] {
-			continue
-		}
-		seen[g.comp[i]] = true
-		comps = append(comps, g.comp[i])
-	}
 	var out []int
-	for _, c := range comps {
-		out = append(out, g.members[c]...)
+	for _, i := range seed {
+		if c := g.comp[i]; c >= 0 && !seen[c] {
+			seen[c] = true
+			out = append(out, g.members[c]...)
+		}
 	}
-	sort.Ints(out)
+	slices.Sort(out)
 	return out
 }
 
@@ -447,7 +395,7 @@ func (g *graph) candidates(c Category) [][]int {
 		return out
 	}
 	for _, grp := range c.groups(g) {
-		add(g.closure(grp))
+		add(g.componentsOf(grp))
 	}
 	return out
 }
@@ -456,9 +404,10 @@ func (g *graph) candidates(c Category) [][]int {
 // key of their first record (neither by date nor by name) and takes
 // min(8, ceil(n/2)) of them while the case has at most 60 records, so a case
 // never shows how many units of a category the library has. Each unit is
-// mapped before it is taken: a unit the mapping runs out of space for is
-// skipped; the outputs it registered stay, so the mapping stays injective and
-// the mapping of the whole case only repeats registered outputs.
+// mapped before it is taken: a unit the mapping runs out of space for or
+// whose image breaks a relation is skipped; the outputs it registered stay,
+// so the mapping stays injective and the mapping of the whole case only
+// repeats registered outputs.
 func (g *graph) pickUnits(m *Mapper, category string, cands [][]int) ([]int, error) {
 	type cand struct {
 		key  [32]byte
@@ -487,14 +436,20 @@ func (g *graph) pickUnits(m *Mapper, category string, cands [][]int) ([]int, err
 				extra++
 			}
 		}
-		if len(chosen)+extra > maxCaseRecords || g.exhausted[c.unit[0]] {
+		if len(chosen)+extra > maxCaseRecords || g.exhausted[c.unit[0]] || g.broken[c.unit[0]] != "" {
 			continue
 		}
-		if _, err := m.Set(g.m.Subset(c.unit)); err != nil {
-			if !errors.Is(err, ErrExhausted) {
-				return nil, err
-			}
+		sub := g.m.Subset(c.unit)
+		img, err := m.Set(sub)
+		if errors.Is(err, ErrExhausted) {
 			g.exhausted[c.unit[0]] = true
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if vs := CheckRelations(sub, img, m.YearShift()); len(vs) > 0 {
+			g.broken[c.unit[0]] = vs[0].Relation
 			continue
 		}
 		for _, i := range c.unit {
@@ -502,12 +457,7 @@ func (g *graph) pickUnits(m *Mapper, category string, cands [][]int) ([]int, err
 		}
 		taken++
 	}
-	out := make([]int, 0, len(chosen))
-	for i := range chosen {
-		out = append(out, i)
-	}
-	sort.Ints(out)
-	return out, nil
+	return slices.Sorted(maps.Keys(chosen)), nil
 }
 
 // Predicates and feature groups of the categories.
@@ -845,47 +795,27 @@ type CaseResult struct {
 type Result struct {
 	Links [6]int // reference links of the whole material by level
 	Units UnitStats
-	Rules map[string]int // unsupported units by the rule of their first unsupported record
-	Cases []CaseResult   // one per category, in the order of Categories
+	// Rules counts the unsupported units by the rule of their first
+	// unsupported record, and under "relation:<relation>" the candidate
+	// units skipped for a broken relation, by their first record.
+	Rules map[string]int
+	Cases []CaseResult // one per category, in the order of Categories
 	Words []string
 }
 
-// RelationError reports that the image of a case breaks relations.
-type RelationError struct {
-	Category   string
-	Violations []Violation
-}
-
-// Error lists the broken relations with their counts.
-func (e *RelationError) Error() string {
-	parts := make([]string, len(e.Violations))
-	for i, v := range e.Violations {
-		parts[i] = fmt.Sprintf("%s=%d", v.Relation, v.Count)
-	}
-	return "case anon-" + e.Category + ": relations broken: " + strings.Join(parts, " ")
-}
-
-func levelIndex(level string) int {
-	for i, l := range Levels {
-		if l == level {
-			return i
-		}
-	}
-	return -1
-}
+// ErrRelations reports that the image of a case breaks relations; the
+// message lists the broken relations with their counts only.
+var ErrRelations = errors.New("relations broken")
 
 // Build builds the cases of a material that passed the partition check:
 // for each category in order it picks units, maps their records and checks
 // that the image keeps every relation.
 func Build(m *Material, mp *Mapper) (*Result, error) {
-	g, err := newGraph(m)
-	if err != nil {
-		return nil, err
-	}
+	g := newGraph(m)
 	res := &Result{}
 	for i := 0; i < g.nA; i++ {
 		for _, p := range g.links[i] {
-			res.Links[levelIndex(p.level)]++
+			res.Links[slices.Index(Levels, p.level)]++
 		}
 	}
 	res.Units.Total = len(g.members)
@@ -913,6 +843,9 @@ func Build(m *Material, mp *Mapper) (*Result, error) {
 		res.Cases = append(res.Cases, cr)
 	}
 	res.Units.Exhausted = len(g.exhausted)
+	for _, rel := range g.broken {
+		res.Rules["relation:"+rel]++
+	}
 	res.Words = mp.Words()
 	return res, nil
 }
@@ -935,7 +868,11 @@ func (g *graph) buildCase(mp *Mapper, category string, recs []int) (CaseResult, 
 		return CaseResult{}, err
 	}
 	if vs := CheckRelations(orig, img, mp.YearShift()); len(vs) > 0 {
-		return CaseResult{}, &RelationError{Category: category, Violations: vs}
+		parts := make([]string, len(vs))
+		for i, v := range vs {
+			parts[i] = fmt.Sprintf("%s=%d", v.Relation, v.Count)
+		}
+		return CaseResult{}, fmt.Errorf("%w: %s", ErrRelations, strings.Join(parts, " "))
 	}
 	imgOf := map[int]int{} // record -> position in the set
 	for pos, r := range orig.Src {
@@ -959,7 +896,7 @@ func (g *graph) buildCase(mp *Mapper, category string, recs []int) (CaseResult, 
 				Level: p.level,
 				Plan:  g.plan.decision(orig.Assets[pos].UUID, orig.Files[fpos].Path),
 			})
-			cr.Levels[levelIndex(p.level)]++
+			cr.Levels[slices.Index(Levels, p.level)]++
 		}
 	}
 	cr.Case = c
@@ -968,24 +905,21 @@ func (g *graph) buildCase(mp *Mapper, category string, recs []int) (CaseResult, 
 
 // SupportedUnits returns every unit without an unsupported record, whatever
 // its size, in the order of their first records.
-func SupportedUnits(m *Material) ([][]int, error) {
-	g, err := newGraph(m)
-	if err != nil {
-		return nil, err
-	}
+func SupportedUnits(m *Material) [][]int {
+	g := newGraph(m)
 	var out [][]int
 	for _, u := range g.members {
 		if unsupportedRule(g, u) == "" {
 			out = append(out, u)
 		}
 	}
-	return out, nil
+	return out
 }
 
 // UnsupportedRules lists the "not supported" rules in output order.
 var UnsupportedRules = []string{
 	RuleDateYear, RuleDateParse, RuleYearSegment, RuleEventDigits, RuleChar, RuleLeadingMark, RuleNonASCIIDigit,
-	RuleRootPath, RuleDrive, RuleDecimal, RuleMark, RuleFix1970, RuleNegativeSize, RuleCaseFold, RuleClusters, RuleEpochGap,
+	RuleRootPath, RuleDrive, RuleDecimal, RuleFix1970, RuleNegativeSize, RuleCaseFold, RuleClusters, RuleEpochGap,
 }
 
 // Subset returns material records (sorted record indices) as a set.

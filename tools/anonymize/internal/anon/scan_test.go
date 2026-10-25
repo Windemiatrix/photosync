@@ -143,29 +143,3 @@ func TestScanDeterministicPointers(t *testing.T) {
 		t.Errorf("pointers = %v", ptrs)
 	}
 }
-
-func TestValidDictionary(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name string
-		tk   Tokens
-		ok   bool
-	}{
-		{"generated words", Tokens{Format: 1, Words: []string{"ghij", "zz", "мыло", "ёжик"}}, true},
-		{"empty", Tokens{Format: 1, Words: []string{}}, true},
-		{"no words", Tokens{Format: 1}, false},
-		{"other format", Tokens{Format: 2, Words: []string{"ghij"}}, false},
-		{"not sorted", Tokens{Format: 1, Words: []string{"hh", "gg"}}, false},
-		{"repeated", Tokens{Format: 1, Words: []string{"gg", "gg"}}, false},
-		{"upper case", Tokens{Format: 1, Words: []string{"Gg"}}, false},
-		{"one cluster", Tokens{Format: 1, Words: []string{"g"}}, false},
-		{"Latin letter outside the alphabet", Tokens{Format: 1, Words: []string{"zinaida"}}, false},
-		{"structural word", Tokens{Format: 1, Words: []string{"mp"}}, false},
-		{"digit", Tokens{Format: 1, Words: []string{"g1"}}, false},
-	}
-	for _, tt := range tests {
-		if got := ValidDictionary(tt.tk); got != tt.ok {
-			t.Errorf("%s: ValidDictionary = %v; want %v", tt.name, got, tt.ok)
-		}
-	}
-}

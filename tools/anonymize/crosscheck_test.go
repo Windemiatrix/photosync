@@ -3,14 +3,19 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
+	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/Windemiatrix/photosync/tools/anonymize/internal/anon"
 )
@@ -36,50 +41,59 @@ func wordClass(w string) int {
 // letters are not words on either side.
 var idRE = regexp.MustCompile(`[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}|[0-9A-Fa-f]{16,}`)
 
-func textRuns(s string) []string { return anon.LowerRuns(idRE.ReplaceAllString(s, " ")) }
-
-// inputWords returns the letter runs (lower case NFC) of every text the tool
-// pseudonymizes: asset names, album titles and folder names, cloud paths
-// (every folder and the file name). Structural words, known extensions and
-// format words are kept by design and left out.
-func inputWords(m *anon.Material) map[string]bool {
-	out := map[string]bool{}
-	add := func(s string) {
-		for _, r := range textRuns(s) {
-			if !anon.AllowedWord(r) {
-				out[r] = true
-			}
+// textRuns returns the letter runs (a letter with the marks that follow it)
+// of s outside identifiers, in lower case NFC. It does not use anon on
+// purpose: the privacy tests must not share a mistake of the code they check.
+func textRuns(s string) []string {
+	var out []string
+	var cur []rune
+	flush := func() {
+		if len(cur) > 0 {
+			out = append(out, strings.ToLower(norm.NFC.String(string(cur))))
+			cur = cur[:0]
 		}
 	}
+	for _, r := range idRE.ReplaceAllString(s, " ") {
+		if unicode.IsLetter(r) || len(cur) > 0 && unicode.Is(unicode.M, r) {
+			cur = append(cur, r)
+		} else {
+			flush()
+		}
+	}
+	flush()
+	return out
+}
+
+// addWords adds the letter runs of s that are not kept by design
+// (structural words, known extensions, format words) to words.
+func addWords(words map[string]bool, s string) {
+	for _, r := range textRuns(s) {
+		if !anon.AllowedWord(r) {
+			words[r] = true
+		}
+	}
+}
+
+// inputWords returns the words of every text the tool pseudonymizes: asset
+// names, album titles and folder names, cloud paths (every folder and the
+// file name).
+func inputWords(m *anon.Material) map[string]bool {
+	out := map[string]bool{}
 	for _, a := range m.Assets {
-		add(a.OriginalFilename)
-		add(a.Filename)
+		addWords(out, a.OriginalFilename)
+		addWords(out, a.Filename)
 		for _, al := range a.Albums {
-			add(al.Title)
+			addWords(out, al.Title)
 			for _, f := range al.FolderNames {
-				add(f)
+				addWords(out, f)
 			}
 		}
 	}
 	for _, f := range m.Files {
-		add(f.Path)
+		addWords(out, f.Path)
 	}
 	return out
 }
-
-// formatKeys are the JSON field names of the output types: code constants,
-// not checked.
-var formatKeys = func() map[string]bool {
-	keys := map[string]bool{}
-	for _, v := range []any{anon.Case{}, anon.Tokens{}, anon.Asset{}, anon.AlbumRef{}, anon.File{}, anon.Pair{}, anon.Provenance{}} {
-		t := reflect.TypeOf(v)
-		for i := 0; i < t.NumField(); i++ {
-			name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
-			keys[name] = true
-		}
-	}
-	return keys
-}()
 
 // crossResult holds the aggregates of a cross-check; it holds no word.
 type crossResult struct {
@@ -105,9 +119,9 @@ func (r crossResult) String() string {
 		r.Glued, r.Collisions[class4], r.Collisions[class3], r.GluedCollisions)
 }
 
-// outputStrings returns the string values and the keys outside formatKeys of
+// jsonStrings returns the string values and the keys outside anon.OutputKeys of
 // a JSON document, or the whole text of a file that is not JSON.
-func outputStrings(data []byte) []string {
+func jsonStrings(data []byte) []string {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	var v any
@@ -120,7 +134,7 @@ func outputStrings(data []byte) []string {
 		switch x := v.(type) {
 		case map[string]any:
 			for k, e := range x {
-				if !formatKeys[k] {
+				if !anon.OutputKeys[k] {
 					out = append(out, k)
 				}
 				walk(e)
@@ -165,7 +179,7 @@ func crossCheck(input, dict map[string]bool, files map[string][]byte) crossResul
 	}
 	sort.Strings(names)
 	for _, n := range names {
-		for _, s := range outputStrings(files[n]) {
+		for _, s := range jsonStrings(files[n]) {
 			for _, run := range textRuns(s) {
 				if anon.AllowedWord(run) {
 					continue
@@ -248,47 +262,23 @@ func digest(files map[string][]byte, limit int) []string {
 	return out
 }
 
-// readOutput reads every regular file under dir by its slash path; errors
+// readTree reads every regular file under dir by its slash path; errors
 // name no path.
-func readOutput(dir string) (map[string][]byte, error) {
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		return nil, fmt.Errorf("cannot open the output directory")
-	}
-	defer closeQuietly(root)
+func readTree(dir string) (map[string][]byte, error) {
+	fsys := os.DirFS(dir)
 	out := map[string][]byte{}
-	var walk func(string) error
-	walk = func(p string) error {
-		f, err := root.Open(p)
-		if err != nil {
-			return fmt.Errorf("cannot read the output directory")
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || !d.Type().IsRegular() {
+			return err
 		}
-		entries, err := f.ReadDir(-1)
-		closeQuietly(f)
-		if err != nil {
-			return fmt.Errorf("cannot read the output directory")
-		}
-		for _, e := range entries {
-			q := e.Name()
-			if p != "." {
-				q = p + "/" + q
-			}
-			switch {
-			case e.IsDir():
-				if err := walk(q); err != nil {
-					return err
-				}
-			case e.Type().IsRegular():
-				data, err := readLimited(root.FS(), q)
-				if err != nil {
-					return fmt.Errorf("cannot read an output file")
-				}
-				out[q] = data
-			}
-		}
-		return nil
+		data, err := fs.ReadFile(fsys, p)
+		out[p] = data
+		return err
+	})
+	if err != nil {
+		return nil, errors.New("cannot read the directory")
 	}
-	return out, walk(".")
+	return out, nil
 }
 
 func materialOf(t *testing.T, dir string) *anon.Material {
@@ -309,10 +299,7 @@ func TestCrossCheck(t *testing.T) {
 	t.Parallel()
 	in, out, _, _, _ := buildCorpus(t, leakSalt)
 	input := inputWords(materialOf(t, in))
-	files, err := readOutput(out)
-	if err != nil {
-		t.Fatal(err)
-	}
+	files := mustReadTree(t, out)
 	dict := dictionaryOf(files)
 	r := crossCheck(input, dict, files)
 	t.Logf("corpus: %s", r)
@@ -345,10 +332,7 @@ func TestCrossCheck(t *testing.T) {
 func TestDigest(t *testing.T) {
 	t.Parallel()
 	_, out, c, _, _ := buildCorpus(t, leakSalt)
-	files, err := readOutput(out)
-	if err != nil {
-		t.Fatal(err)
-	}
+	files := mustReadTree(t, out)
 	d := digest(files, 30)
 	if len(d) > 30 || len(d) < 20 || !strings.HasPrefix(d[0], digestHeader) || !reflect.DeepEqual(d, digest(files, 30)) {
 		t.Errorf("digest: %d lines", len(d))

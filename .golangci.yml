@@ -72,12 +72,49 @@ linters:
             - "!$test"
           deny:
             - {pkg: github.com/Windemiatrix/photosync/internal/app, desc: "adapters and state must not import app"}
+        # The anonymize tool has no network, starts no processes and does not log.
+        anon-tool:
+          list-mode: lax
+          files:
+            - "**/tools/anonymize/**"
+          deny:
+            - {pkg: net, desc: "the anonymize tool has no network"}
+            - {pkg: crypto/tls, desc: "the anonymize tool has no network"}
+            - {pkg: os/exec, desc: "the anonymize tool starts no processes"}
+            - {pkg: syscall, desc: "the anonymize tool does not call the system"}
+            - {pkg: unsafe, desc: "the anonymize tool does not use unsafe"}
+            - {pkg: plugin, desc: "the anonymize tool loads no code"}
+            - {pkg: log, desc: "the anonymize tool does not log"}
+            - {pkg: log/slog, desc: "the anonymize tool does not log"}
+        # The anonymize tool uses no module outside the whitelist.
+        anon-modules:
+          list-mode: strict
+          files:
+            - "**/tools/anonymize/**"
+          allow:
+            - $gostd
+            - github.com/Windemiatrix/photosync/tools/anonymize/internal/anon
+            - golang.org/x/text/unicode/norm
+        # The pure package of the anonymize tool does no I/O.
+        anon-pure:
+          list-mode: lax
+          files:
+            - "**/tools/anonymize/internal/anon/**"
+          deny:
+            - {pkg: os, desc: "anon does no I/O"}
+            - {pkg: io/fs, desc: "anon does no I/O"}
+            - {pkg: path/filepath, desc: "anon does no I/O"}
+            - {pkg: crypto/rand, desc: "anon is deterministic; the salt is passed in"}
     forbidigo:
       forbid:
         - pattern: ^time\.(Now|Since|Until|Sleep|After|Tick|Local)$
           msg: "use internal/clock; only cmd, internal/config and internal/clock may touch real time"
         - pattern: ^os\.(Getenv|LookupEnv|Exit)$
           msg: "environment access and exit belong to cmd, internal/config and internal/clock"
+        - pattern: ^os\.(Environ|Setenv|TempDir|CreateTemp)$
+          msg: "environment access belongs to cmd, internal/config and internal/clock; temporary files to tests"
+        - pattern: ^panic$
+          msg: "return an error"
         - pattern: ^fmt\.Print(f|ln)?$
           msg: "write to an io.Writer or use log/slog; stdout belongs to the command result"
         - pattern: ^http\.(DefaultClient|DefaultTransport|Get|Head|Post|PostForm)$
@@ -95,13 +132,11 @@ linters:
   exclusions:
     generated: lax
     rules:
-      # forbidigo applies to library code, not to the composition root,
-      # configuration loading, the clock itself, developer tools and tests.
+      # forbidigo applies to library code and developer tools, not to the
+      # composition root, configuration loading, the clock itself and tests.
       - path: (^|/)cmd/
         linters: [forbidigo]
       - path: (^|/)internal/(config|clock)/
-        linters: [forbidigo]
-      - path: (^|/)tools/
         linters: [forbidigo]
       - path: _test\.go$
         linters: [forbidigo]

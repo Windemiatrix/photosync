@@ -6,11 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"reflect"
+	"slices"
 )
-
-// ErrPartition reports that no inventory passes the partition check.
-var ErrPartition = errors.New("partition check failed")
 
 // Counters counts the partition mismatches of a material. They hold numbers
 // only, never values.
@@ -59,15 +58,15 @@ func decodeAny(data []byte) (any, error) {
 		return nil, err
 	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
-		return nil, ErrTrailingData
+		return nil, errTrailing
 	}
 	return v, nil
 }
 
-// ErrTrailingData reports data after the JSON value of a file.
-var ErrTrailingData = errors.New("trailing data after the JSON value")
+// errTrailing reports data after the JSON value of a file.
+var errTrailing = errors.New("trailing data after the JSON value")
 
-// CheckPartition checks that the reference links, the inventory and the
+// CheckPartition checks that the reference links, the inventory of m and the
 // reviewed plan describe one partition of the records.
 func CheckPartition(m *Material) Counters {
 	var c Counters
@@ -91,13 +90,13 @@ func CheckPartition(m *Material) Counters {
 		if IsMedia(f.Kind) {
 			media[f.Path] = true
 		}
-		if i >= len(m.Derived) || derivationDiffers(f, m.Derived[i]) {
+		if derivationDiffers(f, m.Derived[i]) {
 			c.Derivation++
 		}
 	}
 	linked := map[string]string{} // path -> level
 	links := map[string]bool{}    // uuid \x00 path \x00 kind
-	for _, key := range sortedLinkKeys(m.Links) {
+	for _, key := range slices.Sorted(maps.Keys(m.Links)) {
 		if !assets[key] {
 			c.UnknownAsset++
 		}
@@ -175,37 +174,6 @@ func derivationDiffers(f File, d Derived) bool {
 	stem, _ := Splitext(BaseName(f.Path))
 	fi := FolderInfoOf(f.Path)
 	return d.Stem != stem || d.Folder != fi.Folder || d.Year != fi.Year || d.EventMonth != fi.EventMonth || f.Kind != KindOf(BaseName(f.Path))
-}
-
-func sortedLinkKeys(l Links) []string {
-	keys := lookup{}
-	for k := range l {
-		keys[k] = true
-	}
-	return sortedKeys(keys)
-}
-
-// PickInventory picks the first inventory that passes the partition check:
-// load(0) is the current inventory, load(1) the previous one; load returns
-// nil for a missing inventory. The chosen inventory is stored in m.
-func PickInventory(m *Material, load func(i int) (*Inventory, error)) (picked int, attempts []Counters, err error) {
-	for i := 0; i < 2; i++ {
-		inv, err := load(i)
-		if err != nil {
-			return 0, attempts, err
-		}
-		if inv == nil {
-			break
-		}
-		m.Files, m.Derived = inv.Files, inv.Derived
-		c := CheckPartition(m)
-		attempts = append(attempts, c)
-		if c.Zero() {
-			return i, attempts, nil
-		}
-	}
-	m.Files, m.Derived = nil, nil
-	return 0, attempts, ErrPartition
 }
 
 // planIndex answers the plan decision of a pair.

@@ -2,6 +2,7 @@
 GOLANGCI_LINT_VERSION ?= v2.15.0
 ACTIONLINT_VERSION ?= v1.7.12
 GOVULNCHECK_VERSION ?= v1.9.0
+# Bump together with the GoReleaser version in .github/workflows/release.yml.
 GORELEASER_VERSION ?= v2.18.3
 GORELEASER = go run github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
 # Values from .env are exported only to the targets that need them.
@@ -51,15 +52,16 @@ vuln: ## Known vulnerabilities in dependencies (not in "make test")
 
 .PHONY: fixtures-check
 fixtures-check: ## Leak scan of testdata/fixtures
-	@if [ -d testdata/fixtures ]; then go run ./tools/anonymize --check testdata/fixtures; \
-	else echo "fixtures-check: no testdata/fixtures, skipped"; fi
+	go run ./tools/anonymize --check testdata/fixtures
+
+ANONYMIZE_SALT ?= $(HOME)/.config/photosync-dev/anonymize.key
 
 .PHONY: fixtures-verify
-fixtures-verify: ## Anonymizer check on the private materials (ANONYMIZE_IN, ANONYMIZE_OUT in .env)
-	@if [ -z "$(ANONYMIZE_IN)" ] || [ -z "$(ANONYMIZE_OUT)" ]; then \
-		echo "fixtures-verify: ANONYMIZE_IN or ANONYMIZE_OUT not set, skipped"; \
+fixtures-verify: ## Anonymizer check on the private materials; rebuilt fixtures equal testdata/fixtures (ANONYMIZE_IN, ANONYMIZE_SALT in .env)
+	@if [ -z "$(ANONYMIZE_IN)" ]; then \
+		echo "fixtures-verify: ANONYMIZE_IN not set, skipped"; \
 	else go test -tags fixtures_verify -count=1 -v -run 'TestFixtures' ./tools/anonymize \
-		-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.out="$(ANONYMIZE_OUT)"; fi
+		-args -anonymize.in="$(ANONYMIZE_IN)" -anonymize.salt="$(ANONYMIZE_SALT)"; fi
 
 ##@ Yandex test account
 
@@ -85,10 +87,3 @@ pr-title: ## PR_TITLE follows the title convention (PR_TITLE='...' make pr-title
 .PHONY: release-snapshot
 release-snapshot: ## Build the release archive into dist/ without publishing
 	$(GORELEASER) release --snapshot --skip=publish --clean
-
-.PHONY: release
-release: ## Build and create a draft GitHub Release for the current tag (needs GITHUB_TOKEN)
-	@header="$$(mktemp "$${RUNNER_TEMP:-$${TMPDIR:-/tmp}}/photosync-release-header.XXXXXX")" && \
-	{ cat docs/release-notes-header.md; printf '\n---\n\n'; cat docs/release-notes-header.en.md; } >"$$header" && \
-	$(GORELEASER) release --clean --release-header-tmpl "$$header" $(GORELEASER_FLAGS); \
-	status=$$?; rm -f "$$header"; exit $$status

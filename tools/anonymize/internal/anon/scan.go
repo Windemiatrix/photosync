@@ -7,9 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"maps"
 	"reflect"
 	"regexp"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -24,9 +25,7 @@ type Finding struct {
 
 // Rules of the leak scanner.
 const (
-	RuleSymlink        = "symlink"         // a symbolic link
-	RuleUnexpectedFile = "unexpected-file" // a file that is not .json
-	RuleTooLarge       = "too-large"       // a file over 1 MiB
+	RuleUnexpectedFile = "unexpected-file" // a file that is not a regular .json file
 	RuleNotJSON        = "not-json"        // a file that does not parse as JSON
 	RuleNoDictionary   = "no-dictionary"   // no tokens.json in the directory
 	RuleUUID           = "uuid"            // a UUID without the marker
@@ -37,47 +36,11 @@ const (
 	RuleWord           = "word"            // a word outside the dictionaries
 	RuleSalt           = "salt"            // the salt in any encoding
 	RuleUnexpectedKey  = "unexpected-key"  // an object key outside the fields of the output types
-	RuleBadDictionary  = "bad-dictionary"  // tokens.json is not a dictionary of generated words
 )
 
-// pseudonymRunes are the letters of the generated words.
-var pseudonymRunes = func() map[rune]bool {
-	out := map[rune]bool{}
-	for _, alpha := range [][]rune{alphaASCII, alphaDecomposable, alphaOther} {
-		for _, r := range alpha {
-			out[r] = true
-		}
-	}
-	return out
-}()
-
-// ValidDictionary reports whether tokens.json has the form of a dictionary
-// the mapping writes: format 1, sorted unique lower-case words of two and
-// more clusters, only letters of the pseudonym alphabets, no structural,
-// extension or format word. A hand-added real word made of those letters
-// still passes, in both alphabets: an ASCII word of the letters g-z only
-// (such as "jim" or "story") or a Cyrillic word of the letters the
-// pseudonyms use. The owner review of tokens.json stays required.
-func ValidDictionary(tk Tokens) bool {
-	if tk.Format != FormatVersion || tk.Words == nil || !sort.StringsAreSorted(tk.Words) {
-		return false
-	}
-	for i, w := range tk.Words {
-		if i > 0 && tk.Words[i-1] == w || w != lowerNFC(w) || len(clusters(w)) < 2 || AllowedWord(w) {
-			return false
-		}
-		for _, r := range w {
-			if !pseudonymRunes[r] {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-// outputKeys are the JSON field names of the output types; any other object
+// OutputKeys are the JSON field names of the output types; any other object
 // key is reported and never printed.
-var outputKeys = jsonKeys(Case{}, Tokens{}, Asset{}, AlbumRef{}, File{}, Pair{}, Provenance{})
+var OutputKeys = jsonKeys(Case{}, Tokens{}, Asset{}, AlbumRef{}, File{}, Pair{}, Provenance{})
 
 func jsonKeys(types ...any) map[string]bool {
 	keys := map[string]bool{}
@@ -91,9 +54,6 @@ func jsonKeys(types ...any) map[string]bool {
 	}
 	return keys
 }
-
-// MaxScanSize is the largest file the scanner reads.
-const MaxScanSize = 1 << 20
 
 var (
 	markerUUIDRE = regexp.MustCompile(`00000000-[0-9A-Fa-f]{4}-8[0-9A-Fa-f]{3}-[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}`)
@@ -149,14 +109,9 @@ func (s *scanner) add(ptr, rule string) {
 func (s *scanner) value(ptr string, v any) {
 	switch x := v.(type) {
 	case map[string]any:
-		keys := make([]string, 0, len(x))
-		for k := range x {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
+		for _, k := range slices.Sorted(maps.Keys(x)) {
 			p := ptr + "/" + k
-			if !outputKeys[k] {
+			if !OutputKeys[k] {
 				p = ptr + "/<key>"
 				s.add(p, RuleUnexpectedKey)
 			}

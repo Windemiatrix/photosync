@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Coverage gate: reads a Go coverage profile and checks the thresholds.
 #
-#   internal/domain/...  each package on its own, at least DOMAIN_MIN (95)
-#   everything else      one total for the group, at least OTHER_MIN (80)
+#   internal/domain/...  each package on its own, at least 95 %
+#   everything else      one total for the group, at least 80 %
 #
 # Packages listed in "excluded" are left out of both groups: an entry matches
 # that package only, an entry ending in "/..." also its subpackages.
@@ -28,18 +28,15 @@ if [[ -z "$module" ]]; then
   exit 2
 fi
 
-domain_min="${DOMAIN_MIN:-95}"
-other_min="${OTHER_MIN:-80}"
+domain_min=95
+other_min=80
 
 # Packages relative to the module root, matched as path prefixes. Their code
-# runs only against real system APIs or is composition-only wiring, so a
-# percentage would say nothing about its quality.
+# is composition-only wiring or a developer tool, so a percentage would say
+# nothing about its quality.
 excluded=(
-  "cmd/..."                             # composition root: wiring only
-  "tools/anonymize"                     # main package of a developer tool
-  "internal/adapters/secrets/keychain"  # cgo, Security.framework
-  "internal/adapters/space/macos"       # cgo, volume capacity API
-  "internal/adapters/network/macos"     # cgo, NWPathMonitor
+  "cmd/..."          # composition root: wiring only
+  "tools/anonymize"  # main package of a developer tool
 )
 
 awk -v module="$module" -v excl="${excluded[*]}" -v dmin="$domain_min" -v omin="$other_min" '

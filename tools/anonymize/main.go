@@ -14,11 +14,11 @@
 // the records, picks small closed units per category, maps every name,
 // path, title, identifier, hash, size and date with HMAC-SHA-256 keyed by the
 // salt (keeping every relation the matching depends on), and writes
-// <out>/anon-<category>/case.json and <out>/tokens.json. --out must be
-// missing or empty and outside --in and any git working tree; the salt file
-// (64 hex digits, mode 0600) is created when missing and must live outside
-// --in, --out and any git working tree. The build ends with the leak scanner
-// over its own output.
+// <out>/anon-<category>/case.json and <out>/tokens.json. --out is created
+// when missing, must be empty and lie outside --in and any git working tree;
+// the salt file (64 hex digits, mode 0600) is created when missing and must
+// lie outside any git working tree. The build ends with the leak scanner over
+// its own output.
 //
 // Example:
 //
@@ -46,7 +46,7 @@ const usage = `usage: anonymize --in <dir> --out <dir> --salt-file <file>
 `
 
 func main() {
-	os.Exit(safely(func() int { return run(os.Args[1:], os.Stdout, os.Stderr) }, os.Stderr))
+	os.Exit(safely(func() int { return run(os.Args[1:], os.Stdout, os.Stderr) }, os.Stderr)) //nolint:forbidigo // the exit code of the command
 }
 
 // safely runs f and turns a panic into exit code 1 with a fixed message: the

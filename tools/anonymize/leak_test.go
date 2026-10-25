@@ -5,15 +5,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"io/fs"
-	"os"
+	"maps"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/Windemiatrix/photosync/tools/anonymize/internal/anon"
 )
@@ -41,108 +40,32 @@ func buildCorpus(t *testing.T, hexSalt string) (in, out string, c corpus, stdout
 	return in, out, c, stdout, stderr
 }
 
+func mustReadTree(t *testing.T, dir string) map[string][]byte {
+	t.Helper()
+	files, err := readTree(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return files
+}
+
 var (
 	digitRunRE  = regexp.MustCompile(`[0-9]+`)
 	compactDate = regexp.MustCompile(`^(19|20)[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])$`)
 )
 
-// letterRunsOf returns the letter runs (letters with their marks) of s.
-func letterRunsOf(s string) []string {
-	var out []string
-	var cur []rune
-	flush := func() {
-		if len(cur) > 0 {
-			out = append(out, string(cur))
-			cur = cur[:0]
-		}
-	}
-	for _, r := range s {
-		if unicode.IsLetter(r) || len(cur) > 0 && unicode.Is(unicode.M, r) {
-			cur = append(cur, r)
-		} else {
-			flush()
-		}
-	}
-	flush()
-	return out
-}
-
-// stringValues returns the string values of a JSON document, or the whole
-// text of another file.
-func stringValues(data []byte) []string {
-	var v any
-	if err := json.Unmarshal(data, &v); err != nil {
-		return []string{string(data)}
-	}
-	var out []string
-	var walk func(any)
-	walk = func(v any) {
-		switch x := v.(type) {
-		case map[string]any:
-			for _, e := range x {
-				walk(e)
-			}
-		case []any:
-			for _, e := range x {
-				walk(e)
-			}
-		case string:
-			out = append(out, x)
-		}
-	}
-	walk(v)
-	return out
-}
-
-func readTree(t *testing.T, dir string) map[string][]byte {
-	t.Helper()
-	out := map[string][]byte{}
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		data, err := os.ReadFile(p) //nolint:gosec // G122: a file the test wrote into t.TempDir()
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(dir, p)
-		out[filepath.ToSlash(rel)] = data
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return out
-}
-
-func allowed(w string) bool { return anon.AllowedWord(strings.ToLower(w)) }
-
-// findLeaks returns the input letter runs of four and more runes, the input
-// digit runs of seven and more digits (not dates) and the canaries that
-// occur in the output.
-func findLeaks(input, output map[string][]byte, canaries []string) []string {
-	outWords := map[string]bool{}
+// findDigitLeaks returns the input digit runs of seven and more digits (not
+// dates) and the canaries that occur in the output.
+func findDigitLeaks(input, output map[string][]byte, canaries []string) []string {
 	var outText strings.Builder
 	for _, data := range output {
 		outText.Write(data)
-		for _, s := range stringValues(data) {
-			for _, r := range letterRunsOf(s) {
-				outWords[strings.ToLower(r)] = true
-			}
-		}
 	}
 	text := outText.String()
 	var leaks []string
 	seen := map[string]bool{}
 	for _, data := range input {
-		for _, s := range stringValues(data) {
-			for _, r := range letterRunsOf(s) {
-				w := strings.ToLower(r)
-				if len([]rune(w)) >= 4 && !allowed(w) && outWords[w] && !seen[w] {
-					seen[w] = true
-					leaks = append(leaks, "word "+w)
-				}
-			}
+		for _, s := range jsonStrings(data) {
 			for _, loc := range digitRunRE.FindAllStringIndex(s, -1) {
 				d := s[loc[0]:loc[1]]
 				if afterCompactDate(s, loc[0]) && keptTime(d) {
@@ -183,18 +106,18 @@ func keptTime(d string) bool {
 	return err == nil
 }
 
-func TestFindLeaksFindsPlantedRuns(t *testing.T) {
+func TestFindDigitLeaks(t *testing.T) {
 	t.Parallel()
 	if !afterCompactDate("PXL_20210305_1011123", 13) || afterCompactDate("X_12345678_1011123", 11) || afterCompactDate("1011123", 0) {
 		t.Error("afterCompactDate")
 	}
 	input := map[string][]byte{"a.json": []byte(`{"t": "Пельменева 1234567 ok", "p": "PXL_20210305_101112345 IMG_20190514_79161234567 IMG_20190514_256199123"}`), "b.txt": []byte("KanareykaX")}
 	clean := map[string][]byte{"case.json": []byte(`{"t": "Ыжтьц 7654321", "p": "PXL_20610305_101112345"}`)}
-	if l := findLeaks(input, clean, []string{"KanareykaX"}); len(l) != 0 {
+	if l := findDigitLeaks(input, clean, []string{"KanareykaX"}); len(l) != 0 {
 		t.Errorf("clean output: %v", l)
 	}
 	planted := map[string][]byte{"case.json": []byte(`{"t": "пельменева", "n": "x1234567", "c": "KanareykaX", "p": "IMG_20590514_79161234567 IMG_20590514_256199123"}`)}
-	if l := findLeaks(input, planted, []string{"KanareykaX"}); strings.Join(l, ",") != "canary KanareykaX,digits 1234567,digits 256199123,digits 79161234567,word kanareykax,word пельменева" {
+	if l := findDigitLeaks(input, planted, []string{"KanareykaX"}); strings.Join(l, ",") != "canary KanareykaX,digits 1234567,digits 256199123,digits 79161234567" {
 		t.Errorf("planted output: %v", l)
 	}
 }
@@ -202,37 +125,31 @@ func TestFindLeaksFindsPlantedRuns(t *testing.T) {
 func TestNoLeaks(t *testing.T) {
 	t.Parallel()
 	in, out, c, stdout, stderr := buildCorpus(t, leakSalt)
-	input, output := readTree(t, in), readTree(t, out)
-	if l := findLeaks(input, output, c.canaries); len(l) != 0 {
+	input, output := mustReadTree(t, in), mustReadTree(t, out)
+	if l := findDigitLeaks(input, output, c.canaries); len(l) != 0 {
 		t.Errorf("leaks: %v", l)
 	}
-	// Rule names are code constants; one of them ("root-path") shares a word
-	// with the CSV headers of the input.
-	for _, r := range anon.UnsupportedRules {
-		stdout = strings.ReplaceAll(stdout, " "+r+"=", " =")
+	words := inputWords(materialOf(t, in))
+	if r := crossCheck(words, dictionaryOf(output), output); r.Failed() {
+		t.Errorf("input words in the output: %s", r)
 	}
-	if l := findLeaks(input, map[string][]byte{"stdout": []byte(stdout), "stderr": []byte(stderr)}, c.canaries); len(l) != 0 {
+	logs := map[string][]byte{"stdout": []byte(stdout), "stderr": []byte(stderr)}
+	if l := findDigitLeaks(input, logs, c.canaries); len(l) != 0 {
 		t.Errorf("leaks in stdout or stderr: %v", l)
 	}
-	text := strings.ToUpper(string(bytes.Join(mapValues(output), nil)))
+	if r := crossCheck(words, nil, logs); r.Failed() {
+		t.Errorf("input words in stdout or stderr: %s", r)
+	}
+	var text []byte
+	for _, k := range slices.Sorted(maps.Keys(output)) {
+		text = append(text, output[k]...)
+	}
+	text = bytes.ToUpper(text)
 	for _, id := range append(append([]string{}, c.uuids...), c.sha1s...) {
-		if strings.Contains(text, strings.ToUpper(id)) {
+		if bytes.Contains(text, []byte(strings.ToUpper(id))) {
 			t.Errorf("input identifier in the output: %s", id)
 		}
 	}
-}
-
-func mapValues(m map[string][]byte) [][]byte {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	out := make([][]byte, len(keys))
-	for i, k := range keys {
-		out[i] = m[k]
-	}
-	return out
 }
 
 func TestOutputFieldsAndDates(t *testing.T) {
@@ -246,7 +163,7 @@ func TestOutputFieldsAndDates(t *testing.T) {
 		years[y] = true
 	}
 	cases := 0
-	for name, data := range readTree(t, out) {
+	for name, data := range mustReadTree(t, out) {
 		if name == "tokens.json" {
 			continue
 		}
@@ -259,12 +176,7 @@ func TestOutputFieldsAndDates(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, a := range doc.ICloud {
-			var keys []string
-			for k := range a {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			if strings.Join(keys, ",") != strings.Join(wantKeys, ",") {
+			if keys := slices.Sorted(maps.Keys(a)); !slices.Equal(keys, wantKeys) {
 				t.Errorf("%s: icloud keys %v", name, keys)
 			}
 			if d, _ := a["date"].(string); len(d) >= 4 && years[d[:4]] {
@@ -297,7 +209,7 @@ func TestNoSaltInOutput(t *testing.T) {
 	forms := []string{string(raw), leakSalt, strings.ToUpper(leakSalt), base64.StdEncoding.EncodeToString(raw),
 		base64.RawStdEncoding.EncodeToString(raw), base64.URLEncoding.EncodeToString(raw), base64.RawURLEncoding.EncodeToString(raw)}
 	all := stdout + stderr
-	for _, data := range readTree(t, out) {
+	for _, data := range mustReadTree(t, out) {
 		all += string(data)
 	}
 	for _, f := range forms {
@@ -311,7 +223,7 @@ func TestDeterministic(t *testing.T) {
 	t.Parallel()
 	_, out1, _, stdout1, _ := buildCorpus(t, leakSalt)
 	_, out2, _, stdout2, _ := buildCorpus(t, leakSalt)
-	a, b := readTree(t, out1), readTree(t, out2)
+	a, b := mustReadTree(t, out1), mustReadTree(t, out2)
 	if len(a) != len(b) || stdout1 != stdout2 {
 		t.Fatalf("%d files, %d files", len(a), len(b))
 	}
@@ -327,20 +239,8 @@ func TestOtherSalt(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	writeCorpus(t, dir)
-	root, err := os.OpenRoot(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer closeQuietly(root)
-	m, _, err := readMaterial(root.FS())
-	if err != nil {
-		t.Fatal(err)
-	}
-	units, err := anon.SupportedUnits(m)
-	if err != nil {
-		t.Fatal(err)
-	}
-	set := m.Subset(flatten(units))
+	m := materialOf(t, dir)
+	set := m.Subset(flatten(anon.SupportedUnits(m)))
 	m1, _ := anon.NewMapper(bytes.Repeat([]byte{1}, 32))
 	m2, _ := anon.NewMapper(bytes.Repeat([]byte{2}, 32))
 	s1, err1 := m1.Set(set)
@@ -381,25 +281,17 @@ func TestOtherSalt(t *testing.T) {
 	}
 	words := map[string]bool{}
 	for _, a := range set.Assets {
-		for _, s := range []string{a.OriginalFilename} {
-			for _, w := range letterRunsOf(s) {
-				words[w] = true
-			}
-		}
+		addWords(words, a.OriginalFilename)
 		for _, al := range a.Albums {
-			for _, w := range letterRunsOf(al.Title) {
-				words[w] = true
-			}
+			addWords(words, al.Title)
 		}
 	}
 	for _, f := range set.Files {
-		for _, w := range letterRunsOf(f.Path) {
-			words[w] = true
-		}
+		addWords(words, f.Path)
 	}
 	total, diff := 0, 0
 	for w := range words {
-		if len([]rune(w)) < 2 || allowed(w) {
+		if len([]rune(w)) < 2 {
 			continue
 		}
 		a, err1 := m1.Text(w)
@@ -421,29 +313,22 @@ func TestCorpusCoversCategories(t *testing.T) {
 	t.Parallel()
 	_, _, _, stdout, _ := buildCorpus(t, leakSalt)
 	for _, c := range anon.Categories {
-		empty := strings.Contains(stdout, "case anon-"+c.Name+": empty\n")
-		if want := c.Name == "nfd" && !anon.NormalizationAvailable; empty != want {
-			t.Errorf("category %s: empty %v", c.Name, empty)
+		if strings.Contains(stdout, "case anon-"+c.Name+": empty\n") {
+			t.Errorf("category %s is empty", c.Name)
 		}
 	}
 	if !regexp.MustCompile(`units: total=\d+ unsupported=[1-9]\d* too_large=0 exhausted=0\n`).MatchString(stdout) {
 		t.Errorf("stdout = %s", stdout)
 	}
-	// Every rule of "not supported" fires on the corpus; "mark" only without
-	// normalization, "clusters" only with it.
+	// Every rule of "not supported" fires on the corpus.
 	line := regexp.MustCompile(`(?m)^unsupported:(.*)$`).FindStringSubmatch(stdout)
 	if line == nil {
 		t.Fatalf("no unsupported line: %s", stdout)
 	}
 	for _, rule := range anon.UnsupportedRules {
 		m := regexp.MustCompile(` ` + regexp.QuoteMeta(rule) + `=(\d+)`).FindStringSubmatch(line[1])
-		if m == nil {
-			t.Errorf("rule %s missing in %q", rule, line[0])
-			continue
-		}
-		zero := rule == anon.RuleMark && anon.NormalizationAvailable || rule == anon.RuleClusters && !anon.NormalizationAvailable
-		if (m[1] == "0") != zero {
-			t.Errorf("rule %s: %s units", rule, m[1])
+		if m == nil || m[1] == "0" {
+			t.Errorf("rule %s in %q", rule, line[0])
 		}
 	}
 }

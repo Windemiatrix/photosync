@@ -1,9 +1,9 @@
-# GoReleaser OSS configuration. Run through the Makefile:
-#   make release-check      validates this file (CI, every pull request)
-#   make release-snapshot   builds the archive locally or in CI, publishes nothing
-#   make release            builds and creates a draft GitHub Release (release.yml)
+# GoReleaser OSS configuration:
+#   make release-snapshot   builds the archive locally and on every pull request,
+#                           publishes nothing
+#   release.yml             builds and creates a draft GitHub Release by a tag
 #
-# This file and docs/release-notes-header*.md run inside the release job with
+# This file and docs/release-notes-header.md run inside the release job with
 # write access, so changes to them are reviewed like changes to a workflow.
 # Only the open-source features are used: no monorepo, no changelog.paths, no
 # release.header.from_file (the header goes in with --release-header-tmpl).

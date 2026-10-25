@@ -23,24 +23,16 @@ var (
 	commit  string
 )
 
-// buildInfo describes how the running binary was built.
-type buildInfo struct {
-	version string
-	commit  string
-	// read returns the build information recorded by the Go toolchain.
-	// It is debug.ReadBuildInfo in production and a fake in tests.
-	read func() (*debug.BuildInfo, bool)
-}
-
 const usage = "usage: photosync version\n"
 
 func main() {
-	b := buildInfo{version: version, commit: commit, read: debug.ReadBuildInfo}
-	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, b))
+	info, _ := debug.ReadBuildInfo()
+	ver, rev := resolve(version, commit, info)
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr, ver, rev))
 }
 
 // run executes one command line and returns the process exit code.
-func run(args []string, stdout, stderr io.Writer, b buildInfo) int {
+func run(args []string, stdout, stderr io.Writer, ver, rev string) int {
 	if len(args) == 0 {
 		_, _ = io.WriteString(stderr, usage) // nothing more to do if stderr is broken
 		return 2
@@ -51,7 +43,6 @@ func run(args []string, stdout, stderr io.Writer, b buildInfo) int {
 			_, _ = io.WriteString(stderr, usage) // nothing more to do if stderr is broken
 			return 2
 		}
-		ver, rev := b.resolve()
 		if _, err := fmt.Fprintf(stdout, "photosync %s (commit %s, %s)\n", ver, rev, runtime.Version()); err != nil {
 			return 1
 		}
@@ -63,21 +54,10 @@ func run(args []string, stdout, stderr io.Writer, b buildInfo) int {
 }
 
 // resolve returns the version and the commit to print. Link-time values win;
-// empty ones fall back to the toolchain build information, then to the
-// placeholders "devel" and "unknown".
-func (b buildInfo) resolve() (ver, rev string) {
-	ver, rev = b.version, b.commit
-	if ver != "" && rev != "" {
-		return ver, rev
-	}
-
-	var info *debug.BuildInfo
-	if b.read != nil {
-		if bi, ok := b.read(); ok {
-			info = bi
-		}
-	}
-
+// empty ones fall back to the toolchain build information (nil when the
+// binary has none), then to the placeholders "devel" and "unknown".
+func resolve(version, commit string, info *debug.BuildInfo) (ver, rev string) {
+	ver, rev = version, commit
 	if ver == "" {
 		ver = "devel"
 		if info != nil && info.Main.Version != "" && info.Main.Version != "(devel)" {
