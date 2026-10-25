@@ -22,10 +22,9 @@ The boundary is an allowlist, not a denylist: any prohibition can be bypassed wi
 - `gh pr merge`, `gh pr edit` (including enabling auto-merge);
 - `gh release`;
 - `gh workflow run`;
-- `git tag`;
-- `scripts/release.sh`.
+- `git tag`.
 
-Reaching the same result another way (a direct GitHub API request, another client, changing repository settings) needs the same confirmation. Only the maintainer merges PRs and creates tags.
+Reaching the same result another way (a direct GitHub API request, another client, changing repository settings) needs the same confirmation. Only the maintainer merges PRs, and a merge releases.
 
 ## Workflow
 
@@ -34,11 +33,11 @@ Reaching the same result another way (a direct GitHub API request, another clien
 3. `make test` (every check, the linter included) is green locally → push the branch (with the maintainer's confirmation) → `gh pr create --head <branch>`.
 4. The PR title becomes the commit title on `main`: `<type>(<scope>)[!]: <description>`, English, printable ASCII only, at most 70 characters, no `#<number>`. Mark an incompatible change (commands, flags, config keys, the state schema) with `!` after the scope: `feat(config)!: rename remotes key`; the next version depends on the marker. The scope is required with `!` too.
 5. Code, comments, commits and PR titles are in English; documents are in Russian and English at the same time, with the same meaning.
-6. A new direct dependency, and any change to `.github/`, `scripts/`, `Makefile`, `.goreleaser.yaml`, `docs/release-notes-header*.md`, `go.mod`, `go.sum`, goes in its own PR with an explanation in the description: the maintainer checks that the CI and release checks are not weakened (`.goreleaser.yaml` and the release-notes header run inside the release job).
+6. A new direct dependency, and any change to `.github/`, `scripts/`, `Makefile`, `.goreleaser.yaml`, `.svu.yml`, `docs/release-notes-header*.md`, `go.mod`, `go.sum`, goes in its own PR with an explanation in the description: the maintainer checks that the CI and release checks are not weakened (`.goreleaser.yaml` and the release-notes header run inside the release job).
 
 ## Releases
 
-Only the maintainer creates the tag: `scripts/release.sh [--major]` on their machine. Agents do not run the script, create tags or call `gh release` (see "Boundaries"). Agents do not choose a version: `scripts/next-version.sh` computes it from PR titles, so a title must describe the change accurately and every incompatible change carries `!`. There is no `CHANGELOG.md`: the change list is built from PR titles. The version rules and the release steps are in [CONTRIBUTING.en.md](CONTRIBUTING.en.md).
+A release comes out by itself after every PR merged into `main` (the `release` job of `ci.yml`). Agents do not create tags or call `gh release` and `gh workflow run` (see "Boundaries"). Agents do not choose a version: svu computes it from PR titles (`.svu.yml`), so a title must describe the change accurately and every incompatible change carries `!`. There is no `CHANGELOG.md`: the change list is built from PR titles. The version rules and the release steps are in [CONTRIBUTING.en.md](CONTRIBUTING.en.md).
 
 ## Code structure
 
