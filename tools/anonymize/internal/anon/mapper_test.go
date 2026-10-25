@@ -206,23 +206,27 @@ func TestTextNFD(t *testing.T) {
 	}
 }
 
+func macWithFirstDigits(date string) func(purpose string, input []byte, counter uint64) [32]byte {
+	return func(purpose string, input []byte, counter uint64) [32]byte {
+		firstAttempt := counter>>32 == 0
+		if purpose == purposeDigits && firstAttempt {
+			var out [32]byte
+			for i := 0; i < 8; i++ {
+				out[i] = date[i] - '0'
+			}
+			return out
+		}
+		return counterMAC(purpose, input, counter)
+	}
+}
+
 func TestNumberRejectsDates(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct {
 		date  string
 		retry bool
 	}{{"20500101", true}, {"19990101", true}, {"20991231", true}, {"19700101", true}, {"19691231", true}, {"21000101", false}, {"19980101", false}} {
-		mac := func(purpose string, input []byte, counter uint64) [32]byte {
-			if purpose == purposeDigits && counter>>32 == 0 {
-				var out [32]byte
-				for i := 0; i < 8; i++ {
-					out[i] = tt.date[i] - '0'
-				}
-				return out
-			}
-			return counterMAC(purpose, input, counter)
-		}
-		m := newMapperMAC(mac)
+		m := newMapperMAC(macWithFirstDigits(tt.date))
 		out, err := m.Text("12345678")
 		if err != nil {
 			t.Fatal(err)

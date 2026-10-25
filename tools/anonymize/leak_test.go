@@ -124,14 +124,14 @@ func TestNoLeaks(t *testing.T) {
 		t.Errorf("leaks: %v", l)
 	}
 	words := inputWords(materialOf(t, in))
-	if r := crossCheck(words, dictionaryOf(output), output); r.Failed() {
+	if r := crossCheck(words, dictionaryOf(output), output); r.Leaks4PlusOrGluedWord() {
 		t.Errorf("input words in the output: %s", r)
 	}
 	logs := map[string][]byte{"stdout": []byte(stdout), "stderr": []byte(stderr)}
 	if l := findDigitLeaks(input, logs, c.canaries); len(l) != 0 {
 		t.Errorf("leaks in stdout or stderr: %v", l)
 	}
-	if r := crossCheck(words, nil, logs); r.Failed() {
+	if r := crossCheck(words, nil, logs); r.Leaks4PlusOrGluedWord() {
 		t.Errorf("input words in stdout or stderr: %s", r)
 	}
 	var text []byte

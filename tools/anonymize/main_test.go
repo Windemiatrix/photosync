@@ -117,14 +117,14 @@ func TestPrevInventory(t *testing.T) {
 	}
 }
 
-func gitTree(t *testing.T, dir string) string {
+func gitTree(t *testing.T, dir string) (symlinkToTree string) {
 	t.Helper()
 	writeFile(t, dir, ".git/HEAD", []byte("ref: refs/heads/main\n"))
-	link := dir + "-link"
-	if err := os.Symlink(dir, link); err != nil {
+	symlinkToTree = dir + "-link"
+	if err := os.Symlink(dir, symlinkToTree); err != nil {
 		t.Fatal(err)
 	}
-	return link
+	return symlinkToTree
 }
 
 func TestBuildErrors(t *testing.T) {

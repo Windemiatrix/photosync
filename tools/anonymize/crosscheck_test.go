@@ -21,19 +21,19 @@ import (
 )
 
 const (
-	classShort = iota
+	classUpTo2 = iota
 	class3
-	class4
+	class4Plus
 )
 
 func wordClass(w string) int {
 	switch n := utf8.RuneCountInString(w); {
 	case n >= 4:
-		return class4
+		return class4Plus
 	case n == 3:
 		return class3
 	}
-	return classShort
+	return classUpTo2
 }
 
 // The hex letters of an identifier (a UUID or a long hexadecimal run) are not
@@ -102,13 +102,13 @@ type crossResult struct {
 	Glued, GluedCollisions int
 }
 
-func (r crossResult) Failed() bool { return r.Hits[class4] > 0 || r.Glued > 0 }
+func (r crossResult) Leaks4PlusOrGluedWord() bool { return r.Hits[class4Plus] > 0 || r.Glued > 0 }
 
 func (r crossResult) String() string {
 	return fmt.Sprintf("input words: short=%d len3=%d len4+=%d; output runs=%d; hits len4+=%d len3=%d short=%d; "+
 		"glued len4+=%d; pseudonym collisions len4+=%d len3=%d glued=%d",
-		r.Input[classShort], r.Input[class3], r.Input[class4], r.Output, r.Hits[class4], r.Hits[class3], r.Hits[classShort],
-		r.Glued, r.Collisions[class4], r.Collisions[class3], r.GluedCollisions)
+		r.Input[classUpTo2], r.Input[class3], r.Input[class4Plus], r.Output, r.Hits[class4Plus], r.Hits[class3], r.Hits[classUpTo2],
+		r.Glued, r.Collisions[class4Plus], r.Collisions[class3], r.GluedCollisions)
 }
 
 func jsonStrings(data []byte) []string {
@@ -284,13 +284,13 @@ func TestCrossCheck(t *testing.T) {
 	dict := dictionaryOf(files)
 	r := crossCheck(input, dict, files)
 	t.Logf("corpus: %s", r)
-	if r.Failed() || r.Input[class4] == 0 || r.Output == 0 || len(dict) == 0 {
+	if r.Leaks4PlusOrGluedWord() || r.Input[class4Plus] == 0 || r.Output == 0 || len(dict) == 0 {
 		t.Errorf("pseudonymized corpus: %s", r)
 	}
 	planted := map[string][]byte{nameTokens: files[nameTokens],
 		"anon-live/case.json": []byte(`{"icloud": [{"title": "Пельменевых", "zinaida": 1, "path": "a/ыыЗинаидыы.jpg"}]}`)}
 	p := crossCheck(input, dict, planted)
-	if p.Hits[class4] != 2 || p.Glued != 1 || !p.Failed() {
+	if p.Hits[class4Plus] != 2 || p.Glued != 1 || !p.Leaks4PlusOrGluedWord() {
 		t.Errorf("planted words: %s", p)
 	}
 	for _, w := range []string{"пельменевых", "zinaida", "зинаиды"} {
@@ -299,7 +299,7 @@ func TestCrossCheck(t *testing.T) {
 		}
 	}
 	dict["пельменевых"] = true
-	if c := crossCheck(input, dict, planted); c.Hits[class4] != 1 || c.Collisions[class4] != 1 {
+	if c := crossCheck(input, dict, planted); c.Hits[class4Plus] != 1 || c.Collisions[class4Plus] != 1 {
 		t.Errorf("collision: %s", c)
 	}
 	if glued("abcd", map[string]bool{"abcd": true}, 4) || !glued("xabcd", map[string]bool{"abcd": true}, 4) {

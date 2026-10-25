@@ -47,7 +47,7 @@ func TestOtherInputsNaN(t *testing.T) {
 		nameLinks:     {Data: []byte(`{"A": [["2023/a.jpg", "exact"]], "score": []}`)},
 		namePlan:      {Data: []byte(`{"download": [], "upload": [], "replace": [], "conflicts": [], "stats": NaN}`)},
 	}
-	inv, err := readInventory(fsys, nameInventory, false)
+	inv, _, err := readInventory(fsys, nameInventory, false)
 	if err != nil || len(inv.Files) != 1 || inv.Files[0].Width != 0 || inv.Files[0].Height != 0 {
 		t.Errorf("readInventory = %+v, %v", inv, err)
 	}

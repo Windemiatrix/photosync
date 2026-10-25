@@ -58,8 +58,8 @@ func partitionMaterial() testMaterial {
 			uuidN(3): {{"2023/01-01 - A/IMG_9003.JPG", LevelProbable}},
 			uuidN(6): {{"2023/01-01 - A/IMG_0006.JPG", LevelSameShot}},
 		},
-		replace: [][2]string{{uuidN(2), "2023/01-01 - A/IMG_0002.JPG"}},
-		keep:    []string{"2023/01-01 - A/IMG_0006.JPG"},
+		replacePairs:   []replacePair{{uuidN(2), "2023/01-01 - A/IMG_0002.JPG"}},
+		keepCloudPaths: []string{"2023/01-01 - A/IMG_0006.JPG"},
 	}
 }
 

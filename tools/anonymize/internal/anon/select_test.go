@@ -37,20 +37,36 @@ func TestComponentsOf(t *testing.T) {
 			uuidN(3): {{"2023/c/IMG_0003.JPG", LevelSameShot}},
 		},
 	}
+	const (
+		asset1 = iota
+		asset2
+		asset3
+		assetTrashed
+		file1HEIC
+		file1CopyMOV
+		file2JPG
+		file2Sidecar
+		file1Text
+		file1OtherFolder
+		file3JPG
+		file3MOV
+		fileUnlinked
+	)
+	chainOf1 := []int{asset1, asset3, file1HEIC, file1CopyMOV, file3JPG, file3MOV}
 	g := newGraph(tm.build())
 	tests := []struct {
 		name string
 		seed []int
 		want []int
 	}{
-		{"asset pulls its files, the neighbors and the chain", []int{0}, []int{0, 2, 4, 5, 10, 11}},
-		{"file pulls its owner", []int{4}, []int{0, 2, 4, 5, 10, 11}},
-		{"neighbor pulls its group", []int{7}, []int{1, 6, 7}},
-		{"other files never enter", []int{8}, nil},
-		{"trash never enters", []int{3}, nil},
-		{"alone", []int{12}, []int{12}},
-		{"another folder", []int{9}, []int{9}},
-		{"union", []int{9, 12}, []int{9, 12}},
+		{"asset pulls its files, the neighbors and the chain", []int{asset1}, chainOf1},
+		{"file pulls its owner", []int{file1HEIC}, chainOf1},
+		{"neighbor pulls its group", []int{file2Sidecar}, []int{asset2, file2JPG, file2Sidecar}},
+		{"other files never enter", []int{file1Text}, nil},
+		{"trash never enters", []int{assetTrashed}, nil},
+		{"alone", []int{fileUnlinked}, []int{fileUnlinked}},
+		{"another folder", []int{file1OtherFolder}, []int{file1OtherFolder}},
+		{"union", []int{file1OtherFolder, fileUnlinked}, []int{file1OtherFolder, fileUnlinked}},
 	}
 	for _, tt := range tests {
 		got := g.componentsOf(tt.seed)
@@ -143,12 +159,12 @@ func categoryCases() []categoryCase {
 		level(LevelExact), level(LevelSameShot), level(LevelSameShotWeak), level(LevelSameTimeSize), level(LevelProbable), level(RefLiveComponent),
 		{"plan-replace", func() testMaterial {
 			tm := single(a1, f1j, LevelSameShot)
-			tm.replace = [][2]string{{a1.UUID, f1j.Path}}
+			tm.replacePairs = []replacePair{{a1.UUID, f1j.Path}}
 			return tm
 		}(), single(a1, f1j, LevelSameShot)},
 		{"plan-keep-cloud", func() testMaterial {
 			tm := single(a1, f1j, LevelSameShot)
-			tm.keep = []string{f1j.Path}
+			tm.keepCloudPaths = []string{f1j.Path}
 			return tm
 		}(), single(a1, f1j, LevelSameShot)},
 		{"unmatched-icloud", testMaterial{assets: []Asset{a1}}, exact},
@@ -533,20 +549,19 @@ func TestClustersRule(t *testing.T) {
 
 func partialUnits() testMaterial {
 	d := "2023-07-14T18:03:27+03:00"
-	bad := photo(1, "me@example.com.jpg", d, 1)
-	good := photo(2, "IMG_0002.HEIC", "2023-07-15T10:00:00+03:00", 2)
-	alone := photo(3, "IMG_0003.HEIC", "2023-07-16T10:00:00+03:00", 3)
+	unsupportedAsset := photo(1, "me@example.com.jpg", d, 1)
+	assetOfBadFile := photo(2, "IMG_0002.HEIC", "2023-07-15T10:00:00+03:00", 2)
+	soleSupportedAsset := photo(3, "IMG_0003.HEIC", "2023-07-16T10:00:00+03:00", 3)
+	linkedFile := cloudFile("2023/a/IMG_0001.JPG", "2023-07-14T18:03:27", 1)
+	neighborFile := cloudFile("2023/a/IMG_0001 (1).JPG", "", 1)
+	unsupportedFile := cloudFile("2023/b/IMG_0002.HEIC", "2045-01-01T00:00:00", 2)
+	sidecarFile := cloudFile("2023/b/IMG_0002.xmp", "", 1)
 	return testMaterial{
-		assets: []Asset{bad, good, alone},
-		files: []File{
-			cloudFile("2023/a/IMG_0001.JPG", "2023-07-14T18:03:27", 1),
-			cloudFile("2023/a/IMG_0001 (1).JPG", "", 1),
-			cloudFile("2023/b/IMG_0002.HEIC", "2045-01-01T00:00:00", 2),
-			cloudFile("2023/b/IMG_0002.xmp", "", 1),
-		},
+		assets: []Asset{unsupportedAsset, assetOfBadFile, soleSupportedAsset},
+		files:  []File{linkedFile, neighborFile, unsupportedFile, sidecarFile},
 		links: Links{
-			bad.UUID:  {{"2023/a/IMG_0001.JPG", LevelSameShot}},
-			good.UUID: {{"2023/b/IMG_0002.HEIC", LevelExact}},
+			unsupportedAsset.UUID: {{linkedFile.Path, LevelSameShot}},
+			assetOfBadFile.UUID:   {{unsupportedFile.Path, LevelExact}},
 		},
 	}
 }
@@ -724,8 +739,8 @@ func TestBuildExpectedPairs(t *testing.T) {
 			rep.UUID:  {{"2023/07-16/IMG_0003.JPG", LevelSameShot}},
 			keep.UUID: {{"2023/07-17/IMG_0004.JPG", LevelSameShot}},
 		},
-		replace: [][2]string{{rep.UUID, "2023/07-16/IMG_0003.JPG"}},
-		keep:    []string{"2023/07-17/IMG_0004.JPG"},
+		replacePairs:   []replacePair{{rep.UUID, "2023/07-16/IMG_0003.JPG"}},
+		keepCloudPaths: []string{"2023/07-17/IMG_0004.JPG"},
 	}
 	m := tm.build()
 	mp := newTestMapper(t)
@@ -734,10 +749,10 @@ func TestBuildExpectedPairs(t *testing.T) {
 		t.Fatal(err)
 	}
 	plan := func(uuid, path string) string {
-		if uuid == rep.UUID && path == tm.replace[0][1] {
+		if uuid == rep.UUID && path == tm.replacePairs[0].cloudPath {
 			return PlanReplaceDecision
 		}
-		if path == tm.keep[0] {
+		if path == tm.keepCloudPaths[0] {
 			return PlanKeepCloudDecision
 		}
 		return ""

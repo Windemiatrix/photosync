@@ -80,35 +80,35 @@ type inventoryRow struct {
 	anon.Derived
 }
 
-func readInventory(fsys fs.FS, name string, optional bool) (*anon.Inventory, error) {
+func readInventory(fsys fs.FS, name string, optional bool) (inv *anon.Inventory, found bool, err error) {
 	var doc struct {
 		Files *[]inventoryRow `json:"files"`
 	}
-	err := decodeFile(fsys, name, &doc)
+	err = decodeFile(fsys, name, &doc)
 	switch {
 	case optional && errors.Is(err, fs.ErrNotExist):
-		return nil, nil
+		return nil, false, nil
 	case err != nil:
-		return nil, fail("read inventory", err)
+		return nil, false, fail("read inventory", err)
 	case doc.Files == nil:
-		return nil, &toolError{"read inventory", "missing field files"}
+		return nil, false, &toolError{"read inventory", "missing field files"}
 	}
-	inv := &anon.Inventory{}
+	inv = &anon.Inventory{}
 	for i, r := range *doc.Files {
 		n := strconv.Itoa(i + 1)
 		switch {
 		case r.Path == "":
-			return nil, &toolError{"read inventory", "missing field files.path in record " + n}
+			return nil, false, &toolError{"read inventory", "missing field files.path in record " + n}
 		case strings.HasPrefix(r.Path, "/") || strings.Contains(r.Path, `\`):
-			return nil, &toolError{"read inventory", "invalid value in field files.path in record " + n}
+			return nil, false, &toolError{"read inventory", "invalid value in field files.path in record " + n}
 		case r.LivePair != "" && r.LivePair != anon.LivePairCID && r.LivePair != anon.LivePairName:
 			// The value is copied into case.json: only the known markers.
-			return nil, &toolError{"read inventory", "invalid value in field files.live_pair in record " + n}
+			return nil, false, &toolError{"read inventory", "invalid value in field files.live_pair in record " + n}
 		}
 		inv.Files = append(inv.Files, r.File)
 		inv.Derived = append(inv.Derived, r.Derived)
 	}
-	return inv, nil
+	return inv, true, nil
 }
 
 func readLinks(fsys fs.FS) (anon.Links, error) {
@@ -133,7 +133,7 @@ func readLinks(fsys fs.FS) (anon.Links, error) {
 	return links, nil
 }
 
-func readMaterial(fsys fs.FS) (*anon.Material, string, error) {
+func readMaterial(fsys fs.FS) (m *anon.Material, usedInventory string, err error) {
 	reviewed, err := readInput(fsys, namePlan)
 	if err != nil {
 		return nil, "", fail("read plan", err)
@@ -162,17 +162,17 @@ func readMaterial(fsys fs.FS) (*anon.Material, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	m := &anon.Material{Assets: assets, Plan: plan, Links: links}
+	m = &anon.Material{Assets: assets, Plan: plan, Links: links}
 	var parts []string
 	for _, c := range []struct {
 		name, file string
 		optional   bool
 	}{{"current", nameInventory, false}, {"prev", namePrevInventory, true}} {
-		inv, err := readInventory(fsys, c.file, c.optional)
+		inv, found, err := readInventory(fsys, c.file, c.optional)
 		if err != nil {
 			return nil, "", err
 		}
-		if inv == nil {
+		if !found {
 			break
 		}
 		m.Inventory = *inv
@@ -333,14 +333,13 @@ func writeOutput(out string, res *anon.Result) error {
 	return nil
 }
 
-func scanDir(dir string, salt []byte) ([]anon.Finding, int, error) {
+func scanDir(dir string, salt []byte) (findings []anon.Finding, filesSeen int, err error) {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return nil, 0, fail("check dir", err)
 	}
 	defer closeQuietly(root)
 	fsys := root.FS()
-	var findings []anon.Finding
 	words := map[string]bool{}
 	data, err := fs.ReadFile(fsys, nameTokens)
 	switch {
@@ -357,12 +356,11 @@ func scanDir(dir string, salt []byte) ([]anon.Finding, int, error) {
 			}
 		}
 	}
-	files := 0
 	err = fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		files++
+		filesSeen++
 		if !d.Type().IsRegular() || !strings.HasSuffix(p, ".json") {
 			findings = append(findings, anon.Finding{File: p, Rule: anon.RuleUnexpectedFile})
 			return nil
@@ -377,7 +375,7 @@ func scanDir(dir string, salt []byte) ([]anon.Finding, int, error) {
 	if err != nil {
 		return nil, 0, fail("check", err)
 	}
-	return findings, files, nil
+	return findings, filesSeen, nil
 }
 
 // A name outside outputNames may be a private string, so it is printed as

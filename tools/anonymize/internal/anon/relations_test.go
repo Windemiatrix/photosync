@@ -8,6 +8,25 @@ import (
 	"testing"
 )
 
+const (
+	liveAsset = iota
+	pixel1970Asset
+	burstKeyAsset
+	burstMemberAsset
+)
+
+const (
+	liveStillFile = iota
+	liveVideoFile
+	suffixCopyFile
+	lowerNameFile
+	pixelFile
+	epochVideoFile
+	xmpFile
+	nonASCIICopyFile
+	editedFile
+)
+
 func relationSet() *Set {
 	a0 := photo(1, "IMG_4821.HEIC", "2023-07-14T18:03:27.455000+03:00", 2734118)
 	a0.LivePhoto = true
@@ -100,80 +119,100 @@ func TestCheckRelationsBreakers(t *testing.T) {
 		brk  func(orig, img *Set)
 		want []string
 	}{
-		{"extension case", func(_, img *Set) { img.Files[6].Path = strings.TrimSuffix(img.Files[6].Path, ".xmp") + ".XMP" }, []string{RelFields}},
-		{"live flag", func(_, img *Set) { img.Assets[0].LivePhoto = false }, []string{RelFields}},
+		{"extension case", func(_, img *Set) {
+			img.Files[xmpFile].Path = strings.TrimSuffix(img.Files[xmpFile].Path, ".xmp") + ".XMP"
+		}, []string{RelFields}},
+		{"live flag", func(_, img *Set) { img.Assets[liveAsset].LivePhoto = false }, []string{RelFields}},
 		// The burst group derives from the flag: it is lost with it.
-		{"burst flag", func(_, img *Set) { img.Assets[1].Burst = false }, []string{RelFields, RelIDs}},
-		{"has_raw flag", func(_, img *Set) { img.Assets[0].HasRaw = true }, []string{RelFields}},
-		{"ismovie flag", func(_, img *Set) { img.Assets[2].IsMovie = true }, []string{RelFields}},
-		{"live_pair dropped", func(_, img *Set) { img.Files[0].LivePair = "" }, []string{RelFields}},
-		{"kind", func(_, img *Set) { img.Files[2].Kind = KindConvert }, []string{RelFields}},
-		{"frame size", func(_, img *Set) { img.Files[2].Width = 1 }, []string{RelFields}},
+		{"burst flag", func(_, img *Set) { img.Assets[pixel1970Asset].Burst = false }, []string{RelFields, RelIDs}},
+		{"has_raw flag", func(_, img *Set) { img.Assets[liveAsset].HasRaw = true }, []string{RelFields}},
+		{"ismovie flag", func(_, img *Set) { img.Assets[burstKeyAsset].IsMovie = true }, []string{RelFields}},
+		{"live_pair dropped", func(_, img *Set) { img.Files[liveStillFile].LivePair = "" }, []string{RelFields}},
+		{"kind", func(_, img *Set) { img.Files[suffixCopyFile].Kind = KindConvert }, []string{RelFields}},
+		{"frame size", func(_, img *Set) { img.Files[suffixCopyFile].Width = 1 }, []string{RelFields}},
 		{"date one day off", func(_, img *Set) {
-			img.Files[4].DateTaken = strings.Replace(img.Files[4].DateTaken, "-03-05T", "-03-06T", 1)
+			img.Files[pixelFile].DateTaken = strings.Replace(img.Files[pixelFile].DateTaken, "-03-05T", "-03-06T", 1)
 		}, []string{RelDate}},
-		{"1970 date shifted", func(_, img *Set) { img.Files[5].DateTaken = y(1970) + img.Files[5].DateTaken[4:] }, []string{RelDate}},
-		{"fraction dropped", func(_, img *Set) { img.Files[0].DateTaken = strings.TrimSuffix(img.Files[0].DateTaken, ".455") }, []string{RelDate}},
-		{"date dropped", func(_, img *Set) { img.Assets[3].Date = "" }, []string{RelDate}},
+		{"1970 date shifted", func(_, img *Set) {
+			img.Files[epochVideoFile].DateTaken = y(1970) + img.Files[epochVideoFile].DateTaken[4:]
+		}, []string{RelDate}},
+		{"fraction dropped", func(_, img *Set) {
+			img.Files[liveStillFile].DateTaken = strings.TrimSuffix(img.Files[liveStillFile].DateTaken, ".455")
+		}, []string{RelDate}},
+		{"date dropped", func(_, img *Set) { img.Assets[burstMemberAsset].Date = "" }, []string{RelDate}},
 		{"event month", func(_, img *Set) {
-			img.Files[4].Path = strings.Replace(img.Files[4].Path, "/03-05/", "/04-05/", 1)
+			img.Files[pixelFile].Path = strings.Replace(img.Files[pixelFile].Path, "/03-05/", "/04-05/", 1)
 		}, []string{RelFolderInfo}},
-		{"suffix dropped", func(_, img *Set) { img.Files[7].Path = strings.Replace(img.Files[7].Path, " (2)", "", 1) }, []string{RelStrings}},
-		{"NFD became NFC", func(orig, img *Set) {
-			orig.Files[5].Path = nfd(orig.Files[5].Path)
-			img.Files[5].Path = nfc(img.Files[5].Path)
+		{"suffix dropped", func(_, img *Set) {
+			img.Files[nonASCIICopyFile].Path = strings.Replace(img.Files[nonASCIICopyFile].Path, " (2)", "", 1)
 		}, []string{RelStrings}},
-		{"two UUIDs gave one", func(_, img *Set) { img.Assets[1].UUID = img.Assets[0].UUID }, []string{RelIDs}},
-		{"content id split", func(_, img *Set) { img.Files[1].ContentID = "00000000ffffffffffffffffffffffff" }, []string{RelIDs}},
-		{"same lower name, different images", func(_, img *Set) { img.Files[3].Path = replaceStemDigits(img.Files[3].Path, "9999") }, []string{RelNames}},
-		{"MOV stem changed", func(_, img *Set) { img.Files[1].Path = replaceStemDigits(img.Files[1].Path, "0002") }, []string{RelFolders, RelNames}},
+		{"NFD became NFC", func(orig, img *Set) {
+			orig.Files[epochVideoFile].Path = nfd(orig.Files[epochVideoFile].Path)
+			img.Files[epochVideoFile].Path = nfc(img.Files[epochVideoFile].Path)
+		}, []string{RelStrings}},
+		{"two UUIDs gave one", func(_, img *Set) { img.Assets[pixel1970Asset].UUID = img.Assets[liveAsset].UUID }, []string{RelIDs}},
+		{"content id split", func(_, img *Set) {
+			img.Files[liveVideoFile].ContentID = "00000000ffffffffffffffffffffffff"
+		}, []string{RelIDs}},
+		{"same lower name, different images", func(_, img *Set) {
+			img.Files[lowerNameFile].Path = replaceStemDigits(img.Files[lowerNameFile].Path, "9999")
+		}, []string{RelNames}},
+		{"MOV stem changed", func(_, img *Set) {
+			img.Files[liveVideoFile].Path = replaceStemDigits(img.Files[liveVideoFile].Path, "0002")
+		}, []string{RelFolders, RelNames}},
 		// The folder partition alone: one more space after " - " keeps the
 		// event month and day and the album of the folder.
 		{"MOV folder spacing", func(_, img *Set) {
-			img.Files[1].Path = strings.Replace(img.Files[1].Path, "07-14 - ", "07-14 -  ", 1)
+			img.Files[liveVideoFile].Path = strings.Replace(img.Files[liveVideoFile].Path, "07-14 - ", "07-14 -  ", 1)
 		}, []string{RelFolders}},
 		{"1970 fix moved", func(_, img *Set) {
-			img.Assets[1].OriginalFilename = strings.Replace(img.Assets[1].OriginalFilename, "0305_", "0306_", 1)
-			img.Files[4].Path = FolderOf(img.Files[4].Path) + "/" + strings.Replace(BaseName(img.Files[4].Path), "0305_", "0306_", 1)
+			img.Assets[pixel1970Asset].OriginalFilename = strings.Replace(img.Assets[pixel1970Asset].OriginalFilename, "0305_", "0306_", 1)
+			img.Files[pixelFile].Path = FolderOf(img.Files[pixelFile].Path) + "/" + strings.Replace(BaseName(img.Files[pixelFile].Path), "0305_", "0306_", 1)
 		}, []string{RelDate}},
 		{"event day", func(_, img *Set) {
-			img.Files[4].Path = strings.Replace(img.Files[4].Path, "/03-05/", "/03-06/", 1)
+			img.Files[pixelFile].Path = strings.Replace(img.Files[pixelFile].Path, "/03-05/", "/03-06/", 1)
 		}, []string{RelFolderInfo}},
-		{"edited dropped", func(_, img *Set) { img.Files[8].Path = strings.Replace(img.Files[8].Path, "_edited", "", 1) }, []string{RelStrings}},
+		{"edited dropped", func(_, img *Set) {
+			img.Files[editedFile].Path = strings.Replace(img.Files[editedFile].Path, "_edited", "", 1)
+		}, []string{RelStrings}},
 		// The name key without " (N)" alone: the copy keeps its tail and is
 		// the only file of its folder.
 		{"name key without (N) split", func(_, img *Set) {
-			base := BaseName(img.Files[2].Path)
-			img.Files[2].Path = FolderOf(img.Files[2].Path) + "/IMG_9999" + base[len("IMG_0000"):]
+			base := BaseName(img.Files[suffixCopyFile].Path)
+			img.Files[suffixCopyFile].Path = FolderOf(img.Files[suffixCopyFile].Path) + "/IMG_9999" + base[len("IMG_0000"):]
 		}, []string{RelNames}},
 		// Relation 4 term by term, on albums no folder holds and on file
 		// names whose keys are unique, so no partition breaks with them.
 		{"slash removed from a title", func(_, img *Set) {
-			img.Assets[3].Albums[0].Title = strings.ReplaceAll(img.Assets[3].Albums[0].Title, "/", "-")
+			img.Assets[burstMemberAsset].Albums[0].Title = strings.ReplaceAll(img.Assets[burstMemberAsset].Albums[0].Title, "/", "-")
 		}, []string{RelStrings}},
-		{"ASCII title made empty", func(_, img *Set) { img.Assets[3].Albums[1].Title = "" }, []string{RelStrings}},
+		{"ASCII title made empty", func(_, img *Set) { img.Assets[burstMemberAsset].Albums[1].Title = "" }, []string{RelStrings}},
 		{"non-ASCII name became ASCII", func(_, img *Set) {
-			img.Files[7].Path = FolderOf(img.Files[7].Path) + "/Qwert (2).jpg"
+			img.Files[nonASCIICopyFile].Path = FolderOf(img.Files[nonASCIICopyFile].Path) + "/Qwert (2).jpg"
 		}, []string{RelStrings}},
 		{"ASCII name became non-ASCII", func(_, img *Set) {
-			img.Files[6].Path = FolderOf(img.Files[6].Path) + "/Жqrst.xmp"
+			img.Files[xmpFile].Path = FolderOf(img.Files[xmpFile].Path) + "/Жqrst.xmp"
 		}, []string{RelStrings}},
-		{"tzoffset changed", func(_, img *Set) { img.Assets[0].TZOffset = 0 }, []string{RelFields}},
-		{"two burst groups gave one", func(_, img *Set) { img.Assets[1].BurstPhotos = []string{img.Assets[2].UUID} }, []string{RelIDs}},
+		{"tzoffset changed", func(_, img *Set) { img.Assets[liveAsset].TZOffset = 0 }, []string{RelFields}},
+		{"two burst groups gave one", func(_, img *Set) {
+			img.Assets[pixel1970Asset].BurstPhotos = []string{img.Assets[burstKeyAsset].UUID}
+		}, []string{RelIDs}},
 		{"burst_photos element changed", func(_, img *Set) {
-			img.Assets[2].BurstPhotos = []string{"00000000-0000-8000-8000-000000000000"}
+			img.Assets[burstKeyAsset].BurstPhotos = []string{"00000000-0000-8000-8000-000000000000"}
 		}, []string{RelIDs}},
-		{"burst_photos element dropped", func(_, img *Set) { img.Assets[1].BurstPhotos = []string{} }, []string{RelFields}},
-		{"burst_key flag", func(_, img *Set) { img.Assets[2].BurstKeyPhoto = false }, []string{RelFields}},
-		{"two SHA-1 gave one", func(_, img *Set) { img.Files[0].SHA1 = img.Files[3].SHA1 }, []string{RelIDs}},
+		{"burst_photos element dropped", func(_, img *Set) { img.Assets[pixel1970Asset].BurstPhotos = []string{} }, []string{RelFields}},
+		{"burst_key flag", func(_, img *Set) { img.Assets[burstKeyAsset].BurstKeyPhoto = false }, []string{RelFields}},
+		{"two SHA-1 gave one", func(_, img *Set) { img.Files[liveStillFile].SHA1 = img.Files[lowerNameFile].SHA1 }, []string{RelIDs}},
 		{"SHA-1 duplicate split", func(_, img *Set) {
-			img.Files[7].SHA1 = "00000000" + strings.Repeat("f", 32)
+			img.Files[nonASCIICopyFile].SHA1 = "00000000" + strings.Repeat("f", 32)
 		}, []string{RelIDs}},
-		{"album and folder split", func(_, img *Set) { img.Assets[0].Albums[0].Title += "x" }, []string{RelAlbums}},
-		{"two sizes swapped", func(_, img *Set) { img.Files[2].Size, img.Files[3].Size = img.Files[3].Size, img.Files[2].Size }, []string{RelSize}},
+		{"album and folder split", func(_, img *Set) { img.Assets[liveAsset].Albums[0].Title += "x" }, []string{RelAlbums}},
+		{"two sizes swapped", func(_, img *Set) {
+			img.Files[suffixCopyFile].Size, img.Files[lowerNameFile].Size = img.Files[lowerNameFile].Size, img.Files[suffixCopyFile].Size
+		}, []string{RelSize}},
 		{"epoch gap", func(orig, img *Set) {
-			orig.Files[5].DateTaken, img.Files[5].DateTaken = "1970-12-31T20:00:00", "1970-12-31T20:00:00"
-			orig.Files[4].DateTaken, img.Files[4].DateTaken = "1971-01-01T02:00:00", y(1971)+"-01-01T02:00:00"
+			orig.Files[epochVideoFile].DateTaken, img.Files[epochVideoFile].DateTaken = "1970-12-31T20:00:00", "1970-12-31T20:00:00"
+			orig.Files[pixelFile].DateTaken, img.Files[pixelFile].DateTaken = "1971-01-01T02:00:00", y(1971)+"-01-01T02:00:00"
 		}, []string{RelEpochGap}},
 		{"file missing", func(_, img *Set) { img.Files = img.Files[:len(img.Files)-1] }, []string{RelShape}},
 		{"asset missing", func(_, img *Set) { img.Assets = img.Assets[1:] }, []string{RelShape}},
@@ -202,8 +241,8 @@ func TestCheckRelationsEpochGapInOriginal(t *testing.T) {
 	t.Parallel()
 	m := newTestMapper(t)
 	orig := relationSet()
-	orig.Files[5].DateTaken = "1970-12-31T23:00:00"
-	orig.Files[4].DateTaken = "1971-01-01T00:30:00"
+	orig.Files[epochVideoFile].DateTaken = "1970-12-31T23:00:00"
+	orig.Files[pixelFile].DateTaken = "1971-01-01T00:30:00"
 	img, err := m.Set(orig)
 	if err != nil {
 		t.Fatal(err)

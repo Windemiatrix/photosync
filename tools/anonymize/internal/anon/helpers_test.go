@@ -46,12 +46,14 @@ func caseMask(s string) string {
 
 func runeLen(s string) int { return utf8.RuneCountInString(s) }
 
+type replacePair struct{ assetUUID, cloudPath string }
+
 type testMaterial struct {
-	assets  []Asset
-	files   []File
-	links   Links
-	replace [][2]string
-	keep    []string
+	assets         []Asset
+	files          []File
+	links          Links
+	replacePairs   []replacePair
+	keepCloudPaths []string
 }
 
 func (tm testMaterial) build() *Material {
@@ -77,10 +79,10 @@ func (tm testMaterial) build() *Material {
 			m.Plan.Upload = append(m.Plan.Upload, PlanUpload{Path: f.Path})
 		}
 	}
-	for _, r := range tm.replace {
-		for _, l := range tm.links[r[0]] {
-			if l.Path == r[1] {
-				m.Plan.Replace = append(m.Plan.Replace, PlanReplace{UUID: r[0], YandexPath: r[1], Match: l.Kind})
+	for _, r := range tm.replacePairs {
+		for _, l := range tm.links[r.assetUUID] {
+			if l.Path == r.cloudPath {
+				m.Plan.Replace = append(m.Plan.Replace, PlanReplace{UUID: r.assetUUID, YandexPath: r.cloudPath, Match: l.Kind})
 			}
 		}
 	}
@@ -91,7 +93,7 @@ func (tm testMaterial) build() *Material {
 			}
 		}
 	}
-	for _, p := range tm.keep {
+	for _, p := range tm.keepCloudPaths {
 		m.Plan.Conflicts = append(m.Plan.Conflicts, []string{ConflictYandexBetter, "x", p, "note"})
 	}
 	m.Plan.Conflicts = append(m.Plan.Conflicts, []string{"yandex_duplicate", "a", "b", "note"})
