@@ -49,6 +49,7 @@ A new direct dependency goes in its own PR with a rationale: why it is needed, w
 
 - Code, comments, commit messages and PR titles are in English.
 - Documents are in Russian and English at the same time, with the same meaning: `*.md` and `*.en.md`.
+- Command and output examples in documents are copied from `make help-output`. A new command, flag or error case joins the list of that target in the `Makefile`.
 
 ## Personal data
 

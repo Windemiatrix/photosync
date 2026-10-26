@@ -84,6 +84,21 @@ fixtures-verify: ## Anonymizer check on the private materials; rebuilt fixtures 
 pr-title: ## PR_TITLE follows the title convention (make pr-title PR_TITLE='...')
 	bash scripts/check-pr-title.sh
 
+##@ Documentation
+
+# Documents copy their examples from this output, so every new command, flag
+# and error case joins the list.
+.PHONY: help-output
+help-output: ## Print what a user sees from each command, exit codes included
+	@tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	go build -o "$$tmp/photosync" ./cmd/photosync || exit 1; \
+	for args in "" "version" "unknown-command"; do \
+		echo "\$$ photosync $$args"; \
+		"$$tmp/photosync" $$args 2>&1; \
+		echo "[exit $$?]"; \
+		echo; \
+	done
+
 ##@ Release
 
 # BUMP=major gives 1.0.0: from 0.x the only way there.
