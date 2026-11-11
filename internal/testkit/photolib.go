@@ -17,7 +17,9 @@ var photoLibIDs atomic.Int64
 // FakePhotoLibrary is the system photo library of a test, held in memory;
 // NewFakePhotoLibrary makes one. A call whose ctx has already ended fails
 // with the error of ctx and does nothing else, as a call of the real library
-// does. Its methods may be called from several goroutines.
+// does. A trashed asset, like a hidden one, stays in snapshots, but the
+// other methods do not find it. Its methods may be called from several
+// goroutines.
 type FakePhotoLibrary struct {
 	mu       sync.Mutex
 	id       int64
@@ -28,9 +30,11 @@ type FakePhotoLibrary struct {
 }
 
 // Counters is what a FakePhotoLibrary has done: Calls counts the calls of
-// each method of app.PhotoLibrary by its name, failed calls included.
+// each method of app.PhotoLibrary by its name, failed calls included, and
+// BytesDownloaded the bytes of the files that Download wrote.
 type Counters struct {
-	Calls map[string]int
+	Calls           map[string]int
+	BytesDownloaded int64
 }
 
 // NewFakePhotoLibrary returns the library of s, which keeps the contract of
@@ -58,12 +62,14 @@ func NewFakePhotoLibrary(s domain.LibrarySnapshot) *FakePhotoLibrary {
 func (f *FakePhotoLibrary) Counters() Counters {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return Counters{Calls: maps.Clone(f.counters.Calls)}
+	c := f.counters
+	c.Calls = maps.Clone(c.Calls)
+	return c
 }
 
 // FailNext makes the next call of the method of app.PhotoLibrary named op,
 // such as "Snapshot", fail with err; the call is counted and does nothing
-// else.
+// else. A nil err takes back an earlier FailNext of op.
 func (f *FakePhotoLibrary) FailNext(op string, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -110,8 +116,9 @@ func (f *FakePhotoLibrary) LibraryIdentity(ctx context.Context, _ string) (strin
 
 func (f *FakePhotoLibrary) begin(ctx context.Context, op string) error {
 	f.counters.Calls[op]++
-	if err, ok := f.failNext[op]; ok {
-		delete(f.failNext, op)
+	err := f.failNext[op]
+	delete(f.failNext, op)
+	if err != nil {
 		return err
 	}
 	return ctx.Err()
