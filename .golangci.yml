@@ -59,6 +59,11 @@ linters:
           deny:
             - {pkg: github.com/Windemiatrix/photosync/internal/adapters, desc: "app must not import adapters; interfaces are declared in app and implemented structurally"}
             - {pkg: github.com/Windemiatrix/photosync/internal/testkit, desc: "testkit is used by app_test only"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/photosdb, desc: "app reaches the photo library through the PhotoLibrary interface"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/photoinfo, desc: "app reaches the photo library through the PhotoLibrary interface"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/albuminfo, desc: "app reaches the photo library through the PhotoLibrary interface"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/query, desc: "app reaches the photo library through the PhotoLibrary interface"}
+            - {pkg: github.com/Windemiatrix/go-libs/osxphotos/photokit, desc: "app reaches the photo library through the PhotoLibrary interface"}
         outer:
           list-mode: lax
           files:
