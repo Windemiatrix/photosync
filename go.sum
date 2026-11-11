@@ -1,3 +1,5 @@
+github.com/Windemiatrix/go-libs/osxphotos v0.91.2 h1:zNiZK0UQTEA+C+TAhISLhsIBCvD/OEJJ0xg2psCUqnU=
+github.com/Windemiatrix/go-libs/osxphotos v0.91.2/go.mod h1:YOUqWB3Om2usnp/t7qGM/Ik5sLdrXRlASJVToaWv6iM=
 golang.org/x/text v0.43.0 h1:1QivrlhwAsnMOcqgOdl9my7s9OyZl8O5/UGUTJVXoWc=
 golang.org/x/text v0.43.0/go.mod h1:hbSIYA/amXcRXTFSZqh8tWHEoqRvvbKPJ2uz/KU+a+s=
 pgregory.net/rapid v1.3.0 h1:vBvO0VSqti75J1jjYqpgPNBLKMd1+gxa9fYo7vk/Exc=
