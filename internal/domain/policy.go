@@ -111,13 +111,19 @@ type Policies struct {
 	// UntitledEvent stands for the missing title in the cloud directory of an
 	// event album without one: "MM-DD - " followed by it.
 	UntitledEvent string
+	// NestedSeparator divides an album title into the levels of its cloud
+	// directory.
+	NestedSeparator string
+	// AlbumsRoot is the top-level cloud directory of the albums and folders
+	// outside the year folders.
+	AlbumsRoot string
 }
 
 // DefaultPolicies returns the policies for the keys that a configuration
 // leaves out, with new slices on each call. Deletes stays empty because the
-// user must choose it, UntitledEvent because it is in the language chosen at
-// setup, and RemotePriority because it is the order of the remotes in the
-// configuration.
+// user must choose it, UntitledEvent and AlbumsRoot because they are in the
+// language chosen at setup, and RemotePriority because it is the order of
+// the remotes in the configuration.
 func DefaultPolicies() Policies {
 	return Policies{
 		Conflict:           ConflictRemoteWins,
@@ -130,15 +136,18 @@ func DefaultPolicies() Policies {
 		AlbumsForPersonal:  true,
 		EditedDirs:         []string{"отредактировано", "edited"},
 		SettleMinutes:      10,
+		NestedSeparator:    " / ",
 	}
 }
 
 // Validate returns nil, or an errors.Join of one *PolicyError for each key
 // with a value that photosync does not take, in the order of the fields. An
-// enumeration takes only its constants, spelled exactly; Deletes and
-// UntitledEvent must not be empty, and SettleMinutes must not be negative.
-// The caller checks the rest: RemotePriority against its remotes, EditedDirs
-// and UntitledEvent as cloud names with naming.IsValidPart.
+// enumeration takes only its constants, spelled exactly; Deletes,
+// UntitledEvent, NestedSeparator and AlbumsRoot must not be empty, and
+// SettleMinutes must not be negative. The caller checks the rest:
+// RemotePriority against its remotes, EditedDirs, UntitledEvent and
+// AlbumsRoot as cloud names with naming.IsValidPart, and NestedSeparator
+// against the day form of an event title.
 func (p Policies) Validate() error {
 	var errs []error
 	errs = checkPolicy(errs, "conflict", p.Conflict, ConflictRemoteWins, ConflictICloudWins, ConflictAsk, ConflictSkip)
@@ -154,6 +163,12 @@ func (p Policies) Validate() error {
 	}
 	if p.UntitledEvent == "" {
 		errs = append(errs, &PolicyError{Key: "untitled_event"})
+	}
+	if p.NestedSeparator == "" {
+		errs = append(errs, &PolicyError{Key: "nested_separator"})
+	}
+	if p.AlbumsRoot == "" {
+		errs = append(errs, &PolicyError{Key: "albums_root"})
 	}
 	return errors.Join(errs...)
 }
