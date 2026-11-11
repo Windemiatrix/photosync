@@ -46,6 +46,7 @@ func TestDefaultPolicies(t *testing.T) {
 		AlbumsForPersonal:  true,
 		EditedDirs:         []string{"отредактировано", "edited"},
 		SettleMinutes:      10,
+		NestedSeparator:    " / ",
 	}
 	got := domain.DefaultPolicies()
 	if !reflect.DeepEqual(got, want) {
@@ -120,6 +121,12 @@ func TestPoliciesValidate(t *testing.T) {
 		{"untitled_event a/b", func(p *domain.Policies) { p.UntitledEvent = "a/b" }, nil},
 		{"untitled_event empty", func(p *domain.Policies) { p.UntitledEvent = "" },
 			[]domain.PolicyError{{Key: "untitled_event"}}},
+		{"nested_separator \" / \"", func(p *domain.Policies) { p.NestedSeparator = " / " }, nil},
+		{"nested_separator empty", func(p *domain.Policies) { p.NestedSeparator = "" },
+			[]domain.PolicyError{{Key: "nested_separator"}}},
+		{"albums_root Cyrillic", func(p *domain.Policies) { p.AlbumsRoot = "Альбомы" }, nil},
+		{"albums_root empty", func(p *domain.Policies) { p.AlbumsRoot = "" },
+			[]domain.PolicyError{{Key: "albums_root"}}},
 		{"unchecked fields", func(p *domain.Policies) {
 			p.DeleteEmptyAlbums = true
 			p.AlbumsForPersonal = false
@@ -143,6 +150,8 @@ func TestPoliciesValidate(t *testing.T) {
 			{Key: "burst", Value: "selected"},
 			{Key: "settle_minutes", Value: "-10"},
 			{Key: "untitled_event"},
+			{Key: "nested_separator"},
+			{Key: "albums_root"},
 		}},
 	}
 	for _, c := range cases {
@@ -154,7 +163,7 @@ func TestPoliciesValidate(t *testing.T) {
 	// A configuration starts from the defaults, so Validate must take the
 	// result of DefaultPolicies as it is: a value receiver.
 	checkPolicyErrors(t, "DefaultPolicies()", domain.DefaultPolicies().Validate(),
-		domain.PolicyError{Key: "deletes"}, domain.PolicyError{Key: "untitled_event"})
+		domain.PolicyError{Key: "deletes"}, domain.PolicyError{Key: "untitled_event"}, domain.PolicyError{Key: "albums_root"})
 }
 
 // The text goes to the log as it is, so it names its package like every
@@ -181,6 +190,8 @@ func validPolicies() domain.Policies {
 		Burst:              "selected_only",
 		SettleMinutes:      10,
 		UntitledEvent:      "Untitled",
+		NestedSeparator:    " > ",
+		AlbumsRoot:         "Albums",
 	}
 }
 
