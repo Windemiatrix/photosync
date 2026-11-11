@@ -124,7 +124,7 @@ Retries: up to 6 attempts with exponential backoff; after three consecutive fail
 - **Other:** parser fuzzing; ru and en key parity; with `--output json`, stdout is exactly one valid JSON document.
 - **PhotoKit:** tests tagged `photokit_live` (import, deletion, albums on a real library) run only by hand under a separate macOS account with its own Apple ID and a test library, never on a primary library. In CI, on a disposable runner with its own library, only a smoke run of import, download and albums runs; deletion needs a system dialog and is not checked in CI.
 
-Coverage: at least 80% in total over all packages (`make cover`); the 95% threshold for each domain package comes with the first of them.
+Coverage: at least 80% in total over all packages and at least 95% in each domain package from its own tests (`make cover`). Tests run with the race detector, in random order and at `GOMAXPROCS` 1 and 4; the domain tests also run in the +14:00, -3:30 and +5:45 time zones (`make test-tz`).
 
 ## 7. Build
 

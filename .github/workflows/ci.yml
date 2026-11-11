@@ -60,8 +60,17 @@ jobs:
           skip-cache: true
       - name: Vet
         run: make vet
+      # Nothing listens on port 9: a test that reaches the internet through an
+      # HTTP client that reads HTTP(S)_PROXY fails at once instead of passing
+      # on the runner's network. Not on the other steps: make mod and the
+      # linter download, and make test-tz reruns tests that already ran here.
       - name: Tests and coverage with cgo
         run: make cover
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
+      - name: Domain tests in other time zones
+        run: make test-tz
 
   repo-checks:
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
