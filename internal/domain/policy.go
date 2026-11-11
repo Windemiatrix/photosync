@@ -1,5 +1,11 @@
 package domain
 
+import (
+	"errors"
+	"fmt"
+	"slices"
+)
+
 // ConflictPolicy is what a sync does with an asset that iCloud and a remote
 // changed in different ways.
 type ConflictPolicy string
@@ -125,4 +131,47 @@ func DefaultPolicies() Policies {
 		EditedDirs:         []string{"отредактировано", "edited"},
 		SettleMinutes:      10,
 	}
+}
+
+// Validate returns nil, or an errors.Join of one *PolicyError for each key
+// with a value that photosync does not take, in the order of the fields. An
+// enumeration takes only its constants, spelled exactly; Deletes and
+// UntitledEvent must not be empty, and SettleMinutes must not be negative.
+// The caller checks the rest: RemotePriority against its remotes, EditedDirs
+// and UntitledEvent as cloud names with naming.IsValidPart.
+func (p Policies) Validate() error {
+	var errs []error
+	errs = checkPolicy(errs, "conflict", p.Conflict, ConflictRemoteWins, ConflictICloudWins, ConflictAsk, ConflictSkip)
+	errs = checkPolicy(errs, "deletes", p.Deletes, DeletesNone, DeletesQuarantine, DeletesPropagate)
+	errs = checkPolicy(errs, "derived_copy", p.DerivedCopy, DerivedReplaceWithOriginal, DerivedKeepBoth, DerivedKeepRemote)
+	errs = checkPolicy(errs, "multi_album", p.MultiAlbum, MultiAlbumKeepOthers, MultiAlbumRemoveOthers)
+	errs = checkPolicy(errs, "unsupported_formats", p.UnsupportedFormats, UnsupportedConvertMP4, UnsupportedRemoteOnly)
+	errs = checkPolicy(errs, "edited_files", p.EditedFiles, EditedIgnore, EditedQuarantine)
+	errs = checkPolicy(errs, "hidden", p.Hidden, HiddenSync, HiddenSkip)
+	errs = checkPolicy(errs, "burst", p.Burst, BurstAll, BurstSelectedOnly)
+	if p.SettleMinutes < 0 {
+		errs = append(errs, &PolicyError{Key: "settle_minutes", Value: fmt.Sprint(p.SettleMinutes)})
+	}
+	if p.UntitledEvent == "" {
+		errs = append(errs, &PolicyError{Key: "untitled_event"})
+	}
+	return errors.Join(errs...)
+}
+
+func checkPolicy[T ~string](errs []error, key string, v T, known ...T) []error {
+	if slices.Contains(known, v) {
+		return errs
+	}
+	return append(errs, &PolicyError{Key: key, Value: string(v)})
+}
+
+// PolicyError is a key of a configuration with a value that photosync does
+// not take. Key is the key without its section; Value is the value as given,
+// and "" stands for a missing or empty value.
+type PolicyError struct {
+	Key, Value string
+}
+
+func (e *PolicyError) Error() string {
+	return fmt.Sprintf("domain: policy %s: invalid value %q", e.Key, e.Value)
 }
