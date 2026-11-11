@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"cmp"
+	"time"
+)
 
 // AssetKey is the address of an asset of a snapshot in a plan, before the
 // state gives the asset an AssetID. CloudAssetGUID is empty while iCloud has
@@ -8,6 +11,20 @@ import "time"
 type AssetKey struct {
 	CloudAssetGUID string
 	UUID           string
+}
+
+// Compare orders keys as a run gives new assets their IDs: keys with a
+// CloudAssetGUID first, by it, then keys without one; ties go by UUID.
+// Strings compare byte by byte. The result is negative, zero or positive, as
+// with cmp.Compare.
+func (k AssetKey) Compare(o AssetKey) int {
+	switch {
+	case k.CloudAssetGUID == "" && o.CloudAssetGUID != "":
+		return 1
+	case k.CloudAssetGUID != "" && o.CloudAssetGUID == "":
+		return -1
+	}
+	return cmp.Or(cmp.Compare(k.CloudAssetGUID, o.CloudAssetGUID), cmp.Compare(k.UUID, o.UUID))
 }
 
 // Asset is an asset of the photo library, as a snapshot reads it or as the
