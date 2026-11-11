@@ -3,9 +3,12 @@
 // are parameters, and a result does not depend on the order of its input
 // (INV-9).
 //
-// Paths of a remote use package path, are relative to the root of the remote
-// and are in NFC. Times are UTC, with the offset of the place in seconds
-// beside them. Sizes are bytes in int64. The value of an enumeration constant
-// is the string that the state and the configuration store: changing one
-// breaks the states and configurations already written.
+// Paths in RemoteEntry and Link use package path and are relative to the root
+// of their library in the remote. A path read from a remote is kept as the remote stores it, not
+// normalized, so two names that differ only in Unicode form or in case stay
+// apart; a name that photosync makes is in NFC. Times are UTC, with the
+// offset of the place in seconds beside them. Sizes are bytes in int64. The
+// value of an enumeration constant is the string that the state and the
+// configuration store: changing one breaks the states and configurations
+// already written.
 package domain

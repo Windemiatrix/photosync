@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"io"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
 )
@@ -116,4 +117,91 @@ type Converter interface {
 	ToMP4(ctx context.Context, src, dst string) error
 	// Version gives the version of the converter, for the reports.
 	Version(ctx context.Context) (string, error)
+}
+
+// Remote is a store of files that holds the roots of the libraries. Its
+// paths use package path, are relative to the top of the store and are
+// passed and returned as the store keeps them, not normalized: names that
+// differ only in Unicode form or in case stay apart. A call fails with
+// domain.ErrNotFound when a path that it reads, moves or removes is
+// missing, and a call that writes a path needs its directory made first. A
+// call that would change a path outside the roots that the remote was made
+// with, or move or remove a root, fails with nothing changed; so does a
+// path argument that starts with "/", has an empty, "." or ".." element, or
+// holds a NUL. Its methods may be called from several goroutines at once.
+type Remote interface {
+	Capabilities() domain.Capabilities
+
+	// Walk calls fn for every file and directory below root, in any order,
+	// never two calls at once, and reads listings, not files. Path of an
+	// entry is relative to root. Walk leaves nothing out, for excluding
+	// paths is up to the caller, and fn cannot prune a subtree: an error from
+	// fn ends the Walk with that error. An entry whose path is not below
+	// root, as one that starts with "/" or has an empty, "." or ".."
+	// element, or holds a NUL fails the whole Walk, and so does an error on
+	// any branch: a Walk that succeeds has listed everything.
+	Walk(ctx context.Context, root string, fn func(domain.RemoteEntry) error) error
+	// Stat gives the entry at path, as Walk would, with an empty Path.
+	Stat(ctx context.Context, path string) (domain.RemoteEntry, error)
+	// Get reads the file at path from byte offset on: length bytes, or up to
+	// the end when length is negative.
+	Get(ctx context.Context, path string, offset, length int64) (io.ReadCloser, error)
+
+	// Put writes the file path from size bytes of r, replacing a file that
+	// is there; an r that gives more or fewer than size bytes fails the Put.
+	// After an error path may hold a part of the file.
+	Put(ctx context.Context, path string, r io.Reader, size int64, h domain.PutHints) error
+	// Mkdir makes the directory path and its missing parents; a directory
+	// that is there already is no change, and a file on the way is
+	// domain.ErrExists.
+	Mkdir(ctx context.Context, path string) error
+	// Move moves the file src to dst in one step. A dst that is taken is
+	// domain.ErrExists, and then nothing is moved; so is a directory at src.
+	Move(ctx context.Context, src, dst string) error
+	// Copy is Move that keeps src.
+	Copy(ctx context.Context, src, dst string) error
+	// Delete removes the file at path; a directory there fails the Delete
+	// with nothing removed.
+	Delete(ctx context.Context, path string) error
+	// RemoveEmptyDir removes the directory path; one that holds anything is
+	// domain.ErrNotEmpty, and then nothing is removed.
+	RemoveEmptyDir(ctx context.Context, path string) error
+
+	// Quota gives the bytes used and the bytes still free in the store; a
+	// store that does not tell fails with domain.ErrNotSupported.
+	Quota(ctx context.Context) (used, available int64, err error)
+}
+
+// MediaProbe reads the metadata of a photo or a video by its content alone:
+// the extension of a name in the cloud may lie.
+type MediaProbe interface {
+	// Probe reads src, a file of size bytes, only within its first 4 MiB and
+	// its last 4 MiB, so that a long video is not downloaded whole. What it
+	// cannot read is left zero, a file of a format it does not know included:
+	// Probe fails only when src or ctx does.
+	Probe(ctx context.Context, src io.ReaderAt, size int64) (domain.MediaMeta, error)
+}
+
+// UI asks the user and shows the progress of a run on the standard error,
+// apart from the result of a command on the standard output. Its methods may
+// be called from several goroutines at once. With no terminal to ask in, a
+// question fails at once with domain.ErrNoTTY, so that a run never waits for
+// an answer that cannot come.
+type UI interface {
+	// Confirm reports whether the user answers prompt with yes in any
+	// language of the interface; any other answer, an empty line and the end
+	// of input are no.
+	Confirm(ctx context.Context, prompt string) (bool, error)
+	// Input gives the line that the user types after prompt, without the line
+	// break, and io.EOF at the end of input.
+	Input(ctx context.Context, prompt string) (string, error)
+	// Print shows msg on lines of its own, never inside the progress line.
+	Print(msg string)
+
+	// ProgressStart shows the progress of stage out of totalItems items and
+	// totalBytes bytes until ProgressDone.
+	ProgressStart(stage string, totalItems, totalBytes int64)
+	// ProgressAdd counts items and bytes more as done.
+	ProgressAdd(items, bytes int64)
+	ProgressDone()
 }
