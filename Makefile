@@ -15,7 +15,7 @@ help: ## Display this help.
 ##@ Development
 
 .PHONY: test
-test: mod vet cover lint lint-sh check-repo release-snapshot fixtures-check fixtures-verify ## Run every check (before a PR)
+test: mod vet cover test-tz lint lint-sh check-repo release-snapshot fixtures-check fixtures-verify ## Run every check (before a PR)
 
 .PHONY: mod
 mod: ## go.mod is tidy and the modules match go.sum
@@ -27,16 +27,26 @@ vet: ## go vet, the fixtures_verify build tag included
 	go vet ./...
 	go vet -tags fixtures_verify ./tools/anonymize
 
-# In percent. Not "?=": the environment must not lower it. The per-package
-# threshold of 95 % for internal/domain comes with the first package there.
+# In percent. Not "?=": the environment must not lower it. Each package of
+# internal/domain needs 95% on its own (the grep in cover): the total would
+# hide a domain package with few tests.
 COVERAGE_MIN := 80
 
 .PHONY: cover
-cover: ## Tests with the race detector and the coverage threshold
-	go test -race -shuffle=on -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+cover: ## Tests with the race detector and the coverage thresholds
+	go test -race -shuffle=on -count=1 -cpu 1,4 -covermode=atomic -coverprofile=coverage.out ./...
 	@pct=$$(go tool cover -func=coverage.out | tail -n 1 | tr -dc '0-9.'); \
 	echo "coverage: $$pct% (minimum $(COVERAGE_MIN)%)"; \
 	test "$${pct%.*}" -ge $(COVERAGE_MIN)
+	! go test -cover ./internal/domain/... | grep -v -E 'coverage: (9[5-9]|100)\.[0-9]% of statements'
+
+# Offsets that break code which assumes whole hours or at most 12 hours from
+# UTC: +14:00, -3:30 with daylight saving, +5:45.
+.PHONY: test-tz
+test-tz: ## Domain tests in time zones with unusual UTC offsets
+	TZ=Pacific/Kiritimati go test -shuffle=on -count=1 ./internal/domain/...
+	TZ=America/St_Johns go test -shuffle=on -count=1 ./internal/domain/...
+	TZ=Asia/Kathmandu go test -shuffle=on -count=1 ./internal/domain/...
 
 .PHONY: lint
 lint: ## Run golangci-lint
