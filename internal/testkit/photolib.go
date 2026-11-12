@@ -27,6 +27,8 @@ type FakePhotoLibrary struct {
 	albums   []domain.Album
 	failNext map[string]error
 	counters Counters
+	imported map[int][][]byte
+	lastID   int
 }
 
 // Counters is what a FakePhotoLibrary has done: Calls counts the calls of
@@ -49,6 +51,7 @@ func NewFakePhotoLibrary(s domain.LibrarySnapshot) *FakePhotoLibrary {
 		albums:   slices.Clone(s.Albums),
 		failNext: map[string]error{},
 		counters: Counters{Calls: map[string]int{}},
+		imported: map[int][][]byte{},
 	}
 	for i := range f.assets {
 		if a := &f.assets[i]; a.InCloud != nil && *a.InCloud {
@@ -122,6 +125,13 @@ func (f *FakePhotoLibrary) begin(ctx context.Context, op string) error {
 		return err
 	}
 	return ctx.Err()
+}
+
+// Numbers of each fake's own, unlike photoLibIDs, keep the identifiers that
+// a test reads the same whatever tests run beside it.
+func (f *FakePhotoLibrary) newID(prefix string) string {
+	f.lastID++
+	return fmt.Sprintf("%s-%d", prefix, f.lastID)
 }
 
 func (f *FakePhotoLibrary) folderTitles(parent string) []string {
