@@ -56,7 +56,8 @@ func photoLibSeed() domain.LibrarySnapshot {
 		Albums: []domain.Album{
 			{UUID: "folder-1", Kind: domain.KindFolder, Title: "Trips"},
 			{UUID: "folder-2", Kind: domain.KindFolder, Title: "2024", ParentUUID: "folder-1", FolderTitles: []string{"Old"}},
-			{UUID: "album-1", Key: "album-guid-1", KeySource: domain.KeyCloudGUID, Title: "05/01 Holidays", ParentUUID: "folder-2"},
+			{UUID: "album-1", Key: "album-guid-1", KeySource: domain.KeyCloudGUID, Title: "05/01 Holidays", ParentUUID: "folder-2",
+				Start: time.Date(2024, 5, 1, 10, 0, 0, 0, time.UTC)},
 			{UUID: "album-2", Title: "Отпуск", InTrash: true, FolderTitles: []string{"Old"}},
 			{UUID: "album-3", Title: "Lost", ParentUUID: "folder-9"},
 		},
