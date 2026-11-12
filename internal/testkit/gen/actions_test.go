@@ -140,6 +140,44 @@ func applyCases() []applyCase {
 			},
 		},
 		{
+			name:    "photos: move to another album",
+			actions: []gen.Action{{Side: gen.ICloud, Kind: gen.AlbumMove, Key: a, Album: "album-1"}},
+			edit: func(want *gen.World) {
+				want.Snapshot.Assets[0].AlbumUUIDs = []string{"album-1"}
+				want.Snapshot.Albums[1].Start = atHour(12)
+				want.Snapshot.Albums[2].Start = atHour(11)
+			},
+		},
+		{
+			name: "photos: move out of two albums",
+			actions: []gen.Action{
+				{Side: gen.ICloud, Kind: gen.AlbumAdd, Key: a, Album: "album-1"},
+				{Side: gen.ICloud, Kind: gen.AlbumMove, Key: a, Album: "album-2"},
+			},
+			edit: func(want *gen.World) {
+				want.Snapshot.Assets[0].AlbumUUIDs = []string{"album-2"}
+				want.Snapshot.Albums[1].Start = atHour(12)
+				want.Snapshot.Albums[3].Start = atHour(11)
+			},
+		},
+		{
+			name:    "photos: move to the album it is in",
+			actions: []gen.Action{{Side: gen.ICloud, Kind: gen.AlbumMove, Key: a, Album: "album-0"}},
+			edit:    func(*gen.World) {},
+		},
+		{
+			name: "photos: move an asset in no album",
+			actions: []gen.Action{
+				{Side: gen.ICloud, Kind: gen.AlbumRemove, Key: c, Album: "album-1"},
+				{Side: gen.ICloud, Kind: gen.AlbumMove, Key: c, Album: "album-2"},
+			},
+			edit: func(want *gen.World) {
+				want.Snapshot.Assets[2].AlbumUUIDs = []string{"album-2"}
+				want.Snapshot.Albums[2].Start = time.Time{}
+				want.Snapshot.Albums[3].Start = atHour(13)
+			},
+		},
+		{
 			name:    "photos: rename an album",
 			actions: []gen.Action{{Side: gen.ICloud, Kind: gen.AlbumRename, Album: "album-1", To: "05/01 Beach"}},
 			edit:    func(want *gen.World) { want.Snapshot.Albums[2].Title = "05/01 Beach" },
@@ -226,6 +264,8 @@ func applyCases() []applyCase {
 				{Side: gen.ICloud, Kind: gen.AlbumAdd, Key: a, Album: "album-9"},
 				{Side: gen.ICloud, Kind: gen.AlbumAdd, Key: noKey, Album: "album-1"},
 				{Side: gen.ICloud, Kind: gen.AlbumRemove, Key: noKey, Album: "album-0"},
+				{Side: gen.ICloud, Kind: gen.AlbumMove, Key: a, Album: "album-9"},
+				{Side: gen.ICloud, Kind: gen.AlbumMove, Key: noKey, Album: "album-1"},
 				{
 					Side: gen.ICloud, Kind: gen.Create, Key: newKey, Album: "album-9",
 					Path: "NEW_0001.HEIC", Size: 5_000_000, Taken: atHour(10),
@@ -241,6 +281,7 @@ func applyCases() []applyCase {
 				{Side: gen.Remote, Kind: gen.Replace, Path: none, Size: 1},
 				{Side: gen.Remote, Kind: gen.Delete, Path: none},
 				{Side: gen.Remote, Kind: gen.AlbumAdd, Path: f1, Album: "album-1"},
+				{Side: gen.Remote, Kind: gen.AlbumMove, Key: a, Album: "album-1"},
 				{Kind: gen.Delete, Key: a, Path: f1},
 			},
 			edit: func(*gen.World) {},
@@ -283,9 +324,9 @@ func TestApplyLeavesInput(t *testing.T) {
 	w := fixture()
 	for _, c := range applyCases() {
 		_ = w.Apply(c.actions...)
-	}
-	if want := fixture(); !reflect.DeepEqual(w, want) {
-		t.Errorf("Apply changed the world it was given:\n got %+v\nwant %+v", w, want)
+		if want := fixture(); !reflect.DeepEqual(w, want) {
+			t.Errorf("%s: Apply changed the world it was given:\n got %+v\nwant %+v", c.name, w, want)
+		}
 	}
 
 	key := w.Snapshot.Assets[0].Key
