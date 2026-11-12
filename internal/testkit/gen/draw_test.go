@@ -77,13 +77,13 @@ func TestActionsNotVacuous(t *testing.T) {
 	pairs := []gen.Action{
 		{Side: gen.ICloud, Kind: gen.Create}, {Side: gen.ICloud, Kind: gen.Delete},
 		{Side: gen.ICloud, Kind: gen.AlbumAdd}, {Side: gen.ICloud, Kind: gen.AlbumRemove},
-		{Side: gen.ICloud, Kind: gen.AlbumRename}, {Side: gen.Remote, Kind: gen.Create},
-		{Side: gen.Remote, Kind: gen.Move}, {Side: gen.Remote, Kind: gen.Rename},
-		{Side: gen.Remote, Kind: gen.Replace}, {Side: gen.Remote, Kind: gen.Delete},
-		{Side: gen.Remote, Kind: gen.AlbumRename},
+		{Side: gen.ICloud, Kind: gen.AlbumMove}, {Side: gen.ICloud, Kind: gen.AlbumRename},
+		{Side: gen.Remote, Kind: gen.Create}, {Side: gen.Remote, Kind: gen.Move},
+		{Side: gen.Remote, Kind: gen.Rename}, {Side: gen.Remote, Kind: gen.Replace},
+		{Side: gen.Remote, Kind: gen.Delete}, {Side: gen.Remote, Kind: gen.AlbumRename},
 	}
 	drawn := map[gen.Action]bool{}
-	acting, longest := 0, 0
+	acting, longest, switching := 0, 0, 0
 	var conflict, moved, deleted bool
 	for seed := range samples {
 		w := gen.Worlds(gen.Config{Frames: 6}).Example(seed)
@@ -96,6 +96,7 @@ func TestActionsNotVacuous(t *testing.T) {
 			drawn[gen.Action{Side: a.Side, Kind: a.Kind}] = true
 		}
 		after := w.Apply(actions...)
+		switched := false
 		for _, k := range w.Truth {
 			asset, file, _ := drawnPair(w, k)
 			assetAfter, fileAfter, kept := drawnPair(after, k)
@@ -103,10 +104,16 @@ func TestActionsNotVacuous(t *testing.T) {
 			conflict = conflict || inPhotos && inCloud
 			moved = moved || kept && fileAfter.Path != file.Path
 			deleted = deleted || !kept || assetAfter.InTrash
+			switched = switched || !inCloud && !assetAfter.InTrash && !slices.Equal(asset.AlbumUUIDs, assetAfter.AlbumUUIDs)
+		}
+		// The reference model reads only worlds where every asset is in one album.
+		if switched && !slices.ContainsFunc(after.Snapshot.Assets, func(x domain.Asset) bool { return len(x.AlbumUUIDs) != 1 }) {
+			switching++
 		}
 	}
-	t.Logf("%d of %d samples act; the longest has %d actions; %d of %d pairs drawn",
-		acting, samples, longest, len(drawn), len(pairs))
+	t.Logf("%d of %d samples act; the longest has %d actions; %d of %d pairs drawn; "+
+		"%d move an asset to another album while its file stays and leave every asset in one album",
+		acting, samples, longest, len(drawn), len(pairs), switching)
 	var missing []string
 	if acting*10 < samples*7 {
 		missing = append(missing, fmt.Sprintf("an action in 70 %% of them (%d act)", acting))
@@ -126,6 +133,7 @@ func TestActionsNotVacuous(t *testing.T) {
 		{conflict, "an asset and its file that both changed"},
 		{moved, "a moved file of an asset"},
 		{deleted, "a deleted asset or file of an asset"},
+		{switching > 0, "an asset moved to another album while its file stays, every asset in one album"},
 	} {
 		if !c.ok {
 			missing = append(missing, c.what)
@@ -223,7 +231,7 @@ func checkDrawnAction(w gen.World, a gen.Action) (int, error) {
 	case a.Side == gen.ICloud && a.Kind == gen.Delete:
 		used = gen.Action{Side: a.Side, Kind: a.Kind, Key: a.Key}
 		ok, rule = live[a.Key], "an asset outside Recently Deleted"
-	case a.Side == gen.ICloud && a.Kind == gen.AlbumAdd:
+	case a.Side == gen.ICloud && (a.Kind == gen.AlbumAdd || a.Kind == gen.AlbumMove):
 		used = gen.Action{Side: a.Side, Kind: a.Kind, Key: a.Key, Album: a.Album}
 		ok, rule = live[a.Key] && isEvent, "an asset outside Recently Deleted and an album that is not a folder"
 	case a.Side == gen.ICloud && a.Kind == gen.AlbumRemove:
@@ -260,7 +268,7 @@ func checkDrawnAction(w gen.World, a gen.Action) (int, error) {
 		ok, rule = free && dirs[a.Path] && attempt >= 0,
 			"the directory of a file, to a free path with the suffix of an attempt"
 	default:
-		return -1, errors.New("not one of the 11 pairs of side and kind")
+		return -1, errors.New("not one of the 12 pairs of side and kind")
 	}
 	if a != used {
 		return attempt, fmt.Errorf("sets the fields that its kind does not use; want %+v", used)

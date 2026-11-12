@@ -19,10 +19,10 @@ const (
 )
 
 // ActionKind is what a user does. In Photos a user creates and deletes an
-// asset, adds it to an album, removes it from one and renames an album. In
-// the cloud a user creates a file, moves it to another directory, renames it
-// in its own, replaces its content and deletes it, and renames a directory.
-// Apply ignores the other pairs of side and kind.
+// asset, adds it to an album, removes it from one, moves it to one and
+// renames an album. In the cloud a user creates a file, moves it to another
+// directory, renames it in its own, replaces its content and deletes it, and
+// renames a directory. Apply ignores the other pairs of side and kind.
 type ActionKind string
 
 // The kinds of actions.
@@ -34,6 +34,7 @@ const (
 	Delete      ActionKind = "delete"
 	AlbumAdd    ActionKind = "album_add"
 	AlbumRemove ActionKind = "album_remove"
+	AlbumMove   ActionKind = "album_move"
 	AlbumRename ActionKind = "album_rename"
 )
 
@@ -42,7 +43,8 @@ const (
 // of the album that a new asset goes to, that Key joins or leaves, or that
 // takes the title To. A Create adds a photo with the key Key whose original,
 // named Path, has Size bytes and was taken at Taken. A Delete moves Key to
-// Recently Deleted, where it stays in its albums. In the cloud, Path is a
+// Recently Deleted, where it stays in its albums. An AlbumMove takes Key out
+// of each album it is in and puts it in Album. In the cloud, Path is a
 // file, or the directory of an AlbumRename, and To its new path. A Create
 // adds a file of Size bytes taken at Taken to the personal root; a Replace
 // gives the file at Path new content of Size bytes and the same metadata.
@@ -95,6 +97,13 @@ func (w *World) inICloud(a Action) {
 		assets[i].AlbumUUIDs = slices.Concat(assets[i].AlbumUUIDs, []string{a.Album})
 	case a.Kind == AlbumRemove && i >= 0:
 		assets[i].AlbumUUIDs = slices.DeleteFunc(slices.Clone(assets[i].AlbumUUIDs), func(u string) bool { return u == a.Album })
+	// One action rather than an add and a remove: apart they rarely meet on
+	// one asset, and either alone leaves it in two albums or in none.
+	case a.Kind == AlbumMove && i >= 0 && j >= 0:
+		for _, u := range assets[i].AlbumUUIDs {
+			w.inICloud(Action{Side: ICloud, Kind: AlbumRemove, Key: a.Key, Album: u})
+		}
+		w.inICloud(Action{Side: ICloud, Kind: AlbumAdd, Key: a.Key, Album: a.Album})
 	case a.Kind == AlbumRename && j >= 0:
 		albums[j].Title = a.To
 	}
