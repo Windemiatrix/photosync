@@ -51,8 +51,10 @@ const (
 
 // LinkDecision is what a sync does with one link, or with a new asset or
 // file of a remote, and why: the change on each side and the ID of the rule
-// in Rules that chose the action, empty for ActionNone.
+// in Rules that chose the action, empty for ActionNone. Link is the link as
+// the last applied run left it, zero for a new asset or file.
 type LinkDecision struct {
+	Link           Link
 	ICloud, Remote ChangeKind
 	Action         LinkAction
 	Rule           string
@@ -67,6 +69,21 @@ type LinkDecision struct {
 type Placement struct {
 	Action  LinkAction
 	Link    Link
+	AlbumID AlbumID
+	Rule    string
+}
+
+// ObjectDecision is what the files of a remote make of an asset: Links are
+// the decisions on its links there, and Join and Leave the albums that it
+// joins and leaves in iCloud.
+type ObjectDecision struct {
+	Links       []LinkDecision
+	Join, Leave []AlbumChange
+}
+
+// AlbumChange is an album that an asset joins or leaves in iCloud, with the
+// ID of the rule in Rules that chose the change.
+type AlbumChange struct {
 	AlbumID AlbumID
 	Rule    string
 }
