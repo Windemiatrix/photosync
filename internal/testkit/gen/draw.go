@@ -15,9 +15,9 @@ import (
 
 var drawPairs = []Action{
 	{Side: ICloud, Kind: Create}, {Side: ICloud, Kind: Delete}, {Side: ICloud, Kind: AlbumAdd},
-	{Side: ICloud, Kind: AlbumRemove}, {Side: ICloud, Kind: AlbumRename}, {Side: Remote, Kind: Create},
-	{Side: Remote, Kind: Move}, {Side: Remote, Kind: Rename}, {Side: Remote, Kind: Replace},
-	{Side: Remote, Kind: Delete}, {Side: Remote, Kind: AlbumRename},
+	{Side: ICloud, Kind: AlbumRemove}, {Side: ICloud, Kind: AlbumMove}, {Side: ICloud, Kind: AlbumRename},
+	{Side: Remote, Kind: Create}, {Side: Remote, Kind: Move}, {Side: Remote, Kind: Rename},
+	{Side: Remote, Kind: Replace}, {Side: Remote, Kind: Delete}, {Side: Remote, Kind: AlbumRename},
 }
 
 // Actions returns the generator of the actions that a user takes on w, one
@@ -67,7 +67,7 @@ func drawAction(t *rapid.T, w World, i int) Action {
 		a.Album, a.Path, a.Size, a.Taken = album.UUID, name+".HEIC", size, taken
 	case a.Side == ICloud && a.Kind == Delete:
 		a.Key = asset.Key
-	case a.Side == ICloud && a.Kind == AlbumAdd:
+	case a.Side == ICloud && (a.Kind == AlbumAdd || a.Kind == AlbumMove):
 		a.Key, a.Album = asset.Key, album.UUID
 	case a.Side == ICloud && a.Kind == AlbumRemove:
 		a.Key, a.Album = asset.Key, drawOne(t, asset.AlbumUUIDs)
