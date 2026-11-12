@@ -66,9 +66,13 @@ func (f *FakePhotoLibrary) Import(ctx context.Context, req domain.ImportRequest)
 		a.Resources = append(a.Resources, domain.Resource{Role: file.role, Filename: file.name, Size: int64(len(b))})
 		data = append(data, b)
 	}
-	a.Key.UUID = f.newID("fake-uuid")
-	f.imported[len(f.assets)] = data
-	f.assets = append(f.assets, a)
+	if err := f.commit(ctx, "Import", func() {
+		a.Key.UUID = f.newID("fake-uuid")
+		f.imported[len(f.assets)] = data
+		f.assets = append(f.assets, a)
+	}); err != nil {
+		return "", err
+	}
 	return a.Key.UUID, nil
 }
 
