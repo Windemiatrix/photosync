@@ -20,9 +20,11 @@ func TestDecisionValues(t *testing.T) {
 		domain.ActionMoveFile, domain.ActionMoveAsset, domain.ActionReplaceAsset,
 		domain.ActionMoveFileReplaceAsset, domain.ActionConflict, domain.ActionDeleteFile,
 		domain.ActionDeleteAsset, domain.ActionForget, domain.ActionUpdateBase,
+		domain.ActionCopyFile, domain.ActionQuarantineFile,
 	},
 		"none", "upload", "import", "link",
 		"move_file", "move_asset", "replace_asset",
 		"move_file_replace_asset", "conflict", "delete_file",
-		"delete_asset", "forget", "update_base")
+		"delete_asset", "forget", "update_base",
+		"copy_file", "quarantine_file")
 }

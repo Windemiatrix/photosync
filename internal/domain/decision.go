@@ -28,7 +28,9 @@ type LinkAction string
 // ActionConflict the winner to the conflict policy. ActionReplaceAsset
 // imports the file in place of the asset. ActionForget drops the link from
 // the state and ActionUpdateBase takes both sides into it, both without
-// operations.
+// operations. ActionCopyFile copies a file of the remote into another
+// directory as a new link, and ActionQuarantineFile moves a needless copy to
+// the quarantine whatever the deletes policy.
 const (
 	ActionNone                 LinkAction = "none"
 	ActionUpload               LinkAction = "upload"
@@ -43,6 +45,8 @@ const (
 	ActionDeleteAsset          LinkAction = "delete_asset"
 	ActionForget               LinkAction = "forget"
 	ActionUpdateBase           LinkAction = "update_base"
+	ActionCopyFile             LinkAction = "copy_file"
+	ActionQuarantineFile       LinkAction = "quarantine_file"
 )
 
 // LinkDecision is what a sync does with one link, or with a new asset or
@@ -52,4 +56,17 @@ type LinkDecision struct {
 	ICloud, Remote ChangeKind
 	Action         LinkAction
 	Rule           string
+}
+
+// Placement is a change that makes the files of an asset in a remote lie in
+// the directories of its albums: ActionMoveFile, ActionCopyFile or
+// ActionUpload into the directory of the album AlbumID, zero for the day
+// folder, or ActionQuarantineFile. Link is the file moved, copied or
+// quarantined as the remote has it now, zero for an upload. Rule is the ID
+// of the rule in Rules that chose the change.
+type Placement struct {
+	Action  LinkAction
+	Link    Link
+	AlbumID AlbumID
+	Rule    string
 }
