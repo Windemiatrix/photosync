@@ -9,9 +9,10 @@ import (
 	"github.com/Windemiatrix/photosync/internal/testkit/gen"
 )
 
-// Three times the slowest best time measured under the race detector with
-// one and four CPUs: a loaded machine passes, a slower algorithm does not.
-const matchScaleCeiling = 5500 * time.Millisecond
+// Three times the slowest best time measured on the macOS CI runner under the
+// race detector with one and four CPUs, about three times slower than a
+// laptop: a loaded runner passes, an algorithm several times slower does not.
+const matchScaleCeiling = 18 * time.Second
 
 // A first sync of twenty thousand shots must match within the ceiling. The
 // world is made before the clock starts, and the best of three runs keeps a
