@@ -58,3 +58,22 @@ func ModeDecide(m domain.Mode, icloud, remote domain.ChangeKind, same bool) (dom
 	}
 	return d, ok
 }
+
+// ModeKeepAlbums returns ModeDecide(m, icloud, remote, same) for a link
+// under the personal root while albums_for_personal is false, the file of
+// which, if the user moved it, is still under that root: a move of the file
+// changes no album there, so it counts as no change unless both sides moved
+// to one place, and when ModeDecide then does nothing and names no rule, the
+// base takes the move with ActionUpdateBase and the rule R-MODE-04. Remote of
+// the result is remote.
+func ModeKeepAlbums(m domain.Mode, icloud, remote domain.ChangeKind, same bool) (domain.LinkDecision, bool) {
+	if remote != domain.ChangeMoved || same && icloud == domain.ChangeMoved {
+		return ModeDecide(m, icloud, remote, same)
+	}
+	d, ok := ModeDecide(m, icloud, domain.ChangeUnchanged, same)
+	d.Remote = remote
+	if d.Action == domain.ActionNone && d.Rule == "" {
+		d.Action, d.Rule = domain.ActionUpdateBase, "R-MODE-04"
+	}
+	return d, ok
+}
