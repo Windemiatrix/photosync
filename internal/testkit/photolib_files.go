@@ -10,11 +10,11 @@ import (
 )
 
 // Download writes each resource of the asset into dir as a file named after
-// its role, such as "original": Size bytes that begin with the Filename of
-// the resource and the Taken of the asset, so that duplicates in iCloud,
-// alike in all three, give equal files. ctx is checked before each file;
-// progress is called after each one with the fake locked and must not call
-// the fake.
+// its role, such as "original": the bytes that Import read for it, or else
+// Size bytes that begin with the Filename of the resource and the Taken of
+// the asset, so that duplicates in iCloud, alike in all three, give equal
+// files. ctx is checked before each file; progress is called after each one
+// with the fake locked and must not call the fake.
 func (f *FakePhotoLibrary) Download(ctx context.Context, uuid, dir string, progress func(received int64)) ([]domain.LocalFile, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -27,12 +27,17 @@ func (f *FakePhotoLibrary) Download(ctx context.Context, uuid, dir string, progr
 	}
 	var files []domain.LocalFile
 	var received int64
-	for _, res := range f.assets[i].Resources {
+	for j, res := range f.assets[i].Resources {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		b := make([]byte, res.Size)
-		copy(b, res.Filename+" "+f.assets[i].Taken.UTC().Format(time.RFC3339Nano))
+		var b []byte
+		if data := f.imported[i]; data != nil {
+			b = data[j]
+		} else {
+			b = make([]byte, res.Size)
+			copy(b, res.Filename+" "+f.assets[i].Taken.UTC().Format(time.RFC3339Nano))
+		}
 		path := filepath.Join(dir, string(res.Role))
 		if err := os.WriteFile(path, b, 0o600); err != nil {
 			return nil, err
