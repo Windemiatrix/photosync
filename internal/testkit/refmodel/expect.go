@@ -147,3 +147,20 @@ func (e *expectation) imported(from string, s slot) {
 	e.out.Objects[domain.AssetKey{UUID: p}] = Object{Album: s.place, Name: path.Base(from), Size: size}
 	e.out.Files[p] = File{Key: domain.AssetKey{UUID: p}, Size: size}
 }
+
+// Canon returns a copy of w, the world that a sync leaves, in which every
+// asset that Now lacks and a file of w links is keyed, in Objects and in that
+// file, by the path of that file as its UUID, as Expected keys the assets
+// that a sync imports.
+func (m Model) Canon(w World) World {
+	c := World{Objects: maps.Clone(w.Objects), Files: maps.Clone(w.Files)}
+	for p, f := range w.Files {
+		o, linked := w.Objects[f.Key]
+		if _, known := m.Now.Objects[f.Key]; linked && !known {
+			delete(c.Objects, f.Key)
+			f.Key = domain.AssetKey{UUID: p}
+			c.Objects[f.Key], c.Files[p] = o, f
+		}
+	}
+	return c
+}
