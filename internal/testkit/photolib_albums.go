@@ -43,8 +43,7 @@ func (f *FakePhotoLibrary) RenameCollection(ctx context.Context, uuid, title str
 	if err != nil {
 		return err
 	}
-	f.albums[i].Title = norm.NFC.String(title)
-	return nil
+	return f.commit(ctx, "RenameCollection", func() { f.albums[i].Title = norm.NFC.String(title) })
 }
 
 func (f *FakePhotoLibrary) create(ctx context.Context, op, title, parentUUID string, kind domain.AlbumKind) (string, error) {
@@ -61,8 +60,13 @@ func (f *FakePhotoLibrary) create(ctx context.Context, op, title, parentUUID str
 			return "", err
 		}
 	}
-	a := domain.Album{UUID: f.newID("fake-uuid"), Kind: kind, Title: norm.NFC.String(title), ParentUUID: parentUUID}
-	f.albums = append(f.albums, a)
+	a := domain.Album{Kind: kind, Title: norm.NFC.String(title), ParentUUID: parentUUID}
+	if err := f.commit(ctx, op, func() {
+		a.UUID = f.newID("fake-uuid")
+		f.albums = append(f.albums, a)
+	}); err != nil {
+		return "", err
+	}
 	return a.UUID, nil
 }
 
@@ -124,10 +128,11 @@ func (f *FakePhotoLibrary) changeMembers(ctx context.Context, op, albumUUID stri
 	if err != nil {
 		return err
 	}
-	for _, i := range found {
-		f.assets[i].AlbumUUIDs = change(f.assets[i].AlbumUUIDs)
-	}
-	return nil
+	return f.commit(ctx, op, func() {
+		for _, i := range found {
+			f.assets[i].AlbumUUIDs = change(f.assets[i].AlbumUUIDs)
+		}
+	})
 }
 
 func (f *FakePhotoLibrary) findAssets(uuids []string) ([]int, error) {
