@@ -190,3 +190,65 @@ func TestModeProjection(t *testing.T) {
 		t.Errorf("decided %d combinations; want 270: each of the 15 possible pairs, with and without same, in 3 modes under 3 policies", decided)
 	}
 }
+
+// Written per mode from the rule on the albums of the personal root, not
+// from the code: there a move of a file is no change, as on the side that a
+// one-way remote does not sync, so the base takes it, an asset moved in
+// iCloud takes its file along, and an asset deleted in iCloud stays deleted.
+// The same move on both sides and every cell without a move of the file
+// decide as ModeDecide does.
+func TestModeKeepAlbums(t *testing.T) {
+	t.Parallel()
+	const (
+		unchanged, moved, deleted = domain.ChangeUnchanged, domain.ChangeMoved, domain.ChangeDeleted
+		two, upload, download     = domain.ModeTwoWay, domain.ModeUploadOnly, domain.ModeDownloadOnly
+	)
+	type key struct {
+		mode domain.Mode
+		linkPair
+	}
+	type outcome struct {
+		action domain.LinkAction
+		rule   string
+	}
+	moves := map[key]outcome{
+		{two, linkPair{unchanged, moved}}:      {domain.ActionUpdateBase, "R-MODE-04"}, // covers: R-MODE-04
+		{two, linkPair{moved, moved}}:          {domain.ActionMoveFile, "R-LINK-04"},
+		{two, linkPair{deleted, moved}}:        {domain.ActionDeleteFile, "R-LINK-08"},
+		{upload, linkPair{unchanged, moved}}:   {domain.ActionUpdateBase, "R-MODE-04"},
+		{upload, linkPair{moved, moved}}:       {domain.ActionMoveFile, "R-LINK-04"},
+		{upload, linkPair{deleted, moved}}:     {domain.ActionDeleteFile, "R-LINK-08"},
+		{download, linkPair{unchanged, moved}}: {domain.ActionUpdateBase, "R-MODE-04"},
+		{download, linkPair{moved, moved}}:     {domain.ActionUpdateBase, "R-MODE-02"},
+		{download, linkPair{deleted, moved}}:   {domain.ActionNone, "R-MODE-02"},
+	}
+	for _, o := range moves {
+		if _, ok := domain.Rules[o.rule]; !ok {
+			t.Errorf("%s is not in domain.Rules", o.rule)
+		}
+	}
+	equal := func(a, b domain.LinkDecision) bool {
+		return a.ICloud == b.ICloud && a.Remote == b.Remote && a.Action == b.Action && a.Rule == b.Rule
+	}
+	for _, m := range []domain.Mode{two, upload, download} {
+		for _, icloud := range changeKinds {
+			for _, remote := range changeKinds {
+				for _, same := range []bool{false, true} {
+					got, ok := plan.ModeKeepAlbums(m, icloud, remote, same)
+					w, listed := moves[key{m, linkPair{icloud, remote}}]
+					want, wantOK := plan.ModeDecide(m, icloud, remote, same)
+					switch {
+					case listed && (!same || icloud != moved):
+						if !ok || !equal(got, domain.LinkDecision{ICloud: icloud, Remote: remote, Action: w.action, Rule: w.rule}) {
+							t.Errorf("ModeKeepAlbums(%s, %s, %s, %v) = %s by %q with sides %s, %s, %v; want %s by %q, true",
+								m, icloud, remote, same, got.Action, got.Rule, got.ICloud, got.Remote, ok, w.action, w.rule)
+						}
+					case ok != wantOK || ok && !equal(got, want):
+						t.Errorf("ModeKeepAlbums(%s, %s, %s, %v) = %s by %q with sides %s, %s, %v; want %s by %q with sides %s, %s, %v as ModeDecide",
+							m, icloud, remote, same, got.Action, got.Rule, got.ICloud, got.Remote, ok, want.Action, want.Rule, want.ICloud, want.Remote, wantOK)
+					}
+				}
+			}
+		}
+	}
+}

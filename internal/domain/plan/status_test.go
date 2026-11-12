@@ -1,6 +1,7 @@
 package plan_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
@@ -81,6 +82,117 @@ func TestStatusDeletes(t *testing.T) {
 			if _, ok := domain.Rules[w.rule]; w.rule != "" && !ok {
 				t.Errorf("%s is not in domain.Rules", w.rule)
 			}
+		}
+	}
+}
+
+// Written from the quarantine rules, not from the code: a quarantined link
+// stays as it is until the user brings a side back, and then starts again as
+// a link without a base, the side back new and the other none. A link
+// quarantined in iCloud ends once its asset is gone for good, while one
+// quarantined in the cloud waits for its quarantine to expire. A side
+// brought back is deleted again in no mode under no deletes policy and
+// detaches no link, and a two-way remote keeps the link active.
+func TestStatusSides(t *testing.T) {
+	t.Parallel()
+	const (
+		none, added, deleted = domain.ChangeNone, domain.ChangeNew, domain.ChangeDeleted
+		unchanged, replaced  = domain.ChangeUnchanged, domain.ChangeReplaced
+		inICloud, inCloud    = domain.StatusQuarantinedICloud, domain.StatusQuarantinedRemote
+	)
+	type asset struct{ found, inTrash bool }
+	trashed, back, gone := asset{true, true}, asset{true, false}, asset{false, false}
+	type key struct {
+		status domain.LinkStatus
+		asset
+		file domain.ChangeKind
+	}
+	listed := map[key]linkPair{
+		{inICloud, trashed, unchanged}: {none, added}, // covers: R-STATUS-04
+		{inICloud, back, replaced}:     {added, none},
+		{inICloud, back, deleted}:      {added, none},
+		{inICloud, back, unchanged}:    {added, added},
+		{inICloud, gone, replaced}:     {deleted, deleted},
+		{inICloud, gone, deleted}:      {deleted, deleted}, // covers: R-STATUS-02
+		{inICloud, gone, unchanged}:    {none, added},
+		{inCloud, trashed, unchanged}:  {none, added},
+		{inCloud, back, replaced}:      {added, none},
+		{inCloud, back, deleted}:       {added, none},
+		{inCloud, back, unchanged}:     {added, added},
+		{inCloud, gone, unchanged}:     {none, added},
+	}
+	for _, s := range []domain.LinkStatus{inICloud, inCloud, domain.StatusDetached, domain.StatusActive} {
+		for _, a := range []asset{trashed, back, gone} {
+			for _, file := range []domain.ChangeKind{unchanged, replaced, deleted} {
+				w, revived := listed[key{s, a, file}]
+				if !revived {
+					w = linkPair{none, none} // covers: R-STATUS-03
+				}
+				icloud, remote, ok := plan.StatusSides(s, a.found, a.inTrash, file)
+				if icloud != w.icloud || remote != w.remote || ok != revived {
+					t.Errorf("StatusSides(%s, found %v, in Recently Deleted %v, file %s) = %q, %q, %v; want %q, %q, %v",
+						s, a.found, a.inTrash, file, icloud, remote, ok, w.icloud, w.remote, revived)
+				}
+			}
+		}
+	}
+	lost := []domain.LinkAction{domain.ActionDeleteFile, domain.ActionDeleteAsset, domain.ActionQuarantineFile}
+	for k, w := range listed {
+		if w.icloud != added && w.remote != added {
+			continue
+		}
+		for _, m := range []domain.Mode{domain.ModeTwoWay, domain.ModeUploadOnly, domain.ModeDownloadOnly} {
+			for _, deletes := range []domain.DeletesPolicy{domain.DeletesNone, domain.DeletesQuarantine, domain.DeletesPropagate} {
+				d, decided := plan.ModeDecide(m, w.icloud, w.remote, false)
+				got, status := plan.StatusDeletes(d, deletes)
+				if !decided || slices.Contains(lost, got.Action) || status == domain.StatusDetached ||
+					m == domain.ModeTwoWay && status != domain.StatusActive {
+					t.Errorf("%s, found %v, in Recently Deleted %v, file %s, then %s under %s: %s by %q, link %q; want no deletion, no detached link and, two-way, an active one",
+						k.status, k.found, k.inTrash, k.file, m, deletes, got.Action, got.Rule, status)
+				}
+			}
+		}
+	}
+}
+
+// Written from the rule on detached links, not from the code: an asset whose
+// file or source a remote holds detached is out of sync with that remote,
+// whatever its other links there, until the user relinks it. A detached
+// component, a quarantined link or a link of another remote freezes nothing.
+func TestStatusFrozen(t *testing.T) {
+	t.Parallel()
+	const (
+		personal, shared       = domain.LibraryPersonal, domain.LibraryShared
+		original, source, live = domain.RoleOriginal, domain.RoleSource, domain.RoleLiveVideo
+		active, detached       = domain.StatusActive, domain.StatusDetached
+	)
+	link := func(id domain.LinkID, remote string, root domain.LibraryKind, role domain.LinkRole, status domain.LinkStatus) domain.Link {
+		return domain.Link{
+			ID: id, AssetID: 7, Remote: remote, Root: root, Path: "2024/05-01 - Holidays/IMG_0001.HEIC",
+			Role: role, AlbumID: 10, Status: status,
+		}
+	}
+	file := link(1, "disk", personal, original, active)
+	for _, c := range []struct {
+		name  string
+		links []domain.Link
+		want  bool
+	}{
+		{"no links", nil, false},
+		{"an active file", []domain.Link{file}, false},
+		{"a detached file", []domain.Link{link(2, "disk", personal, original, detached)}, true}, // covers: R-STATUS-05
+		{"a detached source of a converted asset", []domain.Link{link(2, "disk", personal, source, detached)}, true},
+		{"a detached file and an active one", []domain.Link{file, link(2, "disk", personal, original, detached)}, true},
+		{"a detached file under the other root and an active one", []domain.Link{file, link(2, "disk", shared, original, detached)}, true},
+		{"a detached Live Photo video and an active file", []domain.Link{file, link(2, "disk", personal, live, detached)}, false},
+		{"a detached RAW of a pair and an active file", []domain.Link{file, link(2, "disk", personal, domain.RoleRAWPair, detached)}, false},
+		{"a detached derived copy and an active file", []domain.Link{file, link(2, "disk", personal, domain.RoleDerived, detached)}, false},
+		{"a file detached in another remote", []domain.Link{file, link(2, "box", personal, original, detached)}, false},
+		{"a file quarantined in iCloud", []domain.Link{link(2, "disk", personal, original, domain.StatusQuarantinedICloud)}, false},
+		{"a file quarantined in the cloud", []domain.Link{link(2, "disk", personal, original, domain.StatusQuarantinedRemote)}, false},
+	} {
+		if got := plan.StatusFrozen(c.links, "disk"); got != c.want {
+			t.Errorf("%s: StatusFrozen = %v; want %v", c.name, got, c.want)
 		}
 	}
 }
