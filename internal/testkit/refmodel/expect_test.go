@@ -482,6 +482,10 @@ func TestExpectedOnGenWorlds(t *testing.T) {
 				if err := consistent(got, p.strict); err != nil {
 					t.Errorf("seed %d, %s %s: %v", seed, p.deletes, p.conflict, err)
 				}
+				if canon := m.Canon(got); !reflect.DeepEqual(canon, got) {
+					t.Errorf("seed %d, %s %s: Canon gives %+v; want the outcome as it is %+v",
+						seed, p.deletes, p.conflict, canon, got)
+				}
 				if !p.strict {
 					continue
 				}
