@@ -1,0 +1,57 @@
+package leak
+
+import (
+	"strings"
+
+	d "github.com/Windemiatrix/photosync/internal/domain"
+)
+
+type token = d.Secret
+
+type plain d.Secret
+
+type Config struct {
+	Token  d.Secret
+	secret d.Secret
+	alias  token
+	list   []d.Secret
+	array  [2]d.Secret
+	byName map[string]d.Secret
+	byKey  map[d.Secret]bool
+	ptr    *d.Secret
+	d.Secret
+}
+
+type inner struct {
+	Token d.Secret
+}
+
+type holder struct {
+	cfg  Config
+	Cfg  Config
+	cfgp *Config
+	inner
+}
+
+type node struct {
+	next []node
+}
+
+func Use(s d.Secret, t token, p plain) {
+	_ = string(s)
+	_ = []byte(t)
+	_ = plain(s)
+	_ = strings.ToUpper(string(s))
+	_ = s[0]
+	for range s {
+	}
+	_ = any(s)
+	_ = token(s)
+	_ = d.Secret("x")
+	_ = s[1:]
+	_ = len(s)
+	_ = s == "x"
+	_ = p[0]
+	var local struct{ s d.Secret }
+	_ = local
+}

@@ -1,0 +1,7 @@
+package yandexrest2
+
+import "github.com/Windemiatrix/photosync/internal/domain"
+
+func header(s domain.Secret) string {
+	return "OAuth " + string(s)
+}
