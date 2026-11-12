@@ -3,10 +3,10 @@ package domain_test
 import "github.com/Windemiatrix/photosync/internal/domain"
 
 // Each field below keeps its own type: then the compiler keeps a role,
-// status, source, mode or ID of one kind out of a field of another, zero
-// rather than nil stands for no album, and nil still stands for an unknown
-// offset or cloud state. AssetKey stays comparable, because plans key maps by
-// it.
+// status, source, mode, policy or ID of one kind out of a field of another,
+// zero rather than nil stands for no album, and nil still stands for an
+// unknown offset or cloud state. AssetKey stays comparable, because plans
+// key maps by it.
 var (
 	_ = domain.Asset{
 		ID:            domain.AssetID(1),
@@ -43,6 +43,7 @@ var (
 		AlbumPairs: []domain.AlbumPair{{}},
 		Links:      []domain.Link{{}},
 		History:    []domain.AssetHistory{{AssetID: domain.AssetID(1), Key: domain.AssetKey{UUID: "uuid-0"}, Deleted: true}},
+		Conflicts:  []domain.Conflict{{}},
 	}
 	_ = domain.Notice{Code: "match.probable", Params: []string{"40"}}
 	_ = domain.RemoteSpec{
@@ -50,5 +51,11 @@ var (
 		Mode:         domain.ModeUploadOnly,
 		Targets:      map[domain.LibraryKind]string{domain.LibraryShared: "Photos/Shared"},
 		Capabilities: domain.Capabilities{ContentHash: domain.HashMD5},
+	}
+	_ = domain.Conflict{
+		AssetID:    domain.AssetID(1),
+		Remote:     "remote-1",
+		Status:     domain.ConflictStatusOpen,
+		Resolution: domain.ConflictRemoteWins,
 	}
 )
