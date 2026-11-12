@@ -18,9 +18,11 @@ import (
 // CloudAssetGUID and a cloud record (InCloud) only from SyncCloud. The fake
 // reads no metadata: Taken is req.Taken in UTC, zero when req.Taken is, and
 // a resource other than the original keeps the name of its file. Both or
-// neither of Photo and Video, LiveVideo or RAWPair without Photo, and a file
-// that cannot be read fail the Import with nothing created, as they fail the
-// library.
+// neither of Photo and Video, LiveVideo or RAWPair without Photo, an
+// OriginalName that holds a NUL or is not UTF-8, and a file that cannot be
+// read fail the Import with nothing created, as they fail the library; so
+// does a UUID in AlbumUUIDs that is not an album outside the trash, with
+// domain.ErrNotFound.
 func (f *FakePhotoLibrary) Import(ctx context.Context, req domain.ImportRequest) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -30,6 +32,11 @@ func (f *FakePhotoLibrary) Import(ctx context.Context, req domain.ImportRequest)
 	if (req.Photo == "") == (req.Video == "") || (req.Photo == "" && (req.LiveVideo != "" || req.RAWPair != "")) ||
 		strings.ContainsRune(req.OriginalName, 0) || !utf8.ValidString(req.OriginalName) {
 		return "", errors.New("testkit: the import request breaks its contract")
+	}
+	for _, u := range req.AlbumUUIDs {
+		if _, err := f.findCollection(u, ""); err != nil {
+			return "", err
+		}
 	}
 	original := cmp.Or(req.Photo, req.Video)
 	a := domain.Asset{

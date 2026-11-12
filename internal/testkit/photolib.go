@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
 )
@@ -80,9 +81,10 @@ func (f *FakePhotoLibrary) FailNext(op string, err error) {
 }
 
 // Snapshot reads the library whatever path it is given: the fake is one
-// library. The snapshot shares no slice with the library, and the
-// FolderTitles of an album are the titles of the folders above it now,
-// whatever NewFakePhotoLibrary got.
+// library. The snapshot shares no slice with the library. Whatever
+// NewFakePhotoLibrary got, the FolderTitles of an album are the titles of the
+// folders above it now, trashed ones included, and its Start is the earliest
+// nonzero Taken of the assets in it now, hidden and trashed ones included.
 func (f *FakePhotoLibrary) Snapshot(ctx context.Context, _ string) (domain.LibrarySnapshot, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -92,6 +94,7 @@ func (f *FakePhotoLibrary) Snapshot(ctx context.Context, _ string) (domain.Libra
 	s := domain.LibrarySnapshot{Assets: cloneAssets(f.assets), Albums: slices.Clone(f.albums)}
 	for i := range s.Albums {
 		s.Albums[i].FolderTitles = f.folderTitles(s.Albums[i].ParentUUID)
+		s.Albums[i].Start = f.albumStart(s.Albums[i].UUID)
 	}
 	return s, nil
 }
@@ -145,6 +148,19 @@ func (f *FakePhotoLibrary) folderTitles(parent string) []string {
 		parent = f.albums[i].ParentUUID
 	}
 	return titles
+}
+
+// Counted like FolderTitles, for a kept Start would go stale when an asset
+// joins or leaves the album. A zero Taken is a date that the fake does not
+// know, as after an Import without one, and not the earliest date.
+func (f *FakePhotoLibrary) albumStart(uuid string) time.Time {
+	var start time.Time
+	for _, a := range f.assets {
+		if !a.Taken.IsZero() && slices.Contains(a.AlbumUUIDs, uuid) && (start.IsZero() || a.Taken.Before(start)) {
+			start = a.Taken
+		}
+	}
+	return start
 }
 
 // A test and app may sort or fill these slices in place, as photosync fills
