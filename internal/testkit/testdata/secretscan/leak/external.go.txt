@@ -1,0 +1,7 @@
+package leak_test
+
+import "github.com/Windemiatrix/photosync/internal/leak"
+
+func read(c leak.Config) []byte {
+	return []byte(c.Token)
+}

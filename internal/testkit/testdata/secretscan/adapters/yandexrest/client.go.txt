@@ -1,0 +1,14 @@
+package yandexrest
+
+import "github.com/Windemiatrix/photosync/internal/domain"
+
+type Client struct {
+	token domain.Secret
+}
+
+func header(s domain.Secret) string {
+	for range s {
+	}
+	_ = s[0]
+	return "OAuth " + string(s)
+}
