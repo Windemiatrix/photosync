@@ -23,8 +23,20 @@ func build(intn func(int) int, cfg Config) World {
 	for i := range events {
 		events[i] = w.addEvent(intn, folders, i)
 	}
+	// A draw of 7 rather than 0, so that rapid shrinks a world toward no
+	// perturbations. The mask goes first, so that a kind outside the set draws
+	// nothing and only the coins of the set reach a rapid counterexample.
+	on := func(p Perturbation) bool { return cfg.Perturb&p != 0 && intn(8) == 7 }
+	var e event
 	for i := range cfg.Frames {
-		w.addShot(intn, events[intn(len(events))], i)
+		prev := e
+		burst := i > 0 && on(PerturbBurst)
+		if !burst {
+			e = events[intn(len(events))]
+		}
+		same := i > 0 && e.day.Year() != prev.day.Year() && on(PerturbSameName)
+		w.addShot(intn, e, i, cfg.Frames, burst, same)
+		w.perturb(on, intn)
 	}
 	return w
 }
@@ -52,17 +64,31 @@ func (w *World) addEvent(intn func(int) int, folders map[int]string, i int) even
 }
 
 // Offsets span the real time zones, -12:00 to +14:00 by quarters of an hour,
-// so the UTC date of a shot often differs from the day of its event.
-func (w *World) addShot(intn func(int) int, e event, i int) {
+// so the UTC date of a shot often differs from the day of its event. The
+// second of the day is i modulo shots, so that only a burst gives two shots
+// one second, until there are more shots than seconds in a day.
+func (w *World) addShot(intn func(int) int, e event, i, shots int, burst, sameName bool) {
 	offset := 15 * 60 * (intn(105) - 48)
-	taken := e.day.Add(time.Duration(intn(24*3600)-offset) * time.Second)
+	second := (intn(max(24*3600/shots, 1))*shots + i) % (24 * 3600)
+	taken := e.day.Add(time.Duration(second-offset) * time.Second)
 	video := intn(5) == 4
 	ext, width, height, subsec := ".HEIC", 4032, 3024, fmt.Sprintf("%03d", intn(1000))
 	size := int64(1_000_000 + intn(4_000_000))
+	if burst {
+		// A video, or a photo of SubSec 999, leaves no greater SubSec in its second.
+		p := w.Snapshot.Assets[i-1]
+		if s, err := strconv.Atoi(p.SubSec); err == nil && s < 999 {
+			offset, taken, video, subsec = *p.TZOffset, p.Taken, false, fmt.Sprintf("%03d", s+1+intn(999-s))
+		}
+	}
 	if video {
 		ext, width, height, subsec, size = ".MOV", 1920, 1080, "", 10*size
 	}
 	name := fmt.Sprintf("IMG_%04d%s", i+1, ext)
+	if sameName {
+		// Shots are numbered from 1, so the shot before this one had number i.
+		name = fmt.Sprintf("IMG_%04d%s", i, ext)
+	}
 	key := domain.AssetKey{CloudAssetGUID: fmt.Sprintf("guid-%d", i), UUID: fmt.Sprintf("uuid-%d", i)}
 	album := &w.Snapshot.Albums[e.album]
 	w.Snapshot.Assets = append(w.Snapshot.Assets, domain.Asset{

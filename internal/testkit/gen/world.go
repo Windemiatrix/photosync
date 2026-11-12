@@ -23,9 +23,11 @@ type World struct {
 
 // Config is what a world is made of. Frames is the number of shots, each an
 // asset in an event album and a file in the directory of that event; zero or
-// less makes none.
+// less makes none. Up to 86400 shots, no two have one second of the day but
+// those of a burst. Perturb is the set of perturbations that the shots show.
 type Config struct {
-	Frames int
+	Frames  int
+	Perturb Perturbation
 }
 
 // New returns the world of seed and cfg; the same seed and cfg give the same
