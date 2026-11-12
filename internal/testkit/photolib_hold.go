@@ -23,14 +23,17 @@ func (f *FakePhotoLibrary) Hold(op string, waiting func()) {
 
 // Answer is the outcome, come too late, of the change of op that Hold made
 // wait: with yes the change takes effect now, as it was checked when called,
-// and without it the change is dropped. With no such change, Answer does
-// nothing.
+// and without it the change is dropped. With no such change, Answer answers
+// the next dialog of op: no fails that change with domain.ErrUserCanceled and
+// nothing changed, and yes takes back an earlier no.
 func (f *FakePhotoLibrary) Answer(op string, yes bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	apply := f.pending[op]
 	delete(f.pending, op)
-	if yes && apply != nil {
+	if apply == nil {
+		f.refused[op] = !yes
+	} else if yes {
 		apply()
 	}
 }

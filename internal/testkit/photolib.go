@@ -20,7 +20,8 @@ var photoLibIDs atomic.Int64
 // with the error of ctx and does nothing else, as a call of the real library
 // does. A trashed asset, like a hidden one, stays in snapshots, but the
 // other methods do not find it. A change takes effect at once unless Hold
-// makes it wait. Its methods may be called from several goroutines.
+// makes it wait or Answer refuses its dialog. Its methods may be called from
+// several goroutines.
 type FakePhotoLibrary struct {
 	mu       sync.Mutex
 	id       int64
@@ -32,14 +33,17 @@ type FakePhotoLibrary struct {
 	lastID   int
 	held     map[string]func()
 	pending  map[string]func()
+	refused  map[string]bool
 }
 
 // Counters is what a FakePhotoLibrary has done: Calls counts the calls of
-// each method of app.PhotoLibrary by its name, failed calls included, and
-// BytesDownloaded the bytes of the files that Download wrote.
+// each method of app.PhotoLibrary by its name, failed calls included,
+// BytesDownloaded the bytes of the files that Download wrote, and Dialogs the
+// dialogs that changes asked, refused and held ones included.
 type Counters struct {
 	Calls           map[string]int
 	BytesDownloaded int64
+	Dialogs         int
 }
 
 // NewFakePhotoLibrary returns the library of s, which keeps the contract of
@@ -57,6 +61,7 @@ func NewFakePhotoLibrary(s domain.LibrarySnapshot) *FakePhotoLibrary {
 		imported: map[int][][]byte{},
 		held:     map[string]func(){},
 		pending:  map[string]func(){},
+		refused:  map[string]bool{},
 	}
 	for i := range f.assets {
 		if a := &f.assets[i]; a.InCloud != nil && *a.InCloud {
