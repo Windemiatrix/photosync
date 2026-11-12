@@ -42,7 +42,7 @@ func Group(entries []domain.RemoteEntry) (candidates []Candidate, unknown []doma
 		case kindOf(e.Path) == unlisted:
 			unknown = append(unknown, e)
 		default:
-			k := groupKey{e.Root, path.Dir(e.Path), export.StemKey(path.Base(e.Path))}
+			k := keyOf(e)
 			groups[k] = append(groups[k], e)
 		}
 	}
@@ -57,6 +57,10 @@ func Group(entries []domain.RemoteEntry) (candidates []Candidate, unknown []doma
 type groupKey struct {
 	root      domain.LibraryKind
 	dir, stem string
+}
+
+func keyOf(e domain.RemoteEntry) groupKey {
+	return groupKey{e.Root, path.Dir(e.Path), export.StemKey(path.Base(e.Path))}
 }
 
 func byPlace(a, b domain.RemoteEntry) int {
