@@ -37,8 +37,7 @@ type Pair struct {
 // assetsLeft of AssetKey.Compare and candidatesLeft of Root and Path of
 // Main; each is nil when empty, and the inputs are not changed.
 func ByName(assets []domain.Asset, candidates []Candidate) (pairs []Pair, assetsLeft []domain.Asset, candidatesLeft []Candidate) {
-	assets = slices.SortedFunc(slices.Values(assets), func(a, b domain.Asset) int { return a.Key.Compare(b.Key) })
-	candidates = slices.SortedFunc(slices.Values(candidates), func(a, b Candidate) int { return byPlace(a.Main, b.Main) })
+	assets, candidates = inOrder(assets, candidates)
 	stems := map[string][]int{}
 	for j, c := range candidates {
 		k := nameKey(path.Base(c.Main.Path))
@@ -52,6 +51,13 @@ func ByName(assets []domain.Asset, candidates []Candidate) (pairs []Pair, assets
 			}
 		}
 	}
+	return assign(assets, candidates, links)
+}
+
+// Within a rank, links go in the order given: callers give them by asset and
+// then by candidate, both in the order of inOrder, so that ties go by
+// AssetKey.Compare and then by Root and Path of Main.
+func assign(assets []domain.Asset, candidates []Candidate, links []link) (pairs []Pair, assetsLeft []domain.Asset, candidatesLeft []Candidate) {
 	slices.SortStableFunc(links, func(x, y link) int { return cmp.Compare(x.rank, y.rank) })
 	paired, taken := make([]bool, len(assets)), map[int]Pair{}
 	for _, l := range links {
@@ -73,6 +79,13 @@ func ByName(assets []domain.Asset, candidates []Candidate) (pairs []Pair, assets
 		}
 	}
 	return pairs, assetsLeft, candidatesLeft
+}
+
+// Ties and results go by key and by place, whatever the order of the input
+// (INV-9).
+func inOrder(assets []domain.Asset, candidates []Candidate) ([]domain.Asset, []Candidate) {
+	return slices.SortedFunc(slices.Values(assets), func(a, b domain.Asset) int { return a.Key.Compare(b.Key) }),
+		slices.SortedFunc(slices.Values(candidates), func(a, b Candidate) int { return byPlace(a.Main, b.Main) })
 }
 
 type link struct {
