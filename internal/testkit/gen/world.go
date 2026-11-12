@@ -10,11 +10,11 @@ import (
 
 // World is a photo library and the listing of its remote root, made from the
 // same shots. Files holds files only; their paths name the directories.
-// Truth maps the path of every file that holds a shot of an asset to the key
-// of that asset. The snapshot keeps the contract of domain.Asset and
-// domain.Album: no IDs, Kind only on folders, references by UUID, titles in
-// NFC, no hashes. Two events may share a date and a title, and so a
-// directory.
+// Truth maps the path of every file that comes from an asset, the file of
+// its shot or a file beside it, to the key of that asset. The snapshot keeps
+// the contract of domain.Asset and domain.Album: no IDs, Kind only on
+// folders, references by UUID, titles in NFC, no hashes. Two events may
+// share a date and a title, and so a directory.
 type World struct {
 	Snapshot domain.LibrarySnapshot
 	Files    []domain.RemoteEntry

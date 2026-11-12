@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/Windemiatrix/photosync/internal/domain"
 )
 
@@ -19,14 +21,14 @@ type event struct {
 func build(intn func(int) int, cfg Config) World {
 	w := World{Truth: map[string]domain.AssetKey{}}
 	folders := map[int]string{}
-	events := make([]event, 1+intn(1+max(cfg.Frames, 0)/4))
-	for i := range events {
-		events[i] = w.addEvent(intn, folders, i)
-	}
 	// A draw of 7 rather than 0, so that rapid shrinks a world toward no
 	// perturbations. The mask goes first, so that a kind outside the set draws
 	// nothing and only the coins of the set reach a rapid counterexample.
 	on := func(p Perturbation) bool { return cfg.Perturb&p != 0 && intn(8) == 7 }
+	events := make([]event, 1+intn(1+max(cfg.Frames, 0)/4))
+	for i := range events {
+		events[i] = w.addEvent(intn, on, folders, i)
+	}
 	var e event
 	for i := range cfg.Frames {
 		prev := e
@@ -41,9 +43,14 @@ func build(intn func(int) int, cfg Config) World {
 	return w
 }
 
-func (w *World) addEvent(intn func(int) int, folders map[int]string, i int) event {
+func (w *World) addEvent(intn func(int) int, on func(Perturbation) bool, folders map[int]string, i int) event {
 	year, month, day := 2019+intn(6), 1+intn(12), 1+intn(28)
 	word := words[intn(len(words))]
+	dirWord := word
+	if on(PerturbNFD) {
+		word = "Майские"
+		dirWord = norm.NFD.String(word)
+	}
 	folder, ok := folders[year]
 	if !ok {
 		folder = fmt.Sprintf("folder-%d", year)
@@ -58,7 +65,7 @@ func (w *World) addEvent(intn func(int) int, folders map[int]string, i int) even
 	})
 	return event{
 		album: len(w.Snapshot.Albums) - 1,
-		dir:   fmt.Sprintf("%d/%02d-%02d - %s", year, month, day, word),
+		dir:   fmt.Sprintf("%d/%02d-%02d - %s", year, month, day, dirWord),
 		day:   time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC),
 	}
 }
@@ -76,7 +83,7 @@ func (w *World) addShot(intn func(int) int, e event, i, shots int, burst, sameNa
 	size := int64(1_000_000 + intn(4_000_000))
 	if burst {
 		// A video, or a photo of SubSec 999, leaves no greater SubSec in its second.
-		p := w.Snapshot.Assets[i-1]
+		p := w.Snapshot.Assets[len(w.Snapshot.Assets)-1]
 		if s, err := strconv.Atoi(p.SubSec); err == nil && s < 999 {
 			offset, taken, video, subsec = *p.TZOffset, p.Taken, false, fmt.Sprintf("%03d", s+1+intn(999-s))
 		}
