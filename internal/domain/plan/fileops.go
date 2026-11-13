@@ -37,6 +37,26 @@ import (
 // the rule of its decision or placement and the asset of its link. The
 // operations are in the order of domain.Op.Compare, made in the order of
 // placements, and the inputs but names are not changed.
+//
+// decisions also hold what DecideDerived gives for the links of the asset in
+// r. One with ActionReplaceFile on a file of the original or the source role
+// that no placement moves or takes to quarantine replaces the file where it
+// lies, in the order of link ID among those with ActionQuarantineFile, before
+// the placements: the resource of target with the role of the file goes up
+// under the name that Names.Free gives it in the directory and root of the
+// file (OpPut), and the resource of each Live Photo video and RAW file that
+// ComponentBeside finds beside the file among the decisions with
+// ActionReplaceFile goes up at ComponentPath from that name. Each such link
+// keeps its ID and album and takes its new path at the level uploaded with
+// the size and hashes of its resource, and each old file first moves to
+// quarantine with its link quarantined_remote (OpQuarantine); nothing is
+// replaced while target lacks the resource of the file. A placement with
+// ActionMoveFile of a file to replace makes that replacement in its
+// directory, root and album instead of the move, one with ActionCopyFile puts
+// the original there as a new link instead of the copy, and one with
+// ActionQuarantineFile takes the Live Photo videos and RAW files beside the
+// file among those decisions to quarantine with it, their links leaving the
+// state.
 func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions []domain.LinkDecision, placements []domain.Placement, files map[domain.LinkID]domain.RemoteEntry, albums []domain.Album, pairs []domain.AlbumPair, t *template.Template, fields template.Photo, p domain.Policies, now time.Time) (ops []domain.Op, made []domain.AlbumPair, notices []domain.Notice, err error) {
 	root := target.TargetLibrary
 	add := func(kind domain.OpKind, from, to domain.Link, dst, rule string) {
@@ -50,17 +70,58 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 		to.Status, to.QuarantinePath = status, names.Quarantine(l.Root, now, l.Path)
 		add(domain.OpQuarantine, l, to, to.QuarantinePath, rule)
 	}
-	for _, d := range slices.SortedFunc(slices.Values(decisions), func(x, y domain.LinkDecision) int { return cmp.Compare(x.Link.ID, y.Link.ID) }) {
-		if d.Action == domain.ActionQuarantineFile {
+	put := func(l domain.Link, at func(name string) string, rule string) (dst string) {
+		for _, res := range target.Resources {
+			// The roles of a link and of its resource store the same strings.
+			if res.Role == domain.ResourceRole(l.Role) {
+				dst = at(res.Filename)
+				add(domain.OpPut, domain.Link{}, domain.Link{
+					ID: l.ID, AssetID: target.ID, Remote: r.Name, Root: l.Root, Path: dst, Role: l.Role, AlbumID: l.AlbumID,
+					Size: res.Size, SHA256: res.SHA256, MD5: res.MD5, Level: domain.LevelUploaded, Status: domain.StatusActive,
+				}, dst, rule)
+			}
+		}
+		return dst
+	}
+	decided := slices.SortedFunc(slices.Values(decisions), func(x, y domain.LinkDecision) int { return cmp.Compare(x.Link.ID, y.Link.ID) })
+	replaced := slices.DeleteFunc(slices.Clone(decided), func(d domain.LinkDecision) bool { return d.Action != domain.ActionReplaceFile })
+	replace := func(main domain.LinkDecision, to domain.Link, dir string) {
+		dst := put(to, func(name string) string { return names.Free(to.Root, dir, name) }, main.Rule)
+		// Without the original in its place, quarantine would only take the copy away.
+		if dst == "" {
+			return
+		}
+		quarantine(main.Link, domain.StatusQuarantinedRemote, main.Rule)
+		for _, d := range replaced {
+			if ComponentBeside(main.Link, d.Link) {
+				to.ID, to.Role = d.Link.ID, d.Link.Role
+				put(to, func(string) string { return ComponentPath(dst, d.Link.Role, target) }, d.Rule)
+				quarantine(d.Link, domain.StatusQuarantinedRemote, d.Rule)
+			}
+		}
+	}
+	stays := func(id domain.LinkID) bool {
+		return !slices.ContainsFunc(placements, func(pl domain.Placement) bool { return pl.Link.ID == id && pl.Action != domain.ActionCopyFile })
+	}
+	for _, d := range decided {
+		switch {
+		case d.Action == domain.ActionQuarantineFile:
 			l := d.Link
 			l.Root, l.Path = files[l.ID].Root, files[l.ID].Path
 			quarantine(l, domain.StatusQuarantinedRemote, d.Rule)
+		case d.Action == domain.ActionReplaceFile && objectFile(d.Link) && stays(d.Link.ID):
+			replace(d, d.Link, path.Dir(d.Link.Path))
 		}
 	}
 	own := slices.DeleteFunc(slices.Clone(pairs), func(x domain.AlbumPair) bool { return x.Remote != r.Name || x.Root != root })
 	for _, pl := range placements {
 		if pl.Action == domain.ActionQuarantineFile {
 			quarantine(pl.Link, "", pl.Rule)
+			for _, d := range replaced {
+				if ComponentBeside(pl.Link, d.Link) {
+					quarantine(d.Link, "", pl.Rule)
+				}
+			}
 			continue
 		}
 		var album domain.Album
@@ -76,8 +137,16 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 			if pl.Action == domain.ActionCopyFile {
 				kind, to.ID = domain.OpCopy, 0
 			}
-			to.Root, to.Path, to.AlbumID = root, names.Free(root, dir, path.Base(pl.Link.Path)), pl.AlbumID
-			add(kind, pl.Link, to, to.Path, pl.Rule)
+			to.Root, to.AlbumID = root, pl.AlbumID
+			switch i := slices.IndexFunc(replaced, func(d domain.LinkDecision) bool { return d.Link.ID == pl.Link.ID }); {
+			case i >= 0 && kind == domain.OpMove:
+				replace(replaced[i], to, dir)
+			case i >= 0:
+				put(to, func(name string) string { return names.Free(root, dir, name) }, pl.Rule)
+			default:
+				to.Path = names.Free(root, dir, path.Base(pl.Link.Path))
+				add(kind, pl.Link, to, to.Path, pl.Rule)
+			}
 			continue
 		}
 		var paths []string
@@ -87,12 +156,7 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 		}
 		notices = append(notices, more...)
 		for _, q := range paths {
-			// Render gives no path to an asset without an original file.
-			res := target.Resources[slices.IndexFunc(target.Resources, func(x domain.Resource) bool { return x.Role == domain.ResourceOriginal })]
-			add(domain.OpPut, domain.Link{}, domain.Link{
-				AssetID: target.ID, Remote: r.Name, Root: root, Path: q, Role: domain.RoleOriginal, AlbumID: pl.AlbumID,
-				Size: res.Size, SHA256: res.SHA256, MD5: res.MD5, Level: domain.LevelUploaded, Status: domain.StatusActive,
-			}, q, pl.Rule)
+			put(domain.Link{Root: root, Role: domain.RoleOriginal, AlbumID: pl.AlbumID}, func(string) string { return q }, pl.Rule)
 		}
 	}
 	slices.SortFunc(ops, domain.Op.Compare)
