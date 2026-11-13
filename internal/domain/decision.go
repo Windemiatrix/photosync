@@ -30,7 +30,9 @@ type LinkAction string
 // the state and ActionUpdateBase takes both sides into it, both without
 // operations. ActionCopyFile copies a file of the remote into another
 // directory as a new link, and ActionQuarantineFile moves a needless copy to
-// the quarantine whatever the deletes policy.
+// the quarantine whatever the deletes policy. ActionReplaceFile uploads the
+// file of the asset that a link stands for in place of a lesser copy in the
+// cloud, which goes to the quarantine as well.
 const (
 	ActionNone                 LinkAction = "none"
 	ActionUpload               LinkAction = "upload"
@@ -47,6 +49,7 @@ const (
 	ActionUpdateBase           LinkAction = "update_base"
 	ActionCopyFile             LinkAction = "copy_file"
 	ActionQuarantineFile       LinkAction = "quarantine_file"
+	ActionReplaceFile          LinkAction = "replace_file"
 )
 
 // LinkDecision is what a sync does with one link, or with a new asset or

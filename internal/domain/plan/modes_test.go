@@ -20,7 +20,7 @@ func TestModeAllows(t *testing.T) {
 		domain.ActionMoveFile, domain.ActionMoveAsset, domain.ActionReplaceAsset,
 		domain.ActionMoveFileReplaceAsset, domain.ActionConflict, domain.ActionDeleteFile,
 		domain.ActionDeleteAsset, domain.ActionForget, domain.ActionUpdateBase,
-		domain.ActionCopyFile, domain.ActionQuarantineFile, unknown,
+		domain.ActionCopyFile, domain.ActionQuarantineFile, domain.ActionReplaceFile, unknown,
 	}
 	for _, c := range []struct {
 		mode    domain.Mode
@@ -30,6 +30,7 @@ func TestModeAllows(t *testing.T) {
 		{domain.ModeUploadOnly, []domain.LinkAction{ // covers: R-MODE-01
 			domain.ActionNone, domain.ActionLink, domain.ActionForget, domain.ActionUpdateBase,
 			domain.ActionUpload, domain.ActionMoveFile, domain.ActionCopyFile, domain.ActionDeleteFile, domain.ActionQuarantineFile,
+			domain.ActionReplaceFile,
 		}},
 		{domain.ModeDownloadOnly, []domain.LinkAction{ // covers: R-MODE-02
 			domain.ActionNone, domain.ActionLink, domain.ActionForget, domain.ActionUpdateBase,
@@ -149,7 +150,7 @@ func TestModeDecide(t *testing.T) {
 // covers: INV-5
 func TestModeProjection(t *testing.T) {
 	t.Parallel()
-	toCloud := []domain.LinkAction{domain.ActionUpload, domain.ActionMoveFile, domain.ActionCopyFile, domain.ActionDeleteFile, domain.ActionQuarantineFile}
+	toCloud := []domain.LinkAction{domain.ActionUpload, domain.ActionMoveFile, domain.ActionCopyFile, domain.ActionDeleteFile, domain.ActionQuarantineFile, domain.ActionReplaceFile}
 	toICloud := []domain.LinkAction{domain.ActionImport, domain.ActionMoveAsset, domain.ActionReplaceAsset, domain.ActionDeleteAsset}
 	both := []domain.LinkAction{domain.ActionMoveFileReplaceAsset, domain.ActionConflict}
 	decided := 0
