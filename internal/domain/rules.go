@@ -29,6 +29,7 @@ var Rules = map[string]string{
 	"R-OBJECT-07": "An asset that moves between the shared and the personal library moves all its files to the root of the other library.",
 	"R-OBJECT-08": "A move found by content among duplicate files pairs the links of one asset first, then one to one in a fixed order, and an ambiguous one becomes a deletion and a new file with a notice.",
 	"R-OBJECT-09": "Of several replacements of one asset in one run only the first by remote priority is made; the others are taken into the base as they are.",
+	"R-OBJECT-10": "A matched cloud file that is a lesser copy of the original is replaced by the original under replace_with_original, the copy kept in quarantine.",
 
 	"R-COMPONENT-01": "A Live Photo video or RAW file deleted from the cloud while its main file stays there is restored from iCloud beside the main file where that ends up and beside each copy of the main file, with a warning.",
 	"R-COMPONENT-02": "A Live Photo video or RAW file moved away from its main file is moved back beside it, with a warning.",
