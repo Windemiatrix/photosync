@@ -4,16 +4,16 @@ import "github.com/Windemiatrix/photosync/internal/domain"
 
 // ModeAllows reports whether a remote in mode m runs action a. ActionNone,
 // ActionLink, ActionForget and ActionUpdateBase have no operation and run in
-// every mode. ActionUpload, ActionMoveFile, ActionCopyFile, ActionDeleteFile
-// and ActionQuarantineFile change the cloud and run unless m is
-// download-only; ActionImport, ActionMoveAsset, ActionReplaceAsset and
+// every mode. ActionUpload, ActionMoveFile, ActionCopyFile, ActionReplaceFile,
+// ActionDeleteFile and ActionQuarantineFile change the cloud and run unless m
+// is download-only; ActionImport, ActionMoveAsset, ActionReplaceAsset and
 // ActionDeleteAsset change iCloud and run unless m is upload-only. Any other
 // action, which changes both sides or is unknown here, runs only two-way.
 func ModeAllows(m domain.Mode, a domain.LinkAction) bool {
 	switch a {
 	case domain.ActionNone, domain.ActionLink, domain.ActionForget, domain.ActionUpdateBase:
 		return true
-	case domain.ActionUpload, domain.ActionMoveFile, domain.ActionCopyFile, domain.ActionDeleteFile, domain.ActionQuarantineFile:
+	case domain.ActionUpload, domain.ActionMoveFile, domain.ActionCopyFile, domain.ActionReplaceFile, domain.ActionDeleteFile, domain.ActionQuarantineFile:
 		return m != domain.ModeDownloadOnly
 	case domain.ActionImport, domain.ActionMoveAsset, domain.ActionReplaceAsset, domain.ActionDeleteAsset:
 		return m != domain.ModeUploadOnly
