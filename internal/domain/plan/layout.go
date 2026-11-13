@@ -28,10 +28,11 @@ import (
 // still deletes with ActionDeleteAsset is not laid out: target is now with
 // its albums in the order of AlbumID, and there are no join, leave or
 // placements. Otherwise an asset without a link gets the first placement
-// that DecideFirstPlacement gives under p.MultiAlbum, a remote for which
-// StatusFrozen holds on the statuses after the run gets no placements, and
-// the uploads of a remote with a decision by R-LINK-10, which holds no file
-// of the asset, take that rule. The inputs are not changed.
+// that DecideFirstPlacement gives under p.MultiAlbum when a remote of
+// objects is not upload-only, a remote for which StatusFrozen holds on the
+// statuses after the run gets no placements, and the uploads of a remote
+// with a decision by R-LINK-10, which holds no file of the asset, take that
+// rule. The inputs are not changed.
 func DecideLayout(now domain.Asset, found, linked bool, objects map[string]domain.ObjectDecision, links []domain.Link, remotes []domain.RemoteSpec, albums []domain.Album, p domain.Policies, runID string) (decisions map[string][]domain.LinkDecision, status map[domain.LinkID]domain.LinkStatus, target domain.Asset, join, leave []domain.AlbumChange, placements map[string][]domain.Placement) {
 	modes, names := map[string]domain.Mode{}, []string(nil)
 	for _, r := range remotes {
@@ -62,7 +63,10 @@ func DecideLayout(now domain.Asset, found, linked bool, objects map[string]domai
 		return decisions, status, target, nil, nil, nil
 	}
 	var first domain.ObjectDecision
-	if !linked {
+	if !linked && slices.ContainsFunc(remotes, func(r domain.RemoteSpec) bool {
+		_, in := objects[r.Name]
+		return in && r.Mode != domain.ModeUploadOnly
+	}) {
 		first.Join, first.Leave = DecideFirstPlacement(now, albums, p.MultiAlbum)
 	}
 	target, join, leave = DecideTarget(now, first, fate, links, priority, runID)

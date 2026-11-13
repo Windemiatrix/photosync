@@ -89,9 +89,10 @@ func DecideRemoteLinks(now domain.Asset, found bool, baseLibrary domain.LibraryK
 // found are as DecideRemoteLinks takes them, decisions are what it gives for r,
 // and links are its current for every remote. DecideObject reduces decisions
 // unless the asset is gone, in Recently Deleted or r is upload-only, where they
-// stand. While p.AlbumsForPersonal is false, an asset whose TargetLibrary is
-// the personal library joins and leaves no album. c is the conflict that the
-// state keeps for the asset in r, else one with only AssetID and Remote, and
+// stand. While p.AlbumsForPersonal is false, the asset joins and leaves no
+// album unless links hold an active link of it in r with the original or the
+// source role outside the personal root. c is the conflict that the state
+// keeps for the asset in r, else one with only AssetID and Remote, and
 // DecideConflict and SettleConflict decide it under p.Conflict. The deletes
 // policy is not applied yet, and the inputs are not changed.
 func DecideRemoteObject(now domain.Asset, found bool, decisions []domain.LinkDecision, links []domain.Link, r domain.RemoteSpec, albums []domain.Album, c domain.Conflict, p domain.Policies) (o domain.ObjectDecision, conflict domain.Conflict, in bool) {
@@ -99,7 +100,9 @@ func DecideRemoteObject(now domain.Asset, found bool, decisions []domain.LinkDec
 	if found && !now.InTrash && r.Mode != domain.ModeUploadOnly {
 		o = DecideObject(now, decisions, links, r.Name, albums)
 	}
-	if !p.AlbumsForPersonal && now.TargetLibrary == domain.LibraryPersonal {
+	if !p.AlbumsForPersonal && !slices.ContainsFunc(links, func(l domain.Link) bool {
+		return l.Remote == r.Name && objectFile(l) && l.Root != domain.LibraryPersonal
+	}) {
 		o.Join, o.Leave = nil, nil
 	}
 	if conflict, in = DecideConflict(c, o.Links, p.Conflict); !in {
