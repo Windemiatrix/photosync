@@ -51,6 +51,7 @@ var Rules = map[string]string{
 	"R-STATUS-07": "A conflict left open by the ask or skip policy is kept across runs and closes by itself once one side returns to the base.",
 	"R-STATUS-08": "A replacement keeps the old asset or file in quarantine whatever the deletes policy is.",
 	"R-STATUS-09": "A file kept in cloud quarantine longer than quarantine_keep_days is deleted for good.",
+	"R-STATUS-10": "With edited_files set to quarantine, a cloud file of an edit, in a directory named in edited_dirs or named as an edited photo, moves to .photosync/quarantine/<date>/<path> under its root without a link, except in a download-only remote.",
 
 	"R-LAYOUT-01": "A top-level album folder named with four digits is a year folder, an album anywhere inside it is an event and every other album is thematic.",
 	"R-LAYOUT-02": "The primary placement of an asset is an event album, else a thematic album, else the day folder of its capture date.",
