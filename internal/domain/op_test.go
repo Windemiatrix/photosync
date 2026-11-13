@@ -15,9 +15,9 @@ func TestOpKinds(t *testing.T) {
 	t.Parallel()
 	checkStored(t, []domain.OpKind{
 		domain.OpDelete, domain.OpCopy, domain.OpMove, domain.OpQuarantine, domain.OpPut,
-		domain.OpAlbumAdd, domain.OpAlbumRemove, domain.OpAssetDelete,
+		domain.OpAlbumCreate, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumRemove, domain.OpAssetDelete,
 	},
-		"delete", "copy", "move", "quarantine", "put", "album_add", "album_remove", "asset_delete")
+		"delete", "copy", "move", "quarantine", "put", "album_create", "import", "album_add", "album_remove", "asset_delete")
 }
 
 // The phases are the order in which a run makes its changes: a wrong phase
@@ -25,8 +25,8 @@ func TestOpKinds(t *testing.T) {
 func TestOpKindPhase(t *testing.T) {
 	t.Parallel()
 	for k, want := range map[domain.OpKind]int{
-		domain.OpDelete: 1, domain.OpCopy: 1, domain.OpMove: 1, domain.OpQuarantine: 1, domain.OpPut: 2,
-		domain.OpAlbumAdd: 4, domain.OpAlbumRemove: 4, domain.OpAssetDelete: 5,
+		domain.OpDelete: 1, domain.OpCopy: 1, domain.OpMove: 1, domain.OpQuarantine: 1, domain.OpAlbumCreate: 1, domain.OpPut: 2,
+		domain.OpImport: 3, domain.OpAlbumAdd: 4, domain.OpAlbumRemove: 4, domain.OpAssetDelete: 5,
 	} {
 		if got := k.Phase(); got != want {
 			t.Errorf("%s.Phase() = %d, want %d", k, got, want)
@@ -36,9 +36,7 @@ func TestOpKindPhase(t *testing.T) {
 
 // Every plan lists its operations in this order and a run takes them so.
 // Each pair is told apart by the first key of the order on which it differs,
-// so a skipped key or a wrong sign reorders a pair. No pair here yet puts an
-// operation on iCloud before one on the cloud in the same phase, as
-// album_create will.
+// so a skipped key or a wrong sign reorders a pair.
 func TestOpCompare(t *testing.T) {
 	t.Parallel()
 	const (
@@ -47,6 +45,7 @@ func TestOpCompare(t *testing.T) {
 		inQuarantine          = ".photosync/quarantine/2026-11-13/"
 	)
 	ordered := []domain.Op{
+		{Kind: domain.OpAlbumCreate, AlbumID: 12},
 		{Kind: domain.OpCopy, Remote: "alpha", Root: personal, Src: trip + "IMG_0001.HEIC", DstRoot: personal, Dst: holidays + "IMG_0001.HEIC", Asset: 8},
 		{Kind: domain.OpCopy, Remote: "alpha", Root: personal, Src: trip + "IMG_0001.HEIC", DstRoot: personal, Dst: party + "IMG_0001.HEIC", Asset: 7},
 		{Kind: domain.OpDelete, Remote: "alpha", Root: personal, Src: holidays + "IMG_0002.HEIC", Asset: 8},
@@ -56,6 +55,7 @@ func TestOpCompare(t *testing.T) {
 		{Kind: domain.OpQuarantine, Remote: "alpha", Root: personal, Src: holidays + "IMG_0001.HEIC", DstRoot: personal, Dst: inQuarantine + holidays + "IMG_0001.HEIC", Asset: 7},
 		{Kind: domain.OpDelete, Remote: "beta", Root: personal, Src: holidays + "IMG_0001.HEIC", Asset: 7},
 		{Kind: domain.OpPut, Remote: "alpha", DstRoot: personal, Dst: holidays + "IMG_0004.HEIC", Asset: 7},
+		{Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: party + "IMG_0005.HEIC", AlbumID: 12},
 		{Kind: domain.OpAlbumAdd, Asset: 7, AlbumID: 10},
 		{Kind: domain.OpAlbumAdd, Asset: 7, AlbumID: 11},
 		{Kind: domain.OpAlbumAdd, Asset: 8, AlbumID: 10},

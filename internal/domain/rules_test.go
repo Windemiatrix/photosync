@@ -20,7 +20,7 @@ func TestRules(t *testing.T) {
 	// documents outside the repository.
 	privateRef := regexp.MustCompile(`\b(N?FR|SEC|QA)-|\bD\d`)
 	want := map[string]bool{}
-	for group, count := range map[string]int{"LINK": 14, "OBJECT": 10, "COMPONENT": 5, "MODE": 4, "STATUS": 9, "LAYOUT": 10} {
+	for group, count := range map[string]int{"LINK": 14, "OBJECT": 10, "COMPONENT": 5, "MODE": 4, "STATUS": 10, "LAYOUT": 10} {
 		for n := 1; n <= count; n++ {
 			want[fmt.Sprintf("R-%s-%02d", group, n)] = true
 		}

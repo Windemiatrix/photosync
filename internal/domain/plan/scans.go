@@ -5,6 +5,7 @@ import (
 	"maps"
 	"path"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
@@ -47,7 +48,9 @@ type RemoteScan struct {
 // p.DerivedCopy. files is the union of what ReadScan gives, added and made
 // are what PairDirs gives in the order of the calls, and notices hold, for
 // each remote in turn, those of settling, ReadScan, MatchFresh and
-// DecideDerived. The inputs are not changed.
+// DecideDerived. An entry under the directory .photosync at the top of a
+// root, which ReadScan leaves out, has settled whatever its MTime. The
+// inputs are not changed.
 func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string][]domain.RemoteEntry, remotes []domain.RemoteSpec, p domain.Policies, now time.Time) (files map[domain.LinkID]domain.RemoteEntry, read map[string]RemoteScan, added []domain.Album, made []domain.AlbumPair, notices []domain.Notice) {
 	var lastLink domain.LinkID
 	byAsset := map[domain.AssetID][]domain.Link{}
@@ -72,7 +75,9 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 		for _, e := range slices.SortedFunc(slices.Values(scans[r.Name]), func(x, y domain.RemoteEntry) int {
 			return cmp.Or(cmp.Compare(x.Root, y.Root), cmp.Compare(x.Path, y.Path))
 		}) {
-			if e.IsDir || !e.MTime.After(since) {
+			// What photosync wrote itself, such as a file it has just quarantined,
+			// is no write of the user that may still be going on.
+			if top, _, _ := strings.Cut(e.Path, "/"); e.IsDir || top == ".photosync" || !e.MTime.After(since) {
 				scan = append(scan, e)
 				continue
 			}

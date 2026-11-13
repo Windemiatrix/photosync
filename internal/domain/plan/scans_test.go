@@ -108,6 +108,8 @@ func TestReadScans(t *testing.T) {
 	p.Deletes, p.UntitledEvent, p.AlbumsRoot = domain.DeletesQuarantine, "Untitled", "Albums"
 	skip := p
 	skip.Hidden = domain.HiddenSkip
+	slow := p
+	slow.SettleMinutes = 20
 
 	made := func(id domain.LinkID, asset domain.AssetID, remote string, e domain.RemoteEntry, role domain.LinkRole, level domain.MatchLevel, album domain.AlbumID) domain.LinkDecision {
 		return domain.LinkDecision{
@@ -174,6 +176,9 @@ func TestReadScans(t *testing.T) {
 	e34 := file(personal, "2024/05-14 - Gone/IMG_0034.HEIC", 340, "h4", settled)
 	e40, e41 := file(personal, holidaysDir+"/IMG_0040.HEIC", 400, "z1", settled), file(personal, holidaysDir+"/IMG_0041.HEIC", 400, "z1", settled)
 	z := file(personal, tripDir+"/IMG_0040.HEIC", 400, "z1", settled)
+	own := file(personal, ".photosync/quarantine/2026-11-13/"+holidaysDir+"/IMG_0001.HEIC", 100, "a1", young)
+	nested := file(personal, "2024/.photosync/IMG_0099.HEIC", 990, "q9", young)
+	e13, e14 := file(personal, holidaysDir+"/IMG_0013.HEIC", 130, "k3", now.Add(-20*time.Minute)), file(personal, holidaysDir+"/IMG_0014.HEIC", 140, "k4", now.Add(-15*time.Minute))
 
 	a7, a8, a9 := photo(7, "IMG_0001.HEIC", 100, holidays), photo(8, "IMG_0002.HEIC", 200, trip), photo(9, "IMG_0003.HEIC", 300, holidays)
 	a12, a13, a14 := photo(12, "IMG_0012.HEIC", 1200, holidays), photo(13, "IMG_0013.HEIC", 1300, trip), photo(14, "IMG_0014.HEIC", 1400, trip)
@@ -326,6 +331,10 @@ func TestReadScans(t *testing.T) {
 				[]domain.AlbumPair{pair(trip, "alpha", personal, tripDir, byRemote)},
 				[]domain.Notice{notice("plan.ambiguous_move", personal, holidaysDir+"/IMG_0040.HEIC"),
 					notice("plan.ambiguous_move", personal, holidaysDir+"/IMG_0041.HEIC"), notice("plan.unknown_file", personal, "2024/notes.txt")}}},
+		{"under settle_minutes of 20 a file waits until it is exactly that old, and the own files of photosync at the top of a root never wait",
+			state(link(1, 7, "alpha", e1, original, holidays)), delta(a7), scans{"alpha": {e14, own, nested, e13, e1}}, specs{alpha}, slow,
+			result{found{1: e1}, reads{"alpha": scanned(nil, nil, news{imported(e13, holidays)}, nil)}, nil, nil,
+				[]domain.Notice{settling(personal, "2024/.photosync/IMG_0099.HEIC"), settling(personal, holidaysDir+"/IMG_0014.HEIC")}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
