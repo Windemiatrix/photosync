@@ -21,11 +21,12 @@ import (
 // the source role becomes what ModeDecide, or ModeKeepAlbums for a decision
 // taken by R-MODE-04, gives for its file with the asset deleted in iCloud. Of
 // the decisions that replace the asset, ActionReplaceAsset and
-// ActionMoveFileReplaceAsset, the first stands and the others become
-// ActionNone with no rule, to wait for the next run: the remotes in the order
-// of priority, those that it does not name last in the order of their names,
-// and the decisions of a remote in their order. Each decision keeps its Link
-// and Remote side, Join and Leave are as given, and objects are not changed.
+// ActionMoveFileReplaceAsset, the first stands and each other becomes
+// ActionUpdateBase by R-OBJECT-09, the base taking its file as it is: the
+// remotes in the order of priority, those that it does not name last in the
+// order of their names, and the decisions of a remote in their order. Each
+// decision keeps its Link and Remote side, Join and Leave are as given, and
+// objects are not changed.
 func DecideFate(objects map[string]domain.ObjectDecision, modes map[string]domain.Mode, priority []string, deletes domain.DeletesPolicy) map[string]domain.ObjectDecision {
 	names := slices.Sorted(maps.Keys(objects))
 	rank := func(name string) int {
@@ -60,7 +61,7 @@ func DecideFate(objects map[string]domain.ObjectDecision, modes map[string]domai
 			case d.Action == domain.ActionDeleteAsset && changed:
 				o.Links[i] = redo(name, d, domain.ChangeMoved)
 			case replaces && replaced:
-				o.Links[i].Action, o.Links[i].Rule = domain.ActionNone, ""
+				o.Links[i].Action, o.Links[i].Rule = domain.ActionUpdateBase, "R-OBJECT-09"
 			}
 			replaced = replaced || replaces
 			deleted = deleted || o.Links[i].Action == domain.ActionDeleteAsset

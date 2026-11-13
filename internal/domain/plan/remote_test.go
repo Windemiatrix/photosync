@@ -281,7 +281,7 @@ func TestDecideRemoteObject(t *testing.T) {
 		twoWay, uploadOnly = domain.ModeTwoWay, domain.ModeUploadOnly
 		remoteWins, ask    = domain.ConflictRemoteWins, domain.ConflictAsk
 		atHolidays, atTrip = "2024/05-01 - Holidays/IMG_0001.HEIC", "2024/05-02 - Trip/IMG_0001.HEIC"
-		atParty            = "2024/05-03 - Party/IMG_0001.HEIC"
+		atParty, liveTrip  = "2024/05-03 - Party/IMG_0001.HEIC", "2024/05-02 - Trip/IMG_0001.MOV"
 	)
 	albums := []domain.Album{
 		{ID: 1, UUID: "album-1", Kind: domain.KindFolder, Title: "2024"},
@@ -313,6 +313,9 @@ func TestDecideRemoteObject(t *testing.T) {
 		return l
 	}
 	l1, l2 := link(1, atHolidays, holidays), link(2, atTrip, trip)
+	fromShared, elsewhere := place(l2, shared, atTrip, trip), place(link(4, atTrip, trip), shared, atTrip, trip)
+	liveStays := place(link(3, liveTrip, trip), shared, liveTrip, trip)
+	liveStays.Role, elsewhere.Remote = domain.RoleLiveVideo, "other"
 	decided := func(m domain.Mode, l domain.Link, icloud, remote domain.ChangeKind) domain.LinkDecision {
 		d, _ := plan.ModeDecide(m, icloud, remote, false)
 		d.Link = l
@@ -385,13 +388,13 @@ func TestDecideRemoteObject(t *testing.T) {
 			recorded("", ""), policies(remoteWins, true),
 			od(decs(dec(l1, deleted, unchanged, domain.ActionDeleteFile, "R-LINK-08"), dec(l2, deleted, deleted, domain.ActionForget, "R-LINK-12")), nil, nil),
 			recorded("", ""), true},
-		{"albums_for_personal false: an asset of the personal root joins and leaves no album", in(holidays), true, twoWay, fileMoved,
-			links(place(l1, shared, atTrip, trip)), recorded("", ""), policies(remoteWins, false),
-			od(decs(dec(l1, unchanged, moved, domain.ActionMoveAsset, "R-LINK-05")), nil, nil),
-			recorded("", ""), true},
-		{"albums_for_personal false: an asset waiting to move to the shared library keeps its album changes", asset(personal, shared, holidays), true, twoWay, fileMoved,
+		{"albums_for_personal false: a file moved into the shared root takes the asset into the album of its directory", in(holidays), true, twoWay, fileMoved,
 			links(place(l1, shared, atTrip, trip)), recorded("", ""), policies(remoteWins, false),
 			od(decs(dec(l1, unchanged, moved, domain.ActionMoveAsset, "R-LINK-05")), ch(trip, "R-LINK-05"), ch(holidays, "R-LINK-05")),
+			recorded("", ""), true},
+		{"albums_for_personal false: a file gone under the personal root leaves no album, though the asset waits to move to the shared library",
+			asset(personal, shared, holidays, trip), true, twoWay, gone, links(l1, elsewhere), recorded("", ""), policies(remoteWins, false),
+			od(decs(dec(l1, unchanged, unchanged, domain.ActionNone, ""), dec(l2, unchanged, deleted, domain.ActionForget, "R-OBJECT-02")), nil, nil),
 			recorded("", ""), true},
 		{"a conflict under ask stays out of the plan", in(trip), true, twoWay, both, links(place(l1, personal, atParty, party)),
 			recorded("", ""), policies(ask, true), od(nil, nil, nil),
@@ -414,6 +417,11 @@ func TestDecideRemoteObject(t *testing.T) {
 		{"no decisions: a recorded conflict closes by itself", in(holidays), true, twoWay, nil, nil,
 			recorded(domain.ConflictStatusSkipped, ""), policies(remoteWins, true), od(nil, nil, nil),
 			recorded(domain.ConflictStatusResolved, ""), true},
+		{"albums_for_personal false: a file moved from the shared root into the personal one joins and leaves no album", asset(shared, shared, trip), true, twoWay,
+			decs(decided(twoWay, fromShared, unchanged, moved)), links(place(fromShared, personal, atHolidays, holidays), liveStays),
+			recorded("", ""), policies(remoteWins, false),
+			od(decs(dec(fromShared, unchanged, moved, domain.ActionMoveAsset, "R-LINK-05")), nil, nil),
+			recorded("", ""), true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

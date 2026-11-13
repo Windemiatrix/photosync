@@ -36,6 +36,10 @@ import (
 // "plan.unknown_file" with the root and path of each file of fresh that is
 // neither media nor sidecar, both in the order of Root and Path. The inputs
 // are not changed.
+//
+// The assets for which IsNew holds under p and that have no link in r that
+// is not active meet the candidates first, and the other assets meet those
+// that the first leave.
 func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.LinkID]domain.RemoteEntry, r domain.RemoteSpec, fresh []domain.RemoteEntry, last domain.LinkID, p domain.Policies) (decisions []domain.LinkDecision, left []match.Candidate, notices []domain.Notice) {
 	cands, unknown := match.Group(fresh)
 	for _, e := range unknown {
@@ -72,8 +76,9 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 		}
 		decisions = append(decisions, domain.LinkDecision{Link: l, ICloud: domain.ChangeNew, Remote: domain.ChangeNew, Action: domain.ActionLink, Rule: rule})
 	}
+	ready := func(a domain.Asset) bool { return IsNew(a, p) && !out[a.ID] }
 	take := func(a domain.Asset, c match.Candidate, level domain.MatchLevel, rule string) {
-		if !IsNew(a, p) || out[a.ID] {
+		if !ready(a) {
 			return
 		}
 		add(a, c.Main, c.Role, level, rule)
@@ -91,10 +96,15 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 			}
 		}
 	}
-	pairs, _, rest := match.Match(slices.DeleteFunc(slices.Clone(assets), func(a domain.Asset) bool { return linked[a.ID] }), cands)
+	free := slices.DeleteFunc(slices.Clone(assets), func(a domain.Asset) bool { return linked[a.ID] })
+	pairs, _, rest := match.Match(slices.DeleteFunc(slices.Clone(free), func(a domain.Asset) bool { return !ready(a) }), cands)
 	for _, x := range pairs {
 		hold(x.Candidate.Main, byKey[x.Key])
 		take(byKey[x.Key], x.Candidate, x.Level, "R-LINK-03")
+	}
+	absorbed, _, rest := match.Match(slices.DeleteFunc(free, ready), rest)
+	for _, x := range absorbed {
+		hold(x.Candidate.Main, byKey[x.Key])
 	}
 	for _, c := range rest {
 		if a, ok := held[content(c.Main)]; ok {

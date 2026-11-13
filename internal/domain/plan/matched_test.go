@@ -70,8 +70,8 @@ func TestMatchFresh(t *testing.T) {
 	full7 := photo(7, "IMG_0001.HEIC", 100, domain.ResourceLiveVideo, domain.ResourceRAWPair)
 	video7 := photo(7, "MVI_0001.MP4", 500)
 	video7.IsVideo = true
-	hidden7, trashed7 := photo(7, "IMG_0001.HEIC", 100), photo(7, "IMG_0001.HEIC", 100)
-	hidden7.Hidden, trashed7.InTrash = true, true
+	hidden7, hidden9, trashed7 := photo(7, "IMG_0001.HEIC", 100), photo(9, "IMG_0001.HEIC", 100), photo(7, "IMG_0001.HEIC", 100)
+	hidden7.Hidden, hidden9.Hidden, trashed7.InTrash = true, true, true
 	link := func(id domain.LinkID, asset domain.AssetID, remote, at string, role domain.LinkRole, status domain.LinkStatus) domain.Link {
 		return domain.Link{
 			ID: id, AssetID: asset, Remote: remote, Root: personal, Path: at, Role: role, AlbumID: 10,
@@ -205,6 +205,14 @@ func TestMatchFresh(t *testing.T) {
 				made(13, 7, trip, original, exact, copyRule)), nil, nil},
 		{"a copy by the hash of the kind that the remote gives", bySHA, p, assets(a7), links(l1), found{1: heic},
 			entries(tripBySHA), decided(made(11, 7, tripBySHA, original, exact, copyRule)), nil, nil},
+		{"a file that a hidden asset and a new one both match goes to the new one", byMD5, skip, assets(hidden7, a9), nil, nil,
+			entries(heic), decided(made(11, 9, heic, original, exact, pairRule)), nil, nil},
+		{"a file that an asset waiting for relink and a new one both match goes to the new one", byMD5, p, assets(a7, a9), links(detached),
+			nil, entries(trip), decided(made(11, 9, trip, original, exact, pairRule)), nil, nil},
+		{"a second file of the name and size of a matched asset with other content is new", byMD5, p, assets(a7), nil, nil,
+			entries(tripNew, heic), decided(made(11, 7, heic, original, exact, pairRule)), newFiles(alone(tripNew)), nil},
+		{"a file that a hidden asset matches is no copy of another asset with its content", byMD5, skip, assets(a7, hidden9), links(l1),
+			found{1: heic}, entries(trip), nil, nil, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
