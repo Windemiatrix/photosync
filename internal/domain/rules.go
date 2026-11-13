@@ -28,6 +28,7 @@ var Rules = map[string]string{
 	"R-OBJECT-06": "While an asset is in no event album, a file of it under the root of its library but outside the directories it needs moves into its primary placement or another of them that holds none of its files, as when the asset leaves its last event album or joins a thematic album while its file lies in the day folder.",
 	"R-OBJECT-07": "An asset that moves between the shared and the personal library moves all its files to the root of the other library.",
 	"R-OBJECT-08": "A move found by content among duplicate files pairs the links of one asset first, then one to one in a fixed order, and an ambiguous one becomes a deletion and a new file with a notice.",
+	"R-OBJECT-09": "Of several replacements of one asset in one run only the first by remote priority is made; the others are taken into the base as they are.",
 
 	"R-COMPONENT-01": "A Live Photo video or RAW file deleted from the cloud while its main file stays there is restored from iCloud beside the main file where that ends up and beside each copy of the main file, with a warning.",
 	"R-COMPONENT-02": "A Live Photo video or RAW file moved away from its main file is moved back beside it, with a warning.",
