@@ -72,15 +72,7 @@ func ComponentOps(names *Names, target domain.Asset, mains []domain.Op, componen
 		for _, d := range components[id] {
 			c := d.Link
 			c.Root, c.Path = files[c.ID].Root, files[c.ID].Path
-			end := c
-			end.Root, end.Path = files[id].Root, files[id].Path
-			for _, o := range mains {
-				for _, l := range o.Links {
-					if l.ID == id {
-						end = l
-					}
-				}
-			}
+			end := mainEnd(c, id, mains, files)
 			switch {
 			case c.Remote != names.remote:
 			case d.Action == domain.ActionQuarantineFile:
@@ -119,4 +111,19 @@ func ComponentOps(names *Names, target domain.Asset, mains []domain.Op, componen
 	slices.SortFunc(ops, domain.Op.Compare)
 	slices.SortFunc(notices, func(x, y domain.Notice) int { return slices.Compare(x.Params, y.Params) })
 	return ops, notices
+}
+
+// Components and sidecars go by one rule of where a main file ends up, so
+// that they stay together: an operation of FileOps keeps its link as the
+// state will, and the scan tells where a file that no operation moves lies.
+func mainEnd(at domain.Link, id domain.LinkID, mains []domain.Op, files map[domain.LinkID]domain.RemoteEntry) domain.Link {
+	at.Root, at.Path = files[id].Root, files[id].Path
+	for _, o := range mains {
+		for _, l := range o.Links {
+			if l.ID == id {
+				at = l
+			}
+		}
+	}
+	return at
 }
