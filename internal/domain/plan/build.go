@@ -59,9 +59,11 @@ type Input struct {
 // there, each replacement turned into ActionLink when a decision of
 // DecideLayout deletes the asset, and with the pairs of the state and those
 // that the run made before. A remote takes its names from its whole listing
-// and its links in the state, and its sidecars by those links. ExpireOps, with Policies.QuarantineKeepDays, gives the
-// operations on the quarantine of each remote that the run syncs, from its
-// whole listing.
+// and its links in the state, and its sidecars by those links. ReplaceOps
+// then gives the replacement of the asset from its links as they lie now and
+// its operations so far. ExpireOps, with Policies.QuarantineKeepDays, gives
+// the operations on the quarantine of each remote that the run syncs, from
+// its whole listing.
 //
 // The delta gives each asset found the TargetLibrary of its target. A link of
 // a decision of DecideLayout or DecideComponents with ActionMoveAsset,
@@ -75,8 +77,11 @@ type Input struct {
 // operation of the asset holds it, with the OpAlbumAdd or OpAlbumRemove of
 // the asset on its album, else on the album that its link leaves, else to
 // Links; a decision with another action leaves its link to the operations.
-// Once every asset is decided on, an import of RunOps, whose links are new,
-// leaves the plan when ImportOps imports a file of the same content by the
+// Once every asset is decided on, an asset with an earlier identity that the
+// History of the delta holds with Deleted false gets an OpAssetDelete by
+// R-STATUS-08 unless an OpAssetDelete of the plan names it already; then an
+// import of RunOps, whose links are new, leaves the plan when ImportOps or
+// ReplaceOps imports a file of the same content by the
 // hash of kind Capabilities.ContentHash of the remote of each, an empty hash
 // matching none; then an operation of a remote that the run syncs, other
 // than an import, whose source, or whose destination or a directory above
@@ -186,6 +191,8 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 			out.Ops, notices = append(out.Ops, slices.Concat(main, comp, side)...), append(notices, slices.Concat(more, most, last)...)
 			pairs, out.Pairs = append(pairs, mk...), append(out.Pairs, mk...)
 		}
+		replacing, told := ReplaceOps(target, decisions, components, current, out.Ops[start:], files, albums)
+		out.Ops, notices = append(out.Ops, replacing...), append(notices, told...)
 		if found {
 			delta.Assets[index[id]].TargetLibrary = target.TargetLibrary
 		}
@@ -236,6 +243,20 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 			for _, d := range ds {
 				keep(d.Link, d.Action == domain.ActionLink)
 			}
+		}
+	}
+	finishing := map[domain.AssetID]bool{}
+	for _, o := range out.Ops {
+		if o.Kind == domain.OpAssetDelete {
+			finishing[o.Asset] = true
+		}
+	}
+	// The user may decline the dialog that takes an old asset to Recently
+	// Deleted, which leaves its replacement half done until a run finishes it.
+	for _, h := range delta.History {
+		if !h.Deleted && !finishing[h.AssetID] {
+			finishing[h.AssetID] = true
+			out.Ops = append(out.Ops, domain.Op{Kind: domain.OpAssetDelete, Asset: h.AssetID, Rule: "R-STATUS-08"})
 		}
 	}
 	hashes, relinked := map[string]domain.HashKind{}, map[string]bool{}

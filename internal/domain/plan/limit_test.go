@@ -9,13 +9,14 @@ import (
 	"github.com/Windemiatrix/photosync/internal/domain/plan"
 )
 
-// Each row but the first takes a plan of five assets, its operations in the
-// order that a run takes them: asset 7 in three phases, in two remotes and in
-// iCloud; asset 5, whose first operation comes after that of asset 7; two
-// imports of new assets; and asset 3, whose only operation comes in phase 5.
-// Operations of no asset lie between them, and asset 13 has a link and a
-// conflict but no operation. The expected plans follow the rule of the limit,
-// not the code.
+// Each row but the first and the last takes a plan of five assets, its
+// operations in the order that a run takes them: asset 7 in three phases, in
+// two remotes and in iCloud; asset 5, whose first operation comes after that
+// of asset 7; two imports of new assets; and asset 3, whose only operation
+// comes in phase 5. Operations of no asset lie between them, and asset 13 has
+// a link and a conflict but no operation. The last row takes an import that
+// replaces asset 7 among its other operations. The expected plans follow the
+// rule of the limit, not the code.
 func TestLimit(t *testing.T) {
 	t.Parallel()
 	const personal, holidays = domain.LibraryPersonal, "2024/05-01 - Holidays/"
@@ -43,6 +44,10 @@ func TestLimit(t *testing.T) {
 		Links: links{link(0, 0, domain.RoleOriginal, "Inbox/IMG_0201.HEIC"), link(0, 0, domain.RoleLiveVideo, "Inbox/IMG_0201.mov")},
 	}
 	import2 := domain.Op{Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: "Inbox/IMG_0202.HEIC", Rule: "R-LINK-02"}
+	replace7 := domain.Op{
+		Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: holidays + "IMG_0007.HEIC", Asset: 7, Rule: "R-LINK-06",
+		Links: links{link(71, 7, domain.RoleOriginal, holidays+"IMG_0007.HEIC")},
+	}
 	join7 := domain.Op{Kind: domain.OpAlbumAdd, Asset: 7, AlbumID: 31, Rule: "R-LINK-05"}
 	delete3 := domain.Op{Kind: domain.OpAssetDelete, Asset: 3, Rule: "R-LINK-09"}
 	expire := domain.Op{
@@ -90,6 +95,8 @@ func TestLimit(t *testing.T) {
 			}},
 		{"a limit of as many assets as the plan has", whole(), 5, whole()},
 		{"a limit above the number of assets", whole(), 6, whole()},
+		{"an import that replaces an asset goes with the other operations of that asset",
+			domain.Plan{Ops: ops{move7, put5, replace7, join7}}, 1, domain.Plan{Ops: ops{move7, replace7, join7}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

@@ -255,6 +255,23 @@ func TestBuild(t *testing.T) {
 	withoutPersonal, blind := p, alpha
 	withoutPersonal.AlbumsForPersonal, blind.Capabilities = false, domain.Capabilities{}
 	unhashed := file(personal, holidaysDir+"/IMG_0004.HEIC", 50, "b1", settled)
+	renewed := func(l domain.Link, e domain.RemoteEntry, id domain.AlbumID) domain.Link {
+		l = took(l, e, id)
+		l.Level = domain.LevelImported
+		return l
+	}
+	replacing := func(rule string, ls ...domain.Link) domain.Op {
+		return domain.Op{Kind: domain.OpImport, Remote: ls[0].Remote, Root: ls[0].Root, Src: ls[0].Path, Asset: 7, Rule: rule, Links: ls}
+	}
+	remembered := func(s domain.State, hs ...domain.AssetHistory) domain.State {
+		s.History = hs
+		return s
+	}
+	awayVideo, hidden7, restored5 := video, a7, asset(5, "IMG_0005.HEIC", 100, may1, "run-2")
+	awayVideo.Status, awayVideo.QuarantinePath, hidden7.Hidden = domain.StatusQuarantinedRemote, quarantined+ev.Path, true
+	history5 := domain.AssetHistory{AssetID: 7, Key: restored5.Key}
+	replacedTrip, movTrip := file(personal, tripDir+"/IMG_0001.HEIC", 120, "b1", settled), file(personal, tripDir+"/IMG_0001.mov", 30, "v1", settled)
+	changedMov := file(personal, holidaysDir+"/IMG_0001.MOV", 35, "v2", settled)
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -606,6 +623,43 @@ func TestBuild(t *testing.T) {
 				}}},
 			}},
 			delta(), nil},
+		{"a photo that the user changed in place replaces its asset with one imported from it and from the Live Photo video brought back beside it, and one operation takes the old asset and that of an earlier replacement to Recently Deleted",
+			remembered(state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, awayVideo), history), snapshot(withVideo(a7), restored),
+			scans{"alpha": {ev, replaced}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{
+				replacing("R-LINK-06", renewed(photo, replaced, holidays), renewed(video, ev, holidays)),
+				album(domain.OpAlbumAdd, 7, holidays, "R-LINK-06"), album(domain.OpAssetDelete, 7, 0, "R-STATUS-08"),
+			}},
+			domain.SnapshotDelta{Assets: assets{withVideo(a7)}, Albums: albums, History: []domain.AssetHistory{history}}, nil},
+		{"a photo that the user changed while its asset moved to another event goes there with its Live Photo video, and the asset is replaced from their new place",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(in7Trip)),
+			scans{"alpha": {ev, replaced}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{
+				moved(photo, personal, tripDir+"/IMG_0001.HEIC", trip, "R-OBJECT-05"),
+				moved(video, personal, tripDir+"/IMG_0001.mov", trip, "R-COMPONENT-04"),
+				replacing("R-LINK-14", renewed(photo, replacedTrip, trip), renewed(video, movTrip, trip)),
+				album(domain.OpAlbumAdd, 7, trip, "R-LINK-14"), album(domain.OpAssetDelete, 7, 0, "R-STATUS-08"),
+			}},
+			delta(withVideo(in7Trip)), nil},
+		{"two earlier replacements left half done take their old assets to Recently Deleted in one operation, beside the other changes of the asset",
+			remembered(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), history, history5), snapshot(a7, restored, restored5),
+			scans{"alpha": {tripFile}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{
+				holding(album(domain.OpAlbumAdd, 7, trip, "R-LINK-05"), took(photo, tripFile, trip)),
+				album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05"), album(domain.OpAssetDelete, 7, 0, "R-STATUS-08"),
+			}},
+			domain.SnapshotDelta{Assets: assets{a7}, Albums: albums, History: []domain.AssetHistory{history5, history}}, nil},
+		{"a hidden asset whose file the user changed in place is not replaced, with a notice",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(hidden7), scans{"alpha": {replaced}}, specs{alpha}, "", p, event,
+			domain.Plan{Notices: []domain.Notice{{Code: "plan.hidden_not_replaced", Params: []string{"IMG_0001.HEIC", "uuid-7"}}}},
+			delta(hidden7), nil},
+		{"a photo and its Live Photo video that the user changed while their asset is gone from the library come back to iCloud as one new asset, and nothing replaces the asset that is gone",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(), scans{"alpha": {changedMov, replaced}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{relink("R-LINK-11", holidays, imported(photo, replaced, holidays), imported(video, changedMov, holidays))}}, delta(), nil},
+		{"an earlier replacement left half done takes its old asset to Recently Deleted while the asset that replaced it is gone from the library and has no link",
+			remembered(domain.State{Assets: assets{a7}, Albums: albums}, history), snapshot(restored), nil, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{album(domain.OpAssetDelete, 7, 0, "R-STATUS-08")}},
+			domain.SnapshotDelta{Albums: albums, History: []domain.AssetHistory{history}}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
