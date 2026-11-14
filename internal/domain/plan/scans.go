@@ -42,15 +42,17 @@ type RemoteScan struct {
 // source role of the new links and of the active links of the remote, where
 // ReadScan finds them, whose asset is in delta outside Recently Deleted,
 // Syncs under p, is not in Settling and is not one that StatusFrozen holds
-// for, and in dirs alone the main files of the new files; a file goes in
-// files under each album of the Memberships of its asset. JoinFresh runs
-// with the pairs of state and those made, and DecideDerived with fresh and
-// p.DerivedCopy. files is the union of what ReadScan gives, added and made
-// are what PairDirs gives in the order of the calls, and notices hold, for
-// each remote in turn, those of settling, ReadScan, MatchFresh and
-// DecideDerived. An entry under the directory .photosync at the top of a
-// root, which ReadScan leaves out, has settled whatever its MTime. The
-// inputs are not changed.
+// for, but for a file still at the path of its link outside the directory
+// that the pair of the remote holds for its album and root, which a moved
+// pair left behind, and in dirs alone the main files of the new files; a
+// file goes in files under each album of the Memberships of its asset.
+// JoinFresh runs with the pairs of state and those made, and DecideDerived
+// with fresh and p.DerivedCopy. files is the union of what ReadScan gives,
+// added and made are what PairDirs gives in the order of the calls, and
+// notices hold, for each remote in turn, those of settling, ReadScan,
+// MatchFresh and DecideDerived. An entry under the directory .photosync at
+// the top of a root, which ReadScan leaves out, has settled whatever its
+// MTime. The inputs are not changed.
 func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string][]domain.RemoteEntry, remotes []domain.RemoteSpec, p domain.Policies, now time.Time) (files map[domain.LinkID]domain.RemoteEntry, read map[string]RemoteScan, added []domain.Album, made []domain.AlbumPair, notices []domain.Notice) {
 	var lastLink domain.LinkID
 	byAsset := map[domain.AssetID][]domain.Link{}
@@ -67,6 +69,10 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 	}
 	albums, pairs := slices.Clone(delta.Albums), slices.Clone(state.AlbumPairs)
 	files, read = map[domain.LinkID]domain.RemoteEntry{}, map[string]RemoteScan{}
+	home := map[domain.AlbumPair]string{}
+	for _, x := range state.AlbumPairs {
+		home[domain.AlbumPair{AlbumID: x.AlbumID, Remote: x.Remote, Root: x.Root}] = x.DirPath
+	}
 	since := now.Add(-time.Duration(p.SettleMinutes) * time.Minute)
 	for _, r := range slices.SortedFunc(slices.Values(remotes), func(x, y domain.RemoteSpec) int { return cmp.Compare(x.Name, y.Name) }) {
 		hash := r.Capabilities.ContentHash
@@ -113,8 +119,11 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 		}
 		for _, l := range state.Links {
 			a, found := byID[l.AssetID]
-			if e, ok := fs[l.ID]; ok && objectFile(l) && found && !a.InTrash && Syncs(a, p) && !settling[l.AssetID] &&
-				!StatusFrozen(byAsset[l.AssetID], r.Name) {
+			e, ok := fs[l.ID]
+			dir, paired := home[domain.AlbumPair{AlbumID: l.AlbumID, Remote: r.Name, Root: l.Root}]
+			behind := paired && dir != path.Dir(e.Path) && e.Root == l.Root && e.Path == l.Path
+			if ok && objectFile(l) && found && !a.InTrash && Syncs(a, p) && !settling[l.AssetID] &&
+				!StatusFrozen(byAsset[l.AssetID], r.Name) && !behind {
 				l.Root, l.Path = e.Root, e.Path
 				count(l)
 			}

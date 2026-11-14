@@ -204,6 +204,12 @@ func TestReadScans(t *testing.T) {
 	}, two.added, two.made, nil}
 	party := imported(e4, next)
 	party.File.Live, party.File.RAW, party.File.Sidecars = &e4v, &e4r, entries{e4x}
+	both := photo(7, "IMG_0001.HEIC", 100, holidays)
+	both.Memberships = append(both.Memberships, domain.Membership{AlbumID: trip, FirstSeenRun: "run-1"})
+	movedAway := domain.State{Albums: stateAlbums, Links: []domain.Link{link(1, 7, "alpha", e1, original, holidays)}, AlbumPairs: []domain.AlbumPair{
+		pair(holidays, "alpha", personal, movedDir, domain.OriginICloud), pair(holidays, "beta", personal, holidaysDir, domain.OriginICloud),
+		pair(holidays, "alpha", shared, holidaysDir, domain.OriginICloud),
+	}}
 
 	same := func(x, y result) bool {
 		sameScan := func(a, b plan.RemoteScan) bool {
@@ -335,6 +341,13 @@ func TestReadScans(t *testing.T) {
 			state(link(1, 7, "alpha", e1, original, holidays)), delta(a7), scans{"alpha": {e14, own, nested, e13, e1}}, specs{alpha}, slow,
 			result{found{1: e1}, reads{"alpha": scanned(nil, nil, news{imported(e13, holidays)}, nil)}, nil, nil,
 				[]domain.Notice{settling(personal, "2024/.photosync/IMG_0099.HEIC"), settling(personal, holidaysDir+"/IMG_0014.HEIC")}}},
+		{"a file that stayed where it was when the pair of its album moved to another directory makes no new album of the directory it lies in",
+			movedAway, delta(a7), scans{"alpha": {e1}}, specs{alpha}, p,
+			result{found{1: e1}, reads{"alpha": scanned(nil, nil, nil, nil)}, nil, nil, nil}},
+		{"a file in the directory of the pair of its album still counts among the files of its other albums",
+			state(link(1, 7, "alpha", e1, original, holidays), link(2, 8, "alpha", e2, original, 0)), delta(both, a8), scans{"alpha": {e2, e1}}, specs{alpha}, p,
+			result{found{1: e1, 2: e2}, reads{"alpha": scanned(nil, nil, nil, nil)},
+				[]domain.Album{album(next, event, "Trip photos")}, []domain.AlbumPair{pair(next, "alpha", personal, photosDir, byRemote)}, nil}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

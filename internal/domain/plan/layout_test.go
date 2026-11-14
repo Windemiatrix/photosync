@@ -349,7 +349,7 @@ func TestDecideLayout(t *testing.T) {
 			priority := slices.Clone(c.p.RemotePriority)
 			var got result
 			got.decisions, got.status, got.target, got.join, got.leave, got.placements =
-				plan.DecideLayout(c.now, c.found, c.linked, c.objects, c.links, c.remotes, albums, c.p, "run-2")
+				plan.DecideLayout(c.now, c.found, c.linked, c.objects, c.links, c.remotes, albums, nil, c.p, "run-2")
 			want := result{c.decisions, c.status, c.now, c.join, c.leave, c.placements}
 			want.target.Memberships, want.target.TargetLibrary = c.albums, c.library
 			if !equal(got, want) {
@@ -381,7 +381,7 @@ func TestDecideLayout(t *testing.T) {
 			slices.Reverse(ra)
 			var again result
 			again.decisions, again.status, again.target, again.join, again.leave, again.placements =
-				plan.DecideLayout(now, c.found, c.linked, c.objects, rl, c.remotes, ra, c.p, "run-2")
+				plan.DecideLayout(now, c.found, c.linked, c.objects, rl, c.remotes, ra, nil, c.p, "run-2")
 			if !equal(again, got) {
 				t.Errorf("with the links, albums and memberships reversed: %q; want %q", show(again), show(got))
 			}

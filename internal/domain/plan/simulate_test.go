@@ -421,6 +421,12 @@ func TestSimulate(t *testing.T) {
 				Albums: []domain.Album{{UUID: cats.UUID, Title: cats.Title}, {UUID: hol.UUID, Title: hol.Title}, {UUID: zoo.UUID, Title: zoo.Title}},
 			},
 			scans{}},
+		{"a pair of the plan takes the place of the pair of the state for its album, remote and root, and the other pairs of the state stay",
+			domain.State{AlbumPairs: pairs{alphaTrip, betaHolidays, alphaHolidays}}, domain.LibrarySnapshot{}, nil,
+			domain.Plan{Pairs: pairs{pair(holidays, "alpha", personal, "2024/05-01 - Vacation")}},
+			domain.SnapshotDelta{},
+			domain.State{AlbumPairs: pairs{pair(holidays, "alpha", personal, "2024/05-01 - Vacation"), betaHolidays, alphaTrip}},
+			domain.LibrarySnapshot{}, scans{}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -606,6 +612,13 @@ func TestSimulateConverges(t *testing.T) {
 	n1, n2 := asset(1, "IMG_0001.HEIC", 100, may2, "run-2"), asset(2, "IMG_0001.HEIC", 200, may2, "run-2", trip)
 	restored, restored5 := asset(6, "IMG_0006.HEIC", 100, may1, "run-2"), asset(5, "IMG_0005.HEIC", 100, may1, "run-2")
 	history, history5 := domain.AssetHistory{AssetID: 7, Key: restored.Key}, domain.AssetHistory{AssetID: 7, Key: restored5.Key}
+	vacationLibrary := slices.Clone(library)
+	vacationLibrary[2].Title = "05/01 Vacation"
+	inVacation := func(s domain.LibrarySnapshot) domain.LibrarySnapshot {
+		s.Albums = vacationLibrary
+		return s
+	}
+	stray4 := file(personal, holidaysDir+"/IMG_0004.HEIC", 400, "d4", settled)
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -687,6 +700,12 @@ func TestSimulateConverges(t *testing.T) {
 			scans{"alpha": {tripFile}}, specs{alpha}, "", p, kinds{domain.OpAlbumAdd, domain.OpAlbumRemove, domain.OpAssetDelete}, nil},
 		{"an earlier replacement left half done takes its old asset to Recently Deleted while the asset that replaced it is gone from the library",
 			remembered(domain.State{Assets: assets{a7}, Albums: albums}, history), snapshot(restored), nil, specs{alpha}, "", p, kinds{domain.OpAssetDelete}, nil},
+		{"an album renamed in iCloud takes the files of its folder to the folder of its new title, where a new asset of the album goes up",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), inVacation(snapshot(withVideo(a7), n8)),
+			scans{"alpha": {xmp, ev, e1}}, specs{alpha}, "", p, kinds{domain.OpMove, domain.OpMove, domain.OpMove, domain.OpPut, domain.OpPut}, nil},
+		{"an album renamed in iCloud takes its file along, while a new file of its old folder comes in there and makes no album of the old name on the next run",
+			state(assets{a7}, pairs{alphaHolidays}, photo), inVacation(snapshot(a7)), scans{"alpha": {stray4, e1}}, specs{alpha}, "", p,
+			kinds{domain.OpMove, domain.OpImport}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

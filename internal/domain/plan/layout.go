@@ -11,11 +11,12 @@ import (
 // fate of the asset and StatusDeletes applies p.Deletes; status, by the link
 // ID of each decision, the status that it leaves its link in, "" for none;
 // target, join and leave as DecideTarget gives them; and placements, by
-// remote, those of DecidePlacement that the mode of the remote runs, a remote
-// without any being absent. now and found are as DecideRemoteLinks takes
-// them, links are its current for every remote with the links that matching
-// makes in the run, and linked reports that the asset has a link in some
-// remote and status, in the state or made by matching. objects are, by
+// remote, those of DecidePlacement and then of FollowPairs with moved, the
+// pairs that MovePairs moves as they were, that the mode of the remote runs,
+// a remote without any being absent. now and found are as DecideRemoteLinks
+// takes them, links are its current for every remote with the links that
+// matching makes in the run, and linked reports that the asset has a link in
+// some remote and status, in the state or made by matching. objects are, by
 // remote, what DecideRemoteObject gives with in true for each remote where
 // the asset takes part in the plan, a remote with none of its files too, with
 // the albums that matching makes the asset join added to Join; the decisions
@@ -33,7 +34,7 @@ import (
 // statuses after the run gets no placements, and the uploads of a remote
 // with a decision by R-LINK-10, which holds no file of the asset, take that
 // rule. The inputs are not changed.
-func DecideLayout(now domain.Asset, found, linked bool, objects map[string]domain.ObjectDecision, links []domain.Link, remotes []domain.RemoteSpec, albums []domain.Album, p domain.Policies, runID string) (decisions map[string][]domain.LinkDecision, status map[domain.LinkID]domain.LinkStatus, target domain.Asset, join, leave []domain.AlbumChange, placements map[string][]domain.Placement) {
+func DecideLayout(now domain.Asset, found, linked bool, objects map[string]domain.ObjectDecision, links []domain.Link, remotes []domain.RemoteSpec, albums []domain.Album, moved []domain.AlbumPair, p domain.Policies, runID string) (decisions map[string][]domain.LinkDecision, status map[domain.LinkID]domain.LinkStatus, target domain.Asset, join, leave []domain.AlbumChange, placements map[string][]domain.Placement) {
 	modes, names := map[string]domain.Mode{}, []string(nil)
 	for _, r := range remotes {
 		modes[r.Name], names = r.Mode, append(names, r.Name)
@@ -73,7 +74,8 @@ func DecideLayout(now domain.Asset, found, linked bool, objects map[string]domai
 	placements = map[string][]domain.Placement{}
 	for name, o := range fate {
 		again := slices.ContainsFunc(o.Links, func(d domain.LinkDecision) bool { return d.Rule == "R-LINK-10" })
-		for _, pl := range DecidePlacement(target, links, name, albums) {
+		placed := DecidePlacement(target, links, name, albums)
+		for _, pl := range append(placed, FollowPairs(links, moved, name, placed)...) {
 			if again {
 				pl.Rule = "R-LINK-10"
 			}

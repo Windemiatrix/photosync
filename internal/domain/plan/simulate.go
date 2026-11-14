@@ -15,11 +15,12 @@ import (
 // once every operation of p succeeds, where p and delta are what Build gives
 // for in and p may be cut by Limit. The state takes delta as the run writes
 // it before the operations: its assets and albums over those of in.State
-// with the same ID, the others of in.State staying, and its History. The
-// pairs of p join those of in.State. The links of p, then those of each
-// operation in the order of p.Ops, go over the links of in.State with the
-// same ID: a link with an empty Status leaves the state, and one with a zero
-// ID takes the next ID above every link ID of in.State and p. The conflicts
+// with the same ID, the others of in.State staying, and its History. A pair
+// of p takes the place of the pair of in.State for its album, remote and
+// root, if any. The links of p, then those of each operation in the order
+// of p.Ops, go over the links of in.State with the same ID: a link with an
+// empty Status leaves the state, and one with a zero ID takes the next ID
+// above every link ID of in.State and p. The conflicts
 // of p take the place of those of in.State with the same AssetID and Remote,
 // and a resolved one leaves the state. In the scans, an operation on the
 // cloud deletes, expires, moves, quarantines or copies the entry at its Root
@@ -214,8 +215,11 @@ func Simulate(in Input, p domain.Plan, delta domain.SnapshotDelta) (domain.State
 	slices.SortFunc(conflicts, func(x, y domain.Conflict) int {
 		return cmp.Or(cmp.Compare(x.AssetID, y.AssetID), cmp.Compare(x.Remote, y.Remote))
 	})
-	pairs := slices.Concat(in.State.AlbumPairs, p.Pairs)
-	slices.SortFunc(pairs, func(x, y domain.AlbumPair) int {
+	paired := map[domain.AlbumPair]domain.AlbumPair{}
+	for _, x := range slices.Concat(in.State.AlbumPairs, p.Pairs) {
+		paired[domain.AlbumPair{AlbumID: x.AlbumID, Remote: x.Remote, Root: x.Root}] = x
+	}
+	pairs := slices.SortedFunc(maps.Values(paired), func(x, y domain.AlbumPair) int {
 		return cmp.Or(cmp.Compare(x.AlbumID, y.AlbumID), cmp.Compare(x.Remote, y.Remote), cmp.Compare(x.Root, y.Root))
 	})
 	scans := map[string][]domain.RemoteEntry{}
