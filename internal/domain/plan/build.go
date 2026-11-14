@@ -54,17 +54,33 @@ type Input struct {
 // DecideComponents its links as the state holds them. AssetOps, then
 // FileOps, ComponentOps and SidecarOps in each remote that the run syncs, by
 // name, where the asset takes part in the plan, give its operations: FileOps
-// with the decisions of matching there unless a decision of DecideLayout
-// deletes the asset, and with the pairs of the state and those that the run
-// made before. A remote takes its names from its whole listing and its links
-// in the state, and its sidecars by those links. Once every asset is decided
-// on, an operation of a remote that the run syncs, other than an import,
-// whose source or destination is among the paths that Names.Doubles finds
-// there leaves the plan, and with it every operation there on its asset, if
-// it has one. Ops are in the order of domain.Op.Compare; Albums are what
-// ReadScans adds, Pairs what ReadScans and then FileOps make, and Notices
-// hold those of Reconcile, ReadScans, the operations and Names.Doubles in
-// the order of Code, then Params. The inputs are not changed.
+// with the decisions of matching there, each replacement turned into
+// ActionLink when a decision of DecideLayout deletes the asset, and with the
+// pairs of the state and those that the run made before. A remote takes its
+// names from its whole listing and its links in the state, and its sidecars
+// by those links.
+//
+// The delta gives each asset found the TargetLibrary of its target. A link of
+// a decision of DecideLayout or DecideComponents with ActionMoveAsset,
+// ActionUpdateBase or ActionLink lies where DecideRemoteLinks has it now,
+// with the size, hashes, ETag and MTime of its file, and one with ActionNone,
+// ActionForget or ActionUpload is as in the state; each takes the status
+// that the run leaves it in, except that the link of an upload that
+// DecideLayout decides leaves the state, the upload making a new one. Each
+// such link that differs from the state, and each new link of matching with
+// ActionLink where the asset takes part in the plan, goes, unless an
+// operation of the asset holds it, with the OpAlbumAdd or OpAlbumRemove of
+// the asset on its album, else on the album that its link leaves, else to
+// Links; a decision with another action leaves its link to the operations.
+// Once every asset is decided on, an operation of a remote that the run
+// syncs, other than an import, whose source or destination is among the
+// paths that Names.Doubles finds there leaves the plan, and with it every
+// operation there on its asset, if it has one, and the links and the
+// conflict of that asset there; a link alone on such a path holds nothing
+// back. Ops are in the order of domain.Op.Compare; Albums are what ReadScans
+// adds, Pairs what ReadScans and then FileOps make, and Notices hold those of
+// Reconcile, ReadScans, the operations and Names.Doubles in the order of
+// Code, then Params. The inputs are not changed.
 func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	delta, notices, err := Reconcile(in.State, in.Snapshot, in.RunID)
 	if err != nil {
@@ -85,10 +101,13 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	}
 	out := domain.Plan{Ops: RunOps(read, added, albums, names, remotes, in.Policies, in.Now), Albums: added, Pairs: made}
 	assets, base, owned := map[domain.AssetID]domain.Asset{}, map[domain.AssetID]domain.Asset{}, map[domain.AssetID][]domain.Link{}
-	stored := map[domain.Conflict]domain.Conflict{}
+	stored, index := map[domain.Conflict]domain.Conflict{}, map[domain.AssetID]int{}
 	var ids []domain.AssetID
-	for _, a := range delta.Assets {
-		assets[a.ID], ids = a, append(ids, a.ID)
+	var kept []domain.Link
+	left := map[domain.LinkID]domain.AlbumID{}
+	var conflicts []domain.Conflict
+	for i, a := range delta.Assets {
+		assets[a.ID], index[a.ID], ids = a, i, append(ids, a.ID)
 	}
 	for _, a := range in.State.Assets {
 		base[a.ID] = a
@@ -122,7 +141,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 			c := domain.Conflict{AssetID: id, Remote: r.Name}
 			o, conflict, ok := DecideRemoteObject(asset, found, decided[r.Name], current, r, albums, cmp.Or(stored[c], c), in.Policies)
 			if conflict.Status != "" {
-				out.Conflicts = append(out.Conflicts, conflict)
+				conflicts = append(conflicts, conflict)
 			}
 			if ok {
 				o.Join = objectChanges(append(o.Join, read[r.Name].Join[id]...))
@@ -136,10 +155,15 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 		}
 		decisions, status, target, join, leave, placements := DecideLayout(asset, found, linked, objects, current, in.Remotes, albums, in.Policies, in.RunID)
 		fates, components, copies, after := DecideComponents(decisions, status, placements, owned[id], files, in.Remotes, in.Policies.Deletes)
+		start := len(out.Ops)
 		out.Ops = append(out.Ops, AssetOps(id, decisions, status, join, leave, components, files)...)
 		for _, ds := range decisions {
 			if slices.ContainsFunc(ds, func(d domain.LinkDecision) bool { return d.Action == domain.ActionDeleteAsset }) {
-				clear(matched)
+				for _, ms := range matched {
+					for i := range ms {
+						ms[i].Action = domain.ActionLink
+					}
+				}
 			}
 		}
 		fields := in.Fields(target.Key)
@@ -153,7 +177,59 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 			out.Ops, notices = append(out.Ops, slices.Concat(main, comp, side)...), append(notices, slices.Concat(more, most, last)...)
 			pairs, out.Pairs = append(pairs, mk...), append(out.Pairs, mk...)
 		}
+		if found {
+			delta.Assets[index[id]].TargetLibrary = target.TargetLibrary
+		}
+		carried, cur := map[domain.LinkID]bool{}, map[domain.LinkID]domain.Link{}
+		for _, o := range out.Ops[start:] {
+			for _, l := range o.Links {
+				carried[l.ID] = true
+			}
+		}
+		for _, l := range current {
+			cur[l.ID] = l
+		}
+		keep := func(l domain.Link, changed bool) {
+			if changed && !carried[l.ID] {
+				kept = append(kept, l)
+			}
+		}
+		record := func(d domain.LinkDecision, end domain.LinkStatus) {
+			l := d.Link
+			switch d.Action {
+			case domain.ActionMoveAsset, domain.ActionUpdateBase, domain.ActionLink:
+				e := files[l.ID]
+				l = cur[l.ID]
+				l.Size, l.SHA256, l.MD5, l.ETag, l.MTime = e.Size, e.SHA256, e.MD5, e.ETag, e.MTime
+			case domain.ActionNone, domain.ActionForget, domain.ActionUpload:
+			default:
+				return
+			}
+			l.Status = end
+			left[l.ID] = d.Link.AlbumID
+			keep(l, l != d.Link)
+		}
+		for _, ds := range decisions {
+			for _, d := range ds {
+				st := status[d.Link.ID]
+				if d.Action == domain.ActionUpload {
+					st = ""
+				}
+				record(d, st)
+			}
+		}
+		for _, ds := range components {
+			for _, d := range ds {
+				record(d, after[d.Link.ID])
+			}
+		}
+		for _, ds := range matched {
+			for _, d := range ds {
+				keep(d.Link, d.Action == domain.ActionLink)
+			}
+		}
 	}
+	excluded := map[string]map[domain.AssetID]bool{}
 	for _, r := range remotes {
 		doubled, ns := names[r.Name].Doubles()
 		hit := func(o domain.Op) bool {
@@ -161,6 +237,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 				(doubled[domain.RemoteEntry{Root: o.Root, Path: o.Src}] || doubled[domain.RemoteEntry{Root: o.DstRoot, Path: o.Dst}])
 		}
 		held := map[domain.AssetID]bool{}
+		excluded[r.Name] = held
 		for _, o := range out.Ops {
 			if hit(o) && o.Asset != 0 {
 				held[o.Asset] = true
@@ -168,6 +245,31 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 		}
 		out.Ops = slices.DeleteFunc(out.Ops, func(o domain.Op) bool { return hit(o) || o.Remote == r.Name && held[o.Asset] })
 		notices = append(notices, ns...)
+	}
+	albumOps := map[domain.Link]int{}
+	for i, o := range out.Ops {
+		if o.Kind == domain.OpAlbumAdd || o.Kind == domain.OpAlbumRemove {
+			albumOps[domain.Link{AssetID: o.Asset, AlbumID: o.AlbumID}] = i
+		}
+	}
+	slices.SortFunc(kept, func(x, y domain.Link) int { return cmp.Compare(x.ID, y.ID) })
+	for _, l := range kept {
+		i, joins := albumOps[domain.Link{AssetID: l.AssetID, AlbumID: l.AlbumID}]
+		if !joins {
+			i, joins = albumOps[domain.Link{AssetID: l.AssetID, AlbumID: left[l.ID]}]
+		}
+		switch {
+		case excluded[l.Remote][l.AssetID]:
+		case joins:
+			out.Ops[i].Links = append(out.Ops[i].Links, l)
+		default:
+			out.Links = append(out.Links, l)
+		}
+	}
+	for _, c := range conflicts {
+		if !excluded[c.Remote][c.AssetID] {
+			out.Conflicts = append(out.Conflicts, c)
+		}
 	}
 	slices.SortFunc(out.Ops, domain.Op.Compare)
 	slices.SortFunc(notices, func(x, y domain.Notice) int {
