@@ -16,9 +16,9 @@ import (
 // Each row is a plan with the state, the photo library and the listings that
 // it runs on, and the delta that the run writes first. The expected state,
 // snapshot and listings follow what the delta, each record and each
-// operation on the cloud do once they succeed, not the code, and must not
-// depend on the order of the input, but for that of the operations, which is
-// the order of the run.
+// operation do once they succeed, not the code, and must not depend on the
+// order of the input, but for that of the operations, which is the order of
+// the run.
 func TestSimulate(t *testing.T) {
 	t.Parallel()
 	const (
@@ -126,6 +126,86 @@ func TestSimulate(t *testing.T) {
 	}
 	alphaHolidays, alphaShared := pair(holidays, "alpha", personal, holidaysDir), pair(holidays, "alpha", shared, holidaysDir)
 	betaHolidays, alphaTrip := pair(holidays, "beta", personal, holidaysDir), pair(trip, "alpha", personal, tripDir)
+	year := domain.Album{ID: 1, UUID: "u-2024", Key: `[] "2024"`, KeySource: domain.KeyPath, Kind: domain.KindFolder, Title: "2024"}
+	cats := domain.Album{ID: 5, UUID: "u-cats", Kind: domain.KindThematic, Title: "Cats"}
+	creating := func(id domain.AlbumID) domain.Op {
+		return domain.Op{Kind: domain.OpAlbumCreate, AlbumID: id, Rule: "R-LAYOUT-06"}
+	}
+	albumOp := func(kind domain.OpKind, of domain.AssetID, id domain.AlbumID, rule string, ls ...domain.Link) domain.Op {
+		return domain.Op{Kind: kind, Asset: of, AlbumID: id, Rule: rule, Links: ls}
+	}
+	importing := func(of domain.AssetID, id domain.AlbumID, rule string, ls ...domain.Link) domain.Op {
+		return domain.Op{Kind: domain.OpImport, Remote: "alpha", Root: ls[0].Root, Src: ls[0].Path, Asset: of, AlbumID: id, Rule: rule, Links: ls}
+	}
+	imported := func(e domain.RemoteEntry, role domain.LinkRole, id domain.AlbumID) domain.Link {
+		return domain.Link{
+			Remote: "alpha", Root: e.Root, Path: e.Path, Role: role, AlbumID: id, Size: e.Size, SHA256: e.SHA256, MD5: e.MD5, ETag: e.ETag,
+			MTime: e.MTime, Level: domain.LevelImported, Status: domain.StatusActive,
+		}
+	}
+	owned := func(l domain.Link, id domain.LinkID, of domain.AssetID) domain.Link {
+		l.ID, l.AssetID = id, of
+		return l
+	}
+	member := func(a domain.Asset, run string, of ...domain.Album) domain.Asset {
+		a.AlbumUUIDs, a.Memberships = nil, nil
+		for _, x := range of {
+			a.AlbumUUIDs, a.Memberships = append(a.AlbumUUIDs, x.UUID), append(a.Memberships, domain.Membership{AlbumID: x.ID, FirstSeenRun: run})
+		}
+		return a
+	}
+	seen := func(a domain.Asset) domain.Asset {
+		a.ID, a.TargetLibrary, a.Memberships = 0, "", nil
+		return a
+	}
+	binned := func(a domain.Asset) domain.Asset {
+		a.InTrash = true
+		return a
+	}
+	identity := func(of domain.AssetID, n int, deleted bool) domain.AssetHistory {
+		return domain.AssetHistory{AssetID: of, Key: domain.AssetKey{CloudAssetGUID: fmt.Sprintf("guid-%d", n), UUID: fmt.Sprintf("uuid-%d", n)}, Deleted: deleted}
+	}
+	earlier := func(h domain.AssetHistory) domain.Asset { return domain.Asset{Key: h.Key, Library: personal} }
+	offset := 7200
+	newPhoto, newVideo := file(personal, holidaysDir+"/IMG_0003.HEIC", 300, "c3"), file(personal, holidaysDir+"/IMG_0003.mov", 40, "c4")
+	newPhoto.Meta = domain.MediaMeta{Taken: time.Date(2024, 5, 1, 10, 0, 0, 0, time.UTC), TZOffset: &offset, SubSec: "075", Width: 4032, Height: 3024}
+	mpeg := file(shared, holidaysDir+"/IMG_0004.MPG", 500, "d4")
+	mpegLink, relinked := link(6, 7, "alpha", mpeg, domain.RoleSource), owned(imported(mpeg, domain.RoleSource, 0), 6, 0)
+	made9 := domain.Asset{
+		ID: 9, Key: domain.AssetKey{UUID: "sim-run-2-1"}, Library: personal, TargetLibrary: personal, OriginalName: "IMG_0003.HEIC",
+		Taken: newPhoto.Meta.Taken, TZOffset: &offset, SubSec: "075", Width: 4032, Height: 3024,
+		Resources: []domain.Resource{
+			{Role: domain.ResourceOriginal, Filename: "IMG_0003.HEIC", Size: 300, SHA256: "sc3", MD5: "c3"},
+			{Role: domain.ResourceLiveVideo, Filename: "IMG_0003.mov", Size: 40, SHA256: "sc4", MD5: "c4"},
+		},
+		AlbumUUIDs: []string{"u-hol"}, Memberships: []domain.Membership{{AlbumID: holidays, FirstSeenRun: "run-2"}},
+	}
+	made10 := domain.Asset{
+		ID: 10, Key: domain.AssetKey{UUID: "sim-run-2-2"}, Library: personal, TargetLibrary: shared, OriginalName: "IMG_0004.MPG",
+		Resources: []domain.Resource{{Role: domain.ResourceOriginal, Filename: "IMG_0004.MPG", Size: 500, SHA256: "sd4", MD5: "d4"}},
+	}
+	shot9, shot10 := seen(made9), seen(made10)
+	shot9.Resources = []domain.Resource{{Role: domain.ResourceOriginal, Filename: "IMG_0003.HEIC", Size: 300}, {Role: domain.ResourceLiveVideo, Filename: "IMG_0003.mov", Size: 40}}
+	shot10.Resources = []domain.Resource{{Role: domain.ResourceOriginal, Filename: "IMG_0004.MPG", Size: 500}}
+	r5, r7 := member(a5, "run-1", zoo, hol), member(a7, "run-1", hol)
+	changed5 := file(personal, holidaysDir+"/IMG_0005.HEIC", 150, "f5")
+	changed5.Meta = domain.MediaMeta{Taken: time.Date(2024, 5, 1, 11, 0, 0, 0, time.UTC), Width: 3024, Height: 4032}
+	link5 := link(9, 5, "alpha", file(personal, changed5.Path, 100, "e5"), original)
+	renewed5 := link5
+	renewed5.Size, renewed5.SHA256, renewed5.MD5, renewed5.ETag, renewed5.MTime, renewed5.Level = 150, "sf5", "f5", "ef5", settled, domain.LevelImported
+	new5 := domain.Asset{
+		ID: 5, Key: domain.AssetKey{UUID: "sim-run-2-0"}, Library: personal, TargetLibrary: personal, OriginalName: "IMG_0005.HEIC",
+		Taken: changed5.Meta.Taken, Width: 3024, Height: 4032,
+		Resources:  []domain.Resource{{Role: domain.ResourceOriginal, Filename: "IMG_0005.HEIC", Size: 150, SHA256: "sf5", MD5: "f5"}},
+		AlbumUUIDs: []string{"u-zoo", "u-hol"}, Memberships: []domain.Membership{{AlbumID: zoo.ID, FirstSeenRun: "run-2"}, {AlbumID: holidays, FirstSeenRun: "run-2"}},
+	}
+	shot5 := seen(new5)
+	shot5.Resources = []domain.Resource{{Role: domain.ResourceOriginal, Filename: "IMG_0005.HEIC", Size: 150}}
+	q5, q7, q8 := member(a5, "run-1", zoo), member(a7, "run-1", hol), member(a8, "run-1", zoo, hol)
+	x5, x7, x8 := q5, q7, binned(member(a8, "run-1", hol))
+	x5.AlbumUUIDs, x5.Memberships = []string{}, nil
+	x7.AlbumUUIDs, x7.Memberships = []string{"u-hol", "u-zoo"}, []domain.Membership{{AlbumID: zoo.ID, FirstSeenRun: "run-2"}, {AlbumID: holidays, FirstSeenRun: "run-1"}}
+	otherZoo := moved(other, to(e1, personal, "2024/05-03 - Zoo/IMG_0001.HEIC"), zoo.ID)
 	reversed := func(in plan.Input, p domain.Plan, d domain.SnapshotDelta) (plan.Input, domain.Plan, domain.SnapshotDelta) {
 		// The operations keep the order of the run, and the history of the
 		// delta the order that Build gives it.
@@ -133,7 +213,7 @@ func TestSimulate(t *testing.T) {
 		s.Assets, s.Albums, s.AlbumPairs = slices.Clone(s.Assets), slices.Clone(s.Albums), slices.Clone(s.AlbumPairs)
 		s.Links, s.History, s.Conflicts = slices.Clone(s.Links), slices.Clone(s.History), slices.Clone(s.Conflicts)
 		snap.Assets, snap.Albums = slices.Clone(snap.Assets), slices.Clone(snap.Albums)
-		p.Links, p.Pairs, p.Conflicts = slices.Clone(p.Links), slices.Clone(p.Pairs), slices.Clone(p.Conflicts)
+		p.Links, p.Pairs, p.Conflicts, p.Albums = slices.Clone(p.Links), slices.Clone(p.Pairs), slices.Clone(p.Conflicts), slices.Clone(p.Albums)
 		d.Assets, d.Albums = slices.Clone(d.Assets), slices.Clone(d.Albums)
 		slices.Reverse(s.Assets)
 		slices.Reverse(s.Albums)
@@ -146,6 +226,7 @@ func TestSimulate(t *testing.T) {
 		slices.Reverse(p.Links)
 		slices.Reverse(p.Pairs)
 		slices.Reverse(p.Conflicts)
+		slices.Reverse(p.Albums)
 		slices.Reverse(d.Assets)
 		slices.Reverse(d.Albums)
 		for name, es := range in.Scans {
@@ -233,6 +314,113 @@ func TestSimulate(t *testing.T) {
 				conflict(7, "beta", domain.ConflictStatusSkipped, ""), conflict(9, "alpha", domain.ConflictStatusOpen, ""),
 			}},
 			domain.LibrarySnapshot{}, scans{}},
+		{"an album and a folder that the run adds come to the state with the UUID of their operation, their key and the UUID of their folder, new or not, and to the snapshot as Photos gives them",
+			domain.State{}, domain.LibrarySnapshot{Albums: []domain.Album{{UUID: "u-2024", Kind: domain.KindFolder, Title: "2024"}}}, nil,
+			domain.Plan{
+				Ops: ops{creating(13), creating(14), creating(15)},
+				Albums: []domain.Album{
+					{ID: 15, Kind: domain.KindEvent, Title: "05/03 Zoo", ParentID: year.ID, FolderTitles: []string{"2024"}},
+					{ID: 13, Kind: domain.KindFolder, Title: "2025"},
+					{ID: 14, Kind: domain.KindEvent, Title: "06/01 Fair", ParentID: 13, FolderTitles: []string{"2025"}},
+				},
+				Pairs: pairs{pair(14, "alpha", personal, "2025/06-01 - Fair")},
+			},
+			domain.SnapshotDelta{Albums: []domain.Album{year}},
+			domain.State{
+				Albums: []domain.Album{
+					year,
+					{ID: 13, UUID: "sim-run-2-0", Key: `[] "2025"`, KeySource: domain.KeyPath, Kind: domain.KindFolder, Title: "2025"},
+					{
+						ID: 14, UUID: "sim-run-2-1", Key: `["2025"] "06/01 Fair"`, KeySource: domain.KeyPath, Kind: domain.KindEvent, Title: "06/01 Fair",
+						ParentID: 13, ParentUUID: "sim-run-2-0", FolderTitles: []string{"2025"},
+					},
+					{
+						ID: 15, UUID: "sim-run-2-2", Key: `["2024"] "05/03 Zoo"`, KeySource: domain.KeyPath, Kind: domain.KindEvent, Title: "05/03 Zoo",
+						ParentID: year.ID, ParentUUID: "u-2024", FolderTitles: []string{"2024"},
+					},
+				},
+				AlbumPairs: pairs{pair(14, "alpha", personal, "2025/06-01 - Fair")},
+			},
+			domain.LibrarySnapshot{Albums: []domain.Album{
+				{UUID: "sim-run-2-0", Kind: domain.KindFolder, Title: "2025"},
+				{UUID: "sim-run-2-1", Title: "06/01 Fair", ParentUUID: "sim-run-2-0", FolderTitles: []string{"2025"}},
+				{UUID: "sim-run-2-2", Title: "05/03 Zoo", ParentUUID: "u-2024", FolderTitles: []string{"2024"}},
+				{UUID: "u-2024", Kind: domain.KindFolder, Title: "2024"},
+			}},
+			scans{}},
+		{"an import makes a new asset in the snapshot from its file and in the state under the next asset ID, which its links take, in the order of the operations, and the import by a link of a file of the shared root in the source role makes one that waits to move there",
+			domain.State{Assets: []domain.Asset{a7}, Links: links{mpegLink, photo}},
+			domain.LibrarySnapshot{
+				Assets: []domain.Asset{{Key: a8.Key, OriginalName: a8.OriginalName}, {Key: a7.Key, OriginalName: a7.OriginalName}},
+				Albums: []domain.Album{{UUID: hol.UUID, Title: hol.Title}},
+			},
+			scans{"alpha": {mpeg, newVideo, edit, e1, newPhoto}},
+			domain.Plan{Ops: ops{
+				op(domain.OpQuarantine, 0, edit, editInQuarantine, "R-STATUS-10"),
+				importing(0, holidays, "R-LINK-02", imported(newPhoto, original, holidays), imported(newVideo, live, holidays)),
+				importing(0, 0, "R-LINK-11", relinked),
+			}},
+			domain.SnapshotDelta{Assets: []domain.Asset{a8, a7}, Albums: []domain.Album{hol}},
+			domain.State{
+				Assets: []domain.Asset{a7, a8, made9, made10}, Albums: []domain.Album{hol},
+				Links: links{photo, owned(relinked, 6, 10), owned(imported(newPhoto, original, holidays), 7, 9), owned(imported(newVideo, live, holidays), 8, 9)},
+			},
+			domain.LibrarySnapshot{
+				Assets: []domain.Asset{{Key: a7.Key, OriginalName: a7.OriginalName}, shot9, shot10, {Key: a8.Key, OriginalName: a8.OriginalName}},
+				Albums: []domain.Album{{UUID: hol.UUID, Title: hol.Title}},
+			},
+			scans{"alpha": {editInQuarantine, e1, newPhoto, newVideo, mpeg}}},
+		{"an import with an asset replaces it: the asset keeps its ID under the new key, whose albums and delete come after, and its old key goes to History; the delete takes the old asset and an earlier identity to Recently Deleted and leaves the new asset",
+			domain.State{Assets: []domain.Asset{a5, a7}, Links: links{link5}},
+			domain.LibrarySnapshot{
+				Assets: []domain.Asset{seen(r7), earlier(identity(5, 6, false)), seen(r5), earlier(identity(7, 1, false))},
+				Albums: []domain.Album{{UUID: zoo.UUID, Title: zoo.Title}, {UUID: hol.UUID, Title: hol.Title}},
+			},
+			scans{"alpha": {changed5}},
+			domain.Plan{Ops: ops{
+				importing(5, 0, "R-LINK-06", renewed5),
+				albumOp(domain.OpAlbumAdd, 5, zoo.ID, "R-LINK-06"), albumOp(domain.OpAlbumAdd, 5, holidays, "R-LINK-06"),
+				albumOp(domain.OpAssetDelete, 5, 0, "R-STATUS-08"),
+			}},
+			domain.SnapshotDelta{
+				Assets: []domain.Asset{r7, r5}, Albums: []domain.Album{hol, zoo},
+				History: []domain.AssetHistory{identity(5, 2, true), identity(5, 6, false), identity(7, 1, false)},
+			},
+			domain.State{
+				Assets: []domain.Asset{new5, r7}, Albums: []domain.Album{zoo, hol}, Links: links{renewed5},
+				History: []domain.AssetHistory{identity(5, 2, true), identity(5, 5, true), identity(5, 6, true), identity(7, 1, false)},
+			},
+			domain.LibrarySnapshot{
+				Assets: []domain.Asset{earlier(identity(7, 1, false)), binned(seen(r5)), binned(earlier(identity(5, 6, false))), seen(r7), shot5},
+				Albums: []domain.Album{{UUID: hol.UUID, Title: hol.Title}, {UUID: zoo.UUID, Title: zoo.Title}},
+			},
+			scans{"alpha": {changed5}}},
+		{"an album operation puts its asset into its album or takes it out in the state and the snapshot, and does nothing where the asset is in already or not in it, and a delete takes its asset and the earlier identities to Recently Deleted, the identities alone under R-STATUS-08",
+			domain.State{Links: links{other}},
+			domain.LibrarySnapshot{
+				Assets: []domain.Asset{seen(q8), earlier(identity(5, 4, false)), seen(q5), earlier(identity(8, 3, false)), seen(q7)},
+				Albums: []domain.Album{{UUID: zoo.UUID, Title: zoo.Title}, {UUID: cats.UUID, Title: cats.Title}, {UUID: hol.UUID, Title: hol.Title}},
+			},
+			nil,
+			domain.Plan{Ops: ops{
+				albumOp(domain.OpAlbumAdd, 7, zoo.ID, "R-LINK-05", otherZoo), albumOp(domain.OpAlbumAdd, 7, holidays, "R-LINK-05"),
+				albumOp(domain.OpAlbumRemove, 5, zoo.ID, "R-LINK-05"), albumOp(domain.OpAlbumRemove, 7, cats.ID, "R-LINK-05"),
+				albumOp(domain.OpAlbumRemove, 8, zoo.ID, "R-LINK-05"),
+				albumOp(domain.OpAssetDelete, 5, 0, "R-STATUS-08"), albumOp(domain.OpAssetDelete, 8, 0, "R-STATUS-02"),
+			}},
+			domain.SnapshotDelta{
+				Assets: []domain.Asset{q8, q5, q7}, Albums: []domain.Album{hol, cats, zoo},
+				History: []domain.AssetHistory{identity(5, 4, false), identity(8, 3, false)},
+			},
+			domain.State{
+				Assets: []domain.Asset{x5, x7, x8}, Albums: []domain.Album{cats, zoo, hol}, Links: links{otherZoo},
+				History: []domain.AssetHistory{identity(5, 4, true), identity(8, 3, true)},
+			},
+			domain.LibrarySnapshot{
+				Assets: []domain.Asset{binned(earlier(identity(8, 3, false))), binned(earlier(identity(5, 4, false))), seen(x5), seen(x7), seen(x8)},
+				Albums: []domain.Album{{UUID: cats.UUID, Title: cats.Title}, {UUID: hol.UUID, Title: hol.Title}, {UUID: zoo.UUID, Title: zoo.Title}},
+			},
+			scans{}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -283,12 +471,12 @@ func TestSimulate(t *testing.T) {
 	}
 }
 
-// Each row is the world of a run whose plan changes the cloud and the state
-// but not iCloud. Once every operation of the plan succeeds, a run an hour
-// later, when what the first wrote has settled, finds nothing to do: no
-// operation, record, album or pair, only the conflicts that the first left
-// open, and the same delta. Each row names the operations of the first plan,
-// so that no row passes by planning nothing.
+// Each row is the world of a run, as in TestBuild. Once every operation of
+// its plan succeeds, a run an hour later, when what the first wrote has
+// settled, finds nothing to do: no operation, record, album or pair, only
+// the conflicts that the first left open, and its plan, applied, changes
+// nothing in the state, the snapshot or the listings. Each row names the
+// operations of the first plan, so that no row passes by planning nothing.
 func TestSimulateConverges(t *testing.T) {
 	t.Parallel()
 	const (
@@ -401,6 +589,23 @@ func TestSimulateConverges(t *testing.T) {
 		s.Conflicts = cs
 		return s
 	}
+	remembered := func(s domain.State, hs ...domain.AssetHistory) domain.State {
+		s.History = hs
+		return s
+	}
+	partyDir, quarantined := "2024/05-04 - Party", ".photosync/quarantine/2026-11-13/"
+	e2, e4 := file(personal, holidaysDir+"/IMG_0002.HEIC", 200, "b2", settled), file(personal, partyDir+"/IMG_0004.HEIC", 400, "d4", settled)
+	e2.Meta = domain.MediaMeta{Taken: may1, Width: 4032, Height: 3024}
+	tripFile, partyFile := file(personal, tripDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, partyDir+"/IMG_0001.HEIC", 100, "a1", settled)
+	changedMov := file(personal, holidaysDir+"/IMG_0001.MOV", 35, "v2", settled)
+	back, awayVideo := photo, video
+	back.Status, back.QuarantinePath = domain.StatusQuarantinedRemote, quarantined+e1.Path
+	awayVideo.Status, awayVideo.QuarantinePath = domain.StatusQuarantinedRemote, quarantined+ev.Path
+	trashed, m8 := asset(8, "IMG_0002.HEIC", 200, may1, "run-2"), asset(8, "IMG_0002.HEIC", 200, may1, "run-2")
+	trashed.InTrash = true
+	n1, n2 := asset(1, "IMG_0001.HEIC", 100, may2, "run-2"), asset(2, "IMG_0001.HEIC", 200, may2, "run-2", trip)
+	restored, restored5 := asset(6, "IMG_0006.HEIC", 100, may1, "run-2"), asset(5, "IMG_0005.HEIC", 100, may1, "run-2")
+	history, history5 := domain.AssetHistory{AssetID: 7, Key: restored.Key}, domain.AssetHistory{AssetID: 7, Key: restored5.Key}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -454,6 +659,34 @@ func TestSimulateConverges(t *testing.T) {
 		{"one remote alone syncs: a copy goes into the folder of an event of the asset, and the listing of the other remote stays as it is",
 			state(assets{catsHolidays}, pairs{alphaHolidays, alphaCats, betaHolidays}, inCats, other), snapshot(catsHolidays),
 			scans{"alpha": {catsFile}, "beta": {youngBeta, e1}}, specs{alpha, beta}, "alpha", p, kinds{domain.OpCopy}, nil},
+		{"a file that the user moved takes the asset into the album of its new folder, and a new asset in Recently Deleted goes nowhere",
+			remembered(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), history), snapshot(a7, trashed), scans{"alpha": {tripFile}}, specs{alpha}, "", p,
+			kinds{domain.OpAlbumAdd, domain.OpAlbumRemove}, nil},
+		{"a file that the user moved out of its event into the day folder takes the asset out of the album",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {dayFile}}, specs{alpha}, "", p, kinds{domain.OpAlbumRemove}, nil},
+		{"matching links a new asset with a new file of a paired folder, and the asset joins its album",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, m8), scans{"alpha": {e2, e1}}, specs{alpha}, "", p, kinds{domain.OpAlbumAdd}, nil},
+		{"a file that the user moved into a new folder beside a new file: the album comes to iCloud, then the import and the asset join it",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7), scans{"alpha": {e4, partyFile}}, specs{alpha}, "", p,
+			kinds{domain.OpAlbumCreate, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumRemove}, nil},
+		{"the first placement takes a new asset into the only event of its day, where two new assets go up",
+			state(nil, pairs{alphaHolidays}), snapshot(n2, n1), nil, specs{alpha}, "", p, kinds{domain.OpPut, domain.OpPut, domain.OpAlbumAdd}, nil},
+		{"a file that the user brings back from quarantine for an asset gone from the library comes back to iCloud as a new asset under its link",
+			state(assets{a7}, pairs{alphaHolidays}, back), snapshot(), scans{"alpha": {e1}}, specs{alpha}, "", p, kinds{domain.OpImport}, nil},
+		{"a photo and its Live Photo video that the user changed while their asset is gone from the library come back to iCloud as one new asset",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(), scans{"alpha": {changedMov, replaced}}, specs{alpha}, "", p,
+			kinds{domain.OpImport}, nil},
+		{"a photo that the user changed in place replaces its asset, and the old asset and that of an earlier replacement go to Recently Deleted",
+			remembered(state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, awayVideo), history), snapshot(withVideo(a7), restored),
+			scans{"alpha": {ev, replaced}}, specs{alpha}, "", p, kinds{domain.OpImport, domain.OpAlbumAdd, domain.OpAssetDelete}, nil},
+		{"a photo that the user changed while its asset moved to another event goes there with its Live Photo video, and the asset is replaced from their new place",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(in7Trip)), scans{"alpha": {ev, replaced}}, specs{alpha}, "", p,
+			kinds{domain.OpMove, domain.OpMove, domain.OpImport, domain.OpAlbumAdd, domain.OpAssetDelete}, nil},
+		{"two earlier replacements left half done take their old assets to Recently Deleted, beside the other changes of the asset",
+			remembered(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), history, history5), snapshot(a7, restored, restored5),
+			scans{"alpha": {tripFile}}, specs{alpha}, "", p, kinds{domain.OpAlbumAdd, domain.OpAlbumRemove, domain.OpAssetDelete}, nil},
+		{"an earlier replacement left half done takes its old asset to Recently Deleted while the asset that replaced it is gone from the library",
+			remembered(domain.State{Assets: assets{a7}, Albums: albums}, history), snapshot(restored), nil, specs{alpha}, "", p, kinds{domain.OpAssetDelete}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -477,10 +710,11 @@ func TestSimulateConverges(t *testing.T) {
 			next := in
 			next.State, next.Snapshot, next.Scans, next.Fields, next.Now, next.RunID = s, snap, listed, fieldsOf(snap), now.Add(time.Hour), "run-3"
 			second, again, err := plan.Build(next)
-			if err != nil || len(second.Ops)+len(second.Links)+len(second.Albums)+len(second.Pairs) > 0 ||
-				!reflect.DeepEqual(second.Conflicts, c.conflicts) || !reflect.DeepEqual(again, d) {
-				t.Errorf("after Simulate =\n%+v\n%+v\n%+v\nBuild =\n%+v\n%+v\n%v\nwant no operation, record, album or pair, the conflicts %+v and the delta\n%+v",
-					s, snap, listed, second, again, err, c.conflicts, d)
+			s2, snap2, listed2 := plan.Simulate(next, second, again)
+			if err != nil || len(second.Ops)+len(second.Links)+len(second.Albums)+len(second.Pairs) > 0 || !reflect.DeepEqual(second.Conflicts, c.conflicts) ||
+				!reflect.DeepEqual(s2, s) || !reflect.DeepEqual(snap2, snap) || !reflect.DeepEqual(listed2, listed) {
+				t.Errorf("after Simulate =\n%+v\n%+v\n%+v\nBuild =\n%+v\n%+v\n%v\nSimulate of it =\n%+v\n%+v\n%+v\nwant no operation, record, album or pair, the conflicts %+v, and nothing that the second Simulate changes",
+					s, snap, listed, second, again, err, s2, snap2, listed2, c.conflicts)
 			}
 		})
 	}
