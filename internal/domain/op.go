@@ -11,9 +11,10 @@ type OpKind string
 // OpAlbumCreate adds to iCloud an album or a folder of albums that the run
 // adds, and OpImport makes a new asset of iCloud from a file of the cloud.
 // OpAlbumAdd and OpAlbumRemove put an asset into an album of iCloud and take
-// it out of one, and OpAssetDelete moves an asset to Recently Deleted.
-// OpExpire deletes for good a file whose time in the quarantine of its root
-// is over.
+// it out of one, and OpAssetDelete moves an asset to Recently Deleted along
+// with the earlier identities that State.History holds for it with Deleted
+// false, or, under R-STATUS-08, those identities alone. OpExpire deletes for
+// good a file whose time in the quarantine of its root is over.
 const (
 	OpDelete      OpKind = "delete"
 	OpCopy        OpKind = "copy"
@@ -60,7 +61,9 @@ func (k OpKind) Phase() int {
 // and Src, a delete, an expire and an import no DstRoot and Dst, and an
 // album_create none of the four, and those fields stay empty. Asset is the
 // asset whose file, album or self the operation changes, zero for none, as
-// for an import, whose asset is new; AlbumID is the album that the asset
+// for an import of a new asset; an import with an Asset replaces that asset
+// with the one that it makes, which takes its ID in the state, whose History
+// gains the old key with Deleted false. AlbumID is the album that the asset
 // joins or leaves, or that an album_create adds. Rule is the ID of the rule
 // in Rules that chose the operation, and Irreversible reports that undo
 // cannot bring back what the operation removes. Links are the links that the
