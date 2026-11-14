@@ -52,14 +52,14 @@ type Input struct {
 // are added to Join, and the new links that matching makes there are added
 // to its links as they lie now: so DecideLayout takes them, the asset
 // counting as linked when the state or those new links name it, and
-// DecideComponents its links as the state holds them. AssetOps, then
-// FileOps, ComponentOps and SidecarOps in each remote that the run syncs, by
-// name, where the asset takes part in the plan, give its operations: FileOps
-// with the decisions of matching there, each replacement turned into
-// ActionLink when a decision of DecideLayout deletes the asset, and with the
-// pairs of the state and those that the run made before. A remote takes its
-// names from its whole listing and its links in the state, and its sidecars
-// by those links. ExpireOps, with Policies.QuarantineKeepDays, gives the
+// DecideComponents its links as the state holds them. AssetOps, ImportOps
+// with its links as they lie now, then FileOps, ComponentOps and SidecarOps
+// in each remote that the run syncs, by name, where the asset takes part in
+// the plan, give its operations: FileOps with the decisions of matching
+// there, each replacement turned into ActionLink when a decision of
+// DecideLayout deletes the asset, and with the pairs of the state and those
+// that the run made before. A remote takes its names from its whole listing
+// and its links in the state, and its sidecars by those links. ExpireOps, with Policies.QuarantineKeepDays, gives the
 // operations on the quarantine of each remote that the run syncs, from its
 // whole listing.
 //
@@ -75,16 +75,19 @@ type Input struct {
 // operation of the asset holds it, with the OpAlbumAdd or OpAlbumRemove of
 // the asset on its album, else on the album that its link leaves, else to
 // Links; a decision with another action leaves its link to the operations.
-// Once every asset is decided on, an operation of a remote that the run
-// syncs, other than an import, whose source, or whose destination or a
-// directory above it, is among the paths that Names.Doubles finds there
-// leaves the plan, and with it every operation there on its asset, if it has
-// one, and the links and the conflict of that asset there, but not its
-// operations in iCloud; a link alone holds nothing back. Ops are in the order
-// of domain.Op.Compare; Albums are what ReadScans adds, Pairs what ReadScans
-// and then FileOps make, and Notices hold those of Reconcile, ReadScans, the
-// operations and Names.Doubles in the order of Code, then Params. The inputs
-// are not changed.
+// Once every asset is decided on, an import of RunOps, whose links are new,
+// leaves the plan when ImportOps imports a file of the same content by the
+// hash of kind Capabilities.ContentHash of the remote of each, an empty hash
+// matching none; then an operation of a remote that the run syncs, other
+// than an import, whose source, or whose destination or a directory above
+// it, is among the paths that Names.Doubles finds there leaves the plan, and
+// with it every operation there on its asset, if it has one, and the links
+// and the conflict of that asset there, but not its operations in iCloud; a
+// link alone holds nothing back. Ops are in the order of domain.Op.Compare;
+// Albums are what ReadScans adds, Pairs what ReadScans and then FileOps make,
+// and Notices hold those of Reconcile, ReadScans, the operations and
+// Names.Doubles in the order of Code, then Params. The inputs are not
+// changed.
 func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	delta, notices, err := Reconcile(in.State, in.Snapshot, in.RunID)
 	if err != nil {
@@ -162,6 +165,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 		fates, components, copies, after := DecideComponents(decisions, status, placements, owned[id], files, in.Remotes, in.Policies.Deletes)
 		start := len(out.Ops)
 		out.Ops = append(out.Ops, AssetOps(id, decisions, status, join, leave, components, files)...)
+		out.Ops = append(out.Ops, ImportOps(decisions, current, files, albums, in.Policies.AlbumsForPersonal)...)
 		for _, ds := range decisions {
 			if slices.ContainsFunc(ds, func(d domain.LinkDecision) bool { return d.Action == domain.ActionDeleteAsset }) {
 				for _, ms := range matched {
@@ -234,6 +238,20 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 			}
 		}
 	}
+	hashes, relinked := map[string]domain.HashKind{}, map[string]bool{}
+	for _, r := range remotes {
+		hashes[r.Name] = r.Capabilities.ContentHash
+	}
+	content := func(o domain.Op) string { return moveKey(o.Links[0].MD5, o.Links[0].SHA256, hashes[o.Remote]) }
+	for _, o := range out.Ops {
+		if o.Kind == domain.OpImport && o.Links[0].ID != 0 {
+			relinked[content(o)] = true
+		}
+	}
+	delete(relinked, "")
+	// A new file can wait to be matched on the next run with the asset that the
+	// import of a link makes; a linked file cannot, as no run takes it for new.
+	out.Ops = slices.DeleteFunc(out.Ops, func(o domain.Op) bool { return o.Kind == domain.OpImport && o.Links[0].ID == 0 && relinked[content(o)] })
 	excluded := map[string]map[domain.AssetID]bool{}
 	for _, r := range remotes {
 		doubled, ns := names[r.Name].Doubles()

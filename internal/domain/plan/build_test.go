@@ -244,6 +244,17 @@ func TestBuild(t *testing.T) {
 	expiring := func(remote string, e domain.RemoteEntry) domain.Op {
 		return domain.Op{Kind: domain.OpExpire, Remote: remote, Root: e.Root, Src: e.Path, Rule: "R-STATUS-09", Irreversible: true}
 	}
+	imported := func(l domain.Link, e domain.RemoteEntry, id domain.AlbumID) domain.Link {
+		l = took(l, e, id)
+		l.AssetID, l.Level = 0, domain.LevelImported
+		return l
+	}
+	relink := func(rule string, id domain.AlbumID, ls ...domain.Link) domain.Op {
+		return domain.Op{Kind: domain.OpImport, Remote: ls[0].Remote, Root: ls[0].Root, Src: ls[0].Path, AlbumID: id, Rule: rule, Links: ls}
+	}
+	withoutPersonal, blind := p, alpha
+	withoutPersonal.AlbumsForPersonal, blind.Capabilities = false, domain.Capabilities{}
+	unhashed := file(personal, holidaysDir+"/IMG_0004.HEIC", 50, "b1", settled)
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -536,9 +547,9 @@ func TestBuild(t *testing.T) {
 			snapshot(in7Trip), scans{"alpha": {twinHeic, dayFile}}, specs{alpha}, "", ask, event,
 			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(tripDir, lowTrip), doubles(tripDir+"/IMG_0001.HEIC", twinHeic.Path), settling(twinHeic.Path)}},
 			delta(in7Trip), nil},
-		{"a file that the user brings back from quarantine for an asset gone from the library keeps its link in quarantine, since no operation imports it",
+		{"a file that the user brings back from quarantine for an asset gone from the library comes back to iCloud as a new asset under its link",
 			state(assets{a7}, pairs{alphaHolidays}, back), snapshot(), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
-			domain.Plan{}, delta(), nil},
+			domain.Plan{Ops: ops{relink("R-LINK-02", holidays, imported(photo, e1, holidays))}}, delta(), nil},
 		{"a file that the user moved out of its event into the day folder takes the asset out of the album, and its link goes with the album that it leaves",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {dayFile}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{holding(album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05"), took(photo, dayFile, 0))}}, delta(a7), nil},
@@ -579,6 +590,22 @@ func TestBuild(t *testing.T) {
 		{"one remote alone syncs: the quarantine of the other stays as it is",
 			state(nil, nil), snapshot(), scans{"alpha": {aged5}, "beta": {aged5}}, specs{alpha, beta}, "alpha", p, event,
 			domain.Plan{Ops: ops{expiring("alpha", aged5)}}, delta(), nil},
+		{"a photo that the user changed while its asset is gone from the library comes back to iCloud as a new asset with its Live Photo video, in no album while the personal root sets no albums",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(), scans{"alpha": {ev, replaced}}, specs{alpha}, "", withoutPersonal, event,
+			domain.Plan{Ops: ops{relink("R-LINK-11", 0, imported(photo, replaced, 0), imported(video, ev, 0))}}, delta(), nil},
+		{"a file that the user changed while its asset is gone from the library comes back to iCloud by its link, while the same new file in another remote waits to be matched with the new asset",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo), snapshot(), scans{"alpha": {replaced}, "beta": {replaced}}, specs{alpha, beta}, "", p, event,
+			domain.Plan{Ops: ops{relink("R-LINK-11", holidays, imported(photo, replaced, holidays))}}, delta(), nil},
+		{"a remote trusted with no hash imports a file that the user changed while its asset is gone from the library and a new file, though their listing gives one MD5",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(), scans{"alpha": {unhashed, replaced}}, specs{blind}, "", p, event,
+			domain.Plan{Ops: ops{
+				relink("R-LINK-11", holidays, imported(photo, replaced, holidays)),
+				{Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: unhashed.Path, AlbumID: holidays, Rule: "R-LINK-02", Links: []domain.Link{{
+					Remote: "alpha", Root: personal, Path: unhashed.Path, Role: original, AlbumID: holidays, Size: 50,
+					SHA256: "sb1", MD5: "b1", ETag: "eb1", MTime: settled, Level: domain.LevelImported, Status: domain.StatusActive,
+				}}},
+			}},
+			delta(), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
