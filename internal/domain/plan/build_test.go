@@ -272,6 +272,18 @@ func TestBuild(t *testing.T) {
 	history5 := domain.AssetHistory{AssetID: 7, Key: restored5.Key}
 	replacedTrip, movTrip := file(personal, tripDir+"/IMG_0001.HEIC", 120, "b1", settled), file(personal, tripDir+"/IMG_0001.mov", 30, "v1", settled)
 	changedMov := file(personal, holidaysDir+"/IMG_0001.MOV", 35, "v2", settled)
+	iCloudWins, dayOther := p, other
+	iCloudWins.Conflict, dayOther.Path, dayOther.AlbumID = domain.ConflictICloudWins, dayFile.Path, 0
+	new3, new4 := file(personal, holidaysDir+"/IMG_0003.HEIC", 300, "c3", settled), file(personal, holidaysDir+"/IMG_0004.HEIC", 400, "c4", settled)
+	new5, trip2 := file(personal, holidaysDir+"/IMG_0005.HEIC", 500, "c5", settled), file(personal, tripDir+"/IMG_0002.HEIC", 200, "b2", settled)
+	h8, kept8 := asset(8, "IMG_0002.HEIC", 200, may1, "run-2", holidays), paired
+	kept8.ID, kept8.Remote = 3, "beta"
+	importNew := func(remote string, e domain.RemoteEntry) domain.Op {
+		return relink("R-LINK-02", holidays, imported(domain.Link{Remote: remote, Role: original, Status: domain.StatusActive}, e, holidays))
+	}
+	counted := func(code, remote, count string) domain.Notice {
+		return domain.Notice{Code: code, Params: []string{remote, count}}
+	}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -522,7 +534,7 @@ func TestBuild(t *testing.T) {
 			domain.Plan{
 				Ops: ops{{Kind: domain.OpQuarantine, Remote: "alpha", Root: personal, Src: edit3.Path, DstRoot: personal, Dst: quarantined + edit3.Path,
 					Rule: "R-STATUS-10"}},
-				Notices: []domain.Notice{doubles(quarantined+edit2.Path, quarantined+edit2x.Path), doubles(edit2.Path, edit2x.Path)},
+				Notices: []domain.Notice{doubles(quarantined+edit2.Path, quarantined+edit2x.Path), doubles(edit2.Path, edit2x.Path), counted("plan.edits_left", "alpha", "2")},
 			},
 			delta(), nil},
 		{"a photo that the user moved with its Live Photo video into the folder of another event takes the asset there, and both links take their new place with the album that it joins",
@@ -583,7 +595,7 @@ func TestBuild(t *testing.T) {
 			delta(cat1), nil},
 		{"an edit does not go to a quarantine path that differs from a file in quarantine in case alone",
 			state(nil, nil), snapshot(), scans{"alpha": {edit3, oldQ}}, specs{alpha}, "", edits, event,
-			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(oldQ.Path, quarantined+edit3.Path)}},
+			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(oldQ.Path, quarantined+edit3.Path), counted("plan.edits_left", "alpha", "1")}},
 			delta(), nil},
 		{"a file that would move into a folder that differs from another in case alone keeps its asset as the state has it in its remote, while the other remote takes the move of the user and closes its conflict",
 			recorded(state(assets{a7}, pairs{alphaHolidays, alphaTrip, betaHolidays, betaTrip}, photo, other),
@@ -612,7 +624,11 @@ func TestBuild(t *testing.T) {
 			domain.Plan{Ops: ops{relink("R-LINK-11", 0, imported(photo, replaced, 0), imported(video, ev, 0))}}, delta(), nil},
 		{"a file that the user changed while its asset is gone from the library comes back to iCloud by its link, while the same new file in another remote waits to be matched with the new asset",
 			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo), snapshot(), scans{"alpha": {replaced}, "beta": {replaced}}, specs{alpha, beta}, "", p, event,
-			domain.Plan{Ops: ops{relink("R-LINK-11", holidays, imported(photo, replaced, holidays))}}, delta(), nil},
+			domain.Plan{
+				Ops:     ops{relink("R-LINK-11", holidays, imported(photo, replaced, holidays))},
+				Notices: []domain.Notice{counted("plan.waiting_import", "beta", "1")},
+			},
+			delta(), nil},
 		{"a remote trusted with no hash imports a file that the user changed while its asset is gone from the library and a new file, though their listing gives one MD5",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(), scans{"alpha": {unhashed, replaced}}, specs{blind}, "", p, event,
 			domain.Plan{Ops: ops{
@@ -660,6 +676,47 @@ func TestBuild(t *testing.T) {
 			remembered(domain.State{Assets: assets{a7}, Albums: albums}, history), snapshot(restored), nil, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{album(domain.OpAssetDelete, 7, 0, "R-STATUS-08")}},
 			domain.SnapshotDelta{Albums: albums, History: []domain.AssetHistory{history}}, nil},
+		{"a conflict that the state does not keep is settled by the conflict policy with a notice: under icloud_wins the file follows the asset to its new event",
+			state(assets{a7}, pairs{betaHolidays, betaTrip}, other), snapshot(in7Trip), scans{"beta": {dayFile}}, specs{beta}, "", iCloudWins, event,
+			domain.Plan{
+				Ops:     ops{moved(dayOther, personal, tripDir+"/IMG_0001.HEIC", trip, "R-OBJECT-05")},
+				Notices: []domain.Notice{{Code: "plan.conflict_settled", Params: []string{"beta", "IMG_0001.HEIC", "uuid-7", "icloud_wins"}}},
+			},
+			delta(in7Trip), nil},
+		{"upload-only: new files of the cloud stay out of iCloud and an edit stays where it is, and notices count them",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {new4, e1, edit2, new3}}, specs{alphaUp}, "", p, event,
+			domain.Plan{Notices: []domain.Notice{counted("plan.edits_left", "alpha", "1"), counted("plan.not_imported", "alpha", "2")}}, delta(a7), nil},
+		{"new files that one remote imports wait in another for a later run with a notice of their number, while that remote imports a new file of its own, brings a changed file back by its link and sets an edit aside",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, other), snapshot(),
+			scans{"alpha": {new4, new3}, "beta": {new5, edit2, new4, replaced, new3}}, specs{alpha, beta}, "", edits, event,
+			domain.Plan{
+				Ops: ops{
+					{Kind: domain.OpQuarantine, Remote: "beta", Root: personal, Src: edit2.Path, DstRoot: personal, Dst: quarantined + edit2.Path, Rule: "R-STATUS-10"},
+					importNew("alpha", new3), importNew("alpha", new4),
+					relink("R-LINK-11", holidays, imported(other, replaced, holidays)), importNew("beta", new5),
+				},
+				Notices: []domain.Notice{counted("plan.waiting_import", "beta", "2")},
+			},
+			delta(), nil},
+		{"an edit stays where it is while a lesser copy that matching finds goes to quarantine, and a notice counts the edit",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, m8), scans{"alpha": {edit2, lesser, e1}}, specs{alpha}, "", p, event,
+			domain.Plan{
+				Ops: ops{
+					{Kind: domain.OpQuarantine, Remote: "alpha", Root: personal, Src: lesser.Path, DstRoot: personal, Dst: parked.QuarantinePath,
+						Asset: 8, Rule: "R-OBJECT-10", Links: []domain.Link{parked}},
+					swapped,
+					album(domain.OpAlbumAdd, 8, holidays, "R-LINK-03"),
+				},
+				Notices: []domain.Notice{counted("plan.edits_left", "alpha", "1")},
+			},
+			delta(a7, m8), nil},
+		{"while the personal root sets no albums, files that the user moved there leave the albums of their assets as they are, and a notice counts the moves that the base takes",
+			state(assets{a7, h8}, pairs{betaHolidays, betaTrip}, other, kept8), snapshot(a7, h8), scans{"beta": {trip2, tripFile}}, specs{beta}, "", withoutPersonal, event,
+			domain.Plan{
+				Links:   []domain.Link{took(other, tripFile, holidays), took(kept8, trip2, holidays)},
+				Notices: []domain.Notice{counted("plan.albums_kept", "beta", "2")},
+			},
+			delta(a7, h8), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

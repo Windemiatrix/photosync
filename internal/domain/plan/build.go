@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"path"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/Windemiatrix/go-libs/osxphotos/template"
@@ -90,9 +91,20 @@ type Input struct {
 // and the conflict of that asset there, but not its operations in iCloud; a
 // link alone holds nothing back. Ops are in the order of domain.Op.Compare;
 // Albums are what ReadScans adds, Pairs what ReadScans and then FileOps make,
-// and Notices hold those of Reconcile, ReadScans, the operations and
-// Names.Doubles in the order of Code, then Params. The inputs are not
-// changed.
+// and Notices hold those of Reconcile, ReadScans, the operations,
+// Names.Doubles and Build itself in the order of Code, then Params. Build
+// adds "plan.conflict_settled", with the remote, the original name and the
+// UUID of the asset and the conflict policy, wherever that policy settles a
+// conflict that the state does not keep for an asset in a remote. For each
+// remote that the run syncs it adds, with the remote and a decimal count
+// above zero, "plan.not_imported" for the new files that ReadScans does not
+// decide to import, "plan.waiting_import" for those that it does but that
+// wait for a later run, as the plan imports a file of the same content
+// instead, "plan.edits_left" for the edits of ReadScans that no operation
+// moves to quarantine, and "plan.albums_kept" for the decisions by
+// R-MODE-04, each a move of a file that the base takes while the albums
+// stay as they are. A content counts once among the new files of a remote.
+// The inputs are not changed.
 func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	delta, notices, err := Reconcile(in.State, in.Snapshot, in.RunID)
 	if err != nil {
@@ -119,6 +131,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	var kept []domain.Link
 	left := map[domain.LinkID]domain.AlbumID{}
 	var conflicts []domain.Conflict
+	later := map[[2]string]int{}
 	for i, a := range delta.Assets {
 		assets[a.ID], index[a.ID], ids = a, i, append(ids, a.ID)
 	}
@@ -153,8 +166,12 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 			}
 			c := domain.Conflict{AssetID: id, Remote: r.Name}
 			o, conflict, ok := DecideRemoteObject(asset, found, decided[r.Name], current, r, albums, cmp.Or(stored[c], c), in.Policies)
+			// Only a conflict takes R-LINK-07, and SettleConflict keeps that rule on
+			// the decision that it gives to the winner.
 			if conflict.Status != "" {
 				conflicts = append(conflicts, conflict)
+			} else if slices.ContainsFunc(o.Links, func(d domain.LinkDecision) bool { return d.Rule == "R-LINK-07" }) {
+				notices = append(notices, domain.Notice{Code: "plan.conflict_settled", Params: []string{r.Name, asset.OriginalName, asset.Key.UUID, string(in.Policies.Conflict)}})
 			}
 			if ok {
 				o.Join = objectChanges(append(o.Join, read[r.Name].Join[id]...))
@@ -230,6 +247,9 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 				st := status[d.Link.ID]
 				if d.Action == domain.ActionUpload {
 					st = ""
+				}
+				if d.Rule == "R-MODE-04" {
+					later[[2]string{"plan.albums_kept", d.Link.Remote}]++
 				}
 				record(d, st)
 			}
@@ -320,6 +340,29 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	for _, c := range conflicts {
 		if !excluded[c.Remote][c.AssetID] {
 			out.Conflicts = append(out.Conflicts, c)
+		}
+	}
+	for _, r := range remotes {
+		for _, f := range read[r.Name].NewFiles {
+			code := "plan.not_imported"
+			if f.Decision.Action == domain.ActionImport {
+				code = "plan.waiting_import"
+			}
+			later[[2]string{code, r.Name}]++
+		}
+		later[[2]string{"plan.edits_left", r.Name}] += len(read[r.Name].Edited)
+	}
+	for _, o := range out.Ops {
+		switch {
+		case o.Kind == domain.OpImport && o.Links[0].ID == 0:
+			later[[2]string{"plan.waiting_import", o.Remote}]--
+		case o.Rule == "R-STATUS-10":
+			later[[2]string{"plan.edits_left", o.Remote}]--
+		}
+	}
+	for k, n := range later {
+		if n > 0 {
+			notices = append(notices, domain.Notice{Code: k[0], Params: []string{k[1], strconv.Itoa(n)}})
 		}
 	}
 	slices.SortFunc(out.Ops, domain.Op.Compare)
