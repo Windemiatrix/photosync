@@ -108,6 +108,9 @@ type Policies struct {
 	// SettleMinutes is how long a cloud file must stay unchanged before a sync
 	// touches it.
 	SettleMinutes int
+	// QuarantineKeepDays is how many days a file may stay in the quarantine of a
+	// cloud root; a sync deletes it for good once it has stayed longer.
+	QuarantineKeepDays int
 	// UntitledEvent stands for the missing title in the cloud directory of an
 	// event album without one: "MM-DD - " followed by it.
 	UntitledEvent string
@@ -136,6 +139,7 @@ func DefaultPolicies() Policies {
 		AlbumsForPersonal:  true,
 		EditedDirs:         []string{"отредактировано", "edited"},
 		SettleMinutes:      10,
+		QuarantineKeepDays: 90,
 		NestedSeparator:    " / ",
 	}
 }
@@ -143,11 +147,12 @@ func DefaultPolicies() Policies {
 // Validate returns nil, or an errors.Join of one *PolicyError for each key
 // with a value that photosync does not take, in the order of the fields. An
 // enumeration takes only its constants, spelled exactly; Deletes,
-// UntitledEvent, NestedSeparator and AlbumsRoot must not be empty, and
-// SettleMinutes must not be negative. The caller checks the rest:
-// RemotePriority against its remotes, EditedDirs, UntitledEvent and
-// AlbumsRoot as cloud names with naming.IsValidPart, and NestedSeparator
-// against the day form of an event title.
+// UntitledEvent, NestedSeparator and AlbumsRoot must not be empty,
+// SettleMinutes must not be negative, and QuarantineKeepDays must be above
+// zero. The caller checks the rest: RemotePriority against its remotes,
+// EditedDirs, UntitledEvent and AlbumsRoot as cloud names with
+// naming.IsValidPart, and NestedSeparator against the day form of an event
+// title.
 func (p Policies) Validate() error {
 	var errs []error
 	errs = checkPolicy(errs, "conflict", p.Conflict, ConflictRemoteWins, ConflictICloudWins, ConflictAsk, ConflictSkip)
@@ -160,6 +165,9 @@ func (p Policies) Validate() error {
 	errs = checkPolicy(errs, "burst", p.Burst, BurstAll, BurstSelectedOnly)
 	if p.SettleMinutes < 0 {
 		errs = append(errs, &PolicyError{Key: "settle_minutes", Value: fmt.Sprint(p.SettleMinutes)})
+	}
+	if p.QuarantineKeepDays < 1 {
+		errs = append(errs, &PolicyError{Key: "quarantine_keep_days", Value: fmt.Sprint(p.QuarantineKeepDays)})
 	}
 	if p.UntitledEvent == "" {
 		errs = append(errs, &PolicyError{Key: "untitled_event"})

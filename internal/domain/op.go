@@ -12,6 +12,8 @@ type OpKind string
 // adds, and OpImport makes a new asset of iCloud from a file of the cloud.
 // OpAlbumAdd and OpAlbumRemove put an asset into an album of iCloud and take
 // it out of one, and OpAssetDelete moves an asset to Recently Deleted.
+// OpExpire deletes for good a file whose time in the quarantine of its root
+// is over.
 const (
 	OpDelete      OpKind = "delete"
 	OpCopy        OpKind = "copy"
@@ -23,6 +25,7 @@ const (
 	OpAlbumAdd    OpKind = "album_add"
 	OpAlbumRemove OpKind = "album_remove"
 	OpAssetDelete OpKind = "asset_delete"
+	OpExpire      OpKind = "expire"
 )
 
 // Phase is the phase of a run that runs the operations of kind k. A run
@@ -30,8 +33,9 @@ const (
 // before it is done: the files of the cloud change and the albums that the
 // run adds come to iCloud in phase 1, new files go up in phase 2, new assets
 // come in from the cloud in phase 3, into albums that are there by then, the
-// albums of assets change in phase 4 and the assets that iCloud loses go in
-// phase 5.
+// albums of assets change in phase 4, the assets that iCloud loses go in
+// phase 5 and the files whose time in the quarantine is over leave the cloud
+// in phase 6.
 func (k OpKind) Phase() int {
 	switch k {
 	case OpPut:
@@ -42,6 +46,8 @@ func (k OpKind) Phase() int {
 		return 4
 	case OpAssetDelete:
 		return 5
+	case OpExpire:
+		return 6
 	}
 	return 1
 }
@@ -51,18 +57,18 @@ func (k OpKind) Phase() int {
 // any other operation on iCloud. An operation on the cloud reads, moves or
 // removes the file at Src under its Root and writes the one at Dst under
 // DstRoot, and an import reads the file at Src under Root; a put has no Root
-// and Src, a delete and an import no DstRoot and Dst, and an album_create
-// none of the four, and those fields stay empty. Asset is the asset whose
-// file, album or self the operation changes, zero for none, as for an import,
-// whose asset is new; AlbumID is the album that the asset joins or leaves, or
-// that an album_create adds. Rule is the ID of the rule in Rules that chose
-// the operation, and Irreversible reports that undo cannot bring back what
-// the operation removes. Links are the links that the operation changes, each
-// as the state keeps it once the operation is done, in the order of ID, and
-// those of an import with the link of its main file first; a link with an
-// empty Status leaves the state, one with a zero ID is new and takes its ID
-// from the state, and one with a zero AssetID takes that of the asset that
-// its import makes.
+// and Src, a delete, an expire and an import no DstRoot and Dst, and an
+// album_create none of the four, and those fields stay empty. Asset is the
+// asset whose file, album or self the operation changes, zero for none, as
+// for an import, whose asset is new; AlbumID is the album that the asset
+// joins or leaves, or that an album_create adds. Rule is the ID of the rule
+// in Rules that chose the operation, and Irreversible reports that undo
+// cannot bring back what the operation removes. Links are the links that the
+// operation changes, each as the state keeps it once the operation is done,
+// in the order of ID, and those of an import with the link of its main file
+// first; a link with an empty Status leaves the state, one with a zero ID is
+// new and takes its ID from the state, and one with a zero AssetID takes that
+// of the asset that its import makes.
 type Op struct {
 	Kind         OpKind
 	Remote       string

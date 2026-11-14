@@ -59,7 +59,9 @@ type Input struct {
 // ActionLink when a decision of DecideLayout deletes the asset, and with the
 // pairs of the state and those that the run made before. A remote takes its
 // names from its whole listing and its links in the state, and its sidecars
-// by those links.
+// by those links. ExpireOps, with Policies.QuarantineKeepDays, gives the
+// operations on the quarantine of each remote that the run syncs, from its
+// whole listing.
 //
 // The delta gives each asset found the TargetLibrary of its target. A link of
 // a decision of DecideLayout or DecideComponents with ActionMoveAsset,
@@ -102,6 +104,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 		}
 	}
 	out := domain.Plan{Ops: RunOps(read, added, albums, names, remotes, in.Policies, in.Now), Albums: added, Pairs: made}
+	out.Ops = append(out.Ops, ExpireOps(in.Scans, remotes, in.Policies.QuarantineKeepDays, in.Now)...)
 	assets, base, owned := map[domain.AssetID]domain.Asset{}, map[domain.AssetID]domain.Asset{}, map[domain.AssetID][]domain.Link{}
 	stored, index := map[domain.Conflict]domain.Conflict{}, map[domain.AssetID]int{}
 	var ids []domain.AssetID
