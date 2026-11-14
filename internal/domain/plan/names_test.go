@@ -121,8 +121,10 @@ func TestNames(t *testing.T) {
 			return append([]string{n.Free(personal, "2024/05-01 - holidays", "IMG_0001.HEIC")}, doubles(n)...)
 		}, []string{
 			"2024/05-01 - holidays/IMG_0001.HEIC",
-			"personal:2024/05-01 - Holidays/IMG_0001.HEIC", "personal:2024/05-01 - holidays/IMG_0001.HEIC",
+			"personal:2024/05-01 - Holidays", "personal:2024/05-01 - Holidays/IMG_0001.HEIC",
+			"personal:2024/05-01 - holidays", "personal:2024/05-01 - holidays/IMG_0001.HEIC",
 			"personal:Misc/A.JPG", "personal:Misc/a.jpg", "shared:Misc/B.jpg", "shared:Misc/b.jpg",
+			"plan.doubles|alpha|personal|2024/05-01 - Holidays|2024/05-01 - holidays",
 			"plan.doubles|alpha|personal|2024/05-01 - Holidays/IMG_0001.HEIC|2024/05-01 - holidays/IMG_0001.HEIC",
 			"plan.doubles|alpha|personal|Misc/A.JPG|Misc/a.jpg",
 			"plan.doubles|alpha|shared|Misc/B.jpg|Misc/b.jpg",
@@ -131,6 +133,19 @@ func TestNames(t *testing.T) {
 			n := plan.NewNames("alpha", nil, nil)
 			return append([]string{n.Free(personal, holidays, "IMG_0001.HEIC"), n.Quarantine(personal, day, holidays+"/IMG_0003.HEIC")}, doubles(n)...)
 		}, []string{holidays + "/IMG_0001.HEIC", inQuarantine + holidays + "/IMG_0003.HEIC"}},
+		{"a directory of files of the scan takes its name in its parent", func(n *plan.Names) []string {
+			return []string{n.Free(personal, ".", "misc.jpg")}
+		}, []string{"misc (1).jpg"}},
+		{"a directory that the run gives doubles a directory of files of the scan two levels above the name", func(n *plan.Names) []string {
+			return append([]string{n.Free(personal, "misc/sub", "x.jpg")}, doubles(n)...)
+		}, []string{
+			"misc/sub/x.jpg",
+			"personal:Misc", "personal:Misc/A.JPG", "personal:Misc/a.jpg", "personal:misc",
+			"shared:Misc/B.jpg", "shared:Misc/b.jpg",
+			"plan.doubles|alpha|personal|Misc|misc",
+			"plan.doubles|alpha|personal|Misc/A.JPG|Misc/a.jpg",
+			"plan.doubles|alpha|shared|Misc/B.jpg|Misc/b.jpg",
+		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
