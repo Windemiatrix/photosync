@@ -2,6 +2,7 @@ package plan
 
 import (
 	"cmp"
+	"path"
 	"slices"
 	"time"
 
@@ -73,14 +74,15 @@ type Input struct {
 // the asset on its album, else on the album that its link leaves, else to
 // Links; a decision with another action leaves its link to the operations.
 // Once every asset is decided on, an operation of a remote that the run
-// syncs, other than an import, whose source or destination is among the
-// paths that Names.Doubles finds there leaves the plan, and with it every
-// operation there on its asset, if it has one, and the links and the
-// conflict of that asset there; a link alone on such a path holds nothing
-// back. Ops are in the order of domain.Op.Compare; Albums are what ReadScans
-// adds, Pairs what ReadScans and then FileOps make, and Notices hold those of
-// Reconcile, ReadScans, the operations and Names.Doubles in the order of
-// Code, then Params. The inputs are not changed.
+// syncs, other than an import, whose source, or whose destination or a
+// directory above it, is among the paths that Names.Doubles finds there
+// leaves the plan, and with it every operation there on its asset, if it has
+// one, and the links and the conflict of that asset there, but not its
+// operations in iCloud; a link alone holds nothing back. Ops are in the order
+// of domain.Op.Compare; Albums are what ReadScans adds, Pairs what ReadScans
+// and then FileOps make, and Notices hold those of Reconcile, ReadScans, the
+// operations and Names.Doubles in the order of Code, then Params. The inputs
+// are not changed.
 func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	delta, notices, err := Reconcile(in.State, in.Snapshot, in.RunID)
 	if err != nil {
@@ -233,8 +235,15 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	for _, r := range remotes {
 		doubled, ns := names[r.Name].Doubles()
 		hit := func(o domain.Op) bool {
-			return o.Remote == r.Name && o.Kind != domain.OpImport &&
-				(doubled[domain.RemoteEntry{Root: o.Root, Path: o.Src}] || doubled[domain.RemoteEntry{Root: o.DstRoot, Path: o.Dst}])
+			if o.Remote != r.Name || o.Kind == domain.OpImport {
+				return false
+			}
+			for p := o.Dst; p != path.Dir(p); p = path.Dir(p) {
+				if doubled[domain.RemoteEntry{Root: o.DstRoot, Path: p}] {
+					return true
+				}
+			}
+			return doubled[domain.RemoteEntry{Root: o.Root, Path: o.Src}]
 		}
 		held := map[domain.AssetID]bool{}
 		excluded[r.Name] = held

@@ -229,6 +229,15 @@ func TestBuild(t *testing.T) {
 	reup := put(7, tripDir+"/IMG_0001.HEIC", original, trip, 100)
 	reup.Rule = "R-LINK-10"
 	alphaUp := spec("alpha", domain.ModeUploadOnly)
+	lowHolidays, lowTrip := "2024/05-01 - holidays", "2024/05-02 - trip"
+	youngH, youngT := file(personal, lowHolidays+"/IMG_0009.HEIC", 50, "y5", young), file(personal, lowTrip+"/IMG_0009.HEIC", 50, "y6", young)
+	youngA := file(personal, "albums/IMG_0009.HEIC", 50, "y7", young)
+	oldQ := file(personal, quarantined+holidaysDir+"/IMG_0003_EDITED.jpg", 10, "g5", settled)
+	cat1, betaTrip := asset(1, "IMG_0001.HEIC", 100, may1, "run-2", cats), pair(trip, "beta", personal, tripDir, domain.OriginICloud)
+	inBeta := func(n domain.Notice) domain.Notice {
+		n.Params[0] = "beta"
+		return n
+	}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -461,7 +470,7 @@ func TestBuild(t *testing.T) {
 					betaPut(holidaysDir+"/IMG_0001 (1).HEIC", original, 200), betaPut(holidaysDir+"/IMG_0001 (1).mov", live, 30),
 					album(domain.OpAlbumAdd, 8, holidays, "R-LAYOUT-05"),
 				},
-				Notices: []domain.Notice{doubles(holidaysDir+"/IMG_0001 (1).HEIC", youngTwin.Path), settling(youngTwin.Path)},
+				Notices: []domain.Notice{doubles(holidaysDir, lowHolidays), doubles(holidaysDir+"/IMG_0001 (1).HEIC", youngTwin.Path), settling(youngTwin.Path)},
 			},
 			delta(a7, loose8), nil},
 		{"under propagate a file whose path differs from another in case alone keeps its asset and its Live Photo video in the cloud, and the other file is still imported",
@@ -513,13 +522,13 @@ func TestBuild(t *testing.T) {
 			scans{"alpha": {twinMov, ev, tripFile}}, specs{alpha}, "", p, event,
 			domain.Plan{
 				Ops:     ops{album(domain.OpAlbumAdd, 7, trip, "R-LINK-05"), album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05")},
-				Notices: []domain.Notice{doubles(tripDir+"/IMG_0001.mov", twinMov.Path), settling(twinMov.Path)},
+				Notices: []domain.Notice{doubles(tripDir, lowTrip), doubles(tripDir+"/IMG_0001.mov", twinMov.Path), settling(twinMov.Path)},
 			},
 			delta(withVideo(a7)), nil},
 		{"the choice of the user for a recorded conflict stays recorded while the move that it asks for would land on a path that differs from another file in case alone",
 			recorded(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), conflict("alpha", domain.ConflictStatusOpen, domain.ConflictICloudWins)),
 			snapshot(in7Trip), scans{"alpha": {twinHeic, dayFile}}, specs{alpha}, "", ask, event,
-			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(tripDir+"/IMG_0001.HEIC", twinHeic.Path), settling(twinHeic.Path)}},
+			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(tripDir, lowTrip), doubles(tripDir+"/IMG_0001.HEIC", twinHeic.Path), settling(twinHeic.Path)}},
 			delta(in7Trip), nil},
 		{"a file that the user brings back from quarantine for an asset gone from the library keeps its link in quarantine, since no operation imports it",
 			state(assets{a7}, pairs{alphaHolidays}, back), snapshot(), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
@@ -527,6 +536,36 @@ func TestBuild(t *testing.T) {
 		{"a file that the user moved out of its event into the day folder takes the asset out of the album, and its link goes with the album that it leaves",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {dayFile}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{holding(album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05"), took(photo, dayFile, 0))}}, delta(a7), nil},
+		{"a new asset does not go up into a folder that differs from another folder in case alone, while a file still moves out of that folder to its new event",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip, n8), scans{"alpha": {youngH, e1}}, specs{alpha}, "", p, event,
+			domain.Plan{
+				Ops:     ops{moved(photo, personal, tripDir+"/IMG_0001.HEIC", trip, "R-OBJECT-05")},
+				Notices: []domain.Notice{doubles(holidaysDir, lowHolidays), settling(youngH.Path)},
+			},
+			delta(in7Trip, n8), nil},
+		{"a new asset of a thematic album does not go up while the folder of albums at the root differs from another folder in case alone",
+			state(nil, pairs{alphaCats}), snapshot(cat1), scans{"alpha": {youngA}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles("Albums", "albums"), settling(youngA.Path)}},
+			delta(cat1), nil},
+		{"an edit does not go to a quarantine path that differs from a file in quarantine in case alone",
+			state(nil, nil), snapshot(), scans{"alpha": {edit3, oldQ}}, specs{alpha}, "", edits, event,
+			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(oldQ.Path, quarantined+edit3.Path)}},
+			delta(), nil},
+		{"a file that would move into a folder that differs from another in case alone keeps its asset as the state has it in its remote, while the other remote takes the move of the user and closes its conflict",
+			recorded(state(assets{a7}, pairs{alphaHolidays, alphaTrip, betaHolidays, betaTrip}, photo, other),
+				conflict("beta", domain.ConflictStatusSkipped, ""), conflict("alpha", domain.ConflictStatusSkipped, "")),
+			snapshot(a7), scans{"alpha": {youngT, e1}, "beta": {youngT, tripFile}}, specs{beta, alpha}, "", p, event,
+			domain.Plan{
+				Ops:       ops{holding(album(domain.OpAlbumAdd, 7, trip, "R-LINK-05"), took(other, tripFile, trip)), album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05")},
+				Conflicts: []domain.Conflict{conflict("beta", domain.ConflictStatusResolved, "")},
+				Notices:   []domain.Notice{doubles(tripDir, lowTrip), inBeta(doubles(tripDir, lowTrip)), settling(youngT.Path), inBeta(settling(youngT.Path))},
+			},
+			delta(a7), nil},
+		{"under ask a photo that the user moved into the event that its asset is in now plans nothing while its Live Photo video still cannot follow it, and both links wait as the state has them",
+			state(assets{withVideo(in7Trip)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(in7Trip)),
+			scans{"alpha": {twinMov, ev, tripFile}}, specs{alpha}, "", ask, event,
+			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(tripDir, lowTrip), doubles(tripDir+"/IMG_0001.mov", twinMov.Path), settling(twinMov.Path)}},
+			delta(withVideo(in7Trip)), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

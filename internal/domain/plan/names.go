@@ -15,11 +15,11 @@ import (
 	"github.com/Windemiatrix/photosync/internal/domain/pathtemplate"
 )
 
-// Names are the names of the cloud files of one remote in a run: those that
-// its scan lists and its links hold in quarantine, and those that the run
-// gives. A name that Free, Quarantine or Render gives is taken from then on,
-// so the names depend on the order of the calls, which the caller makes in
-// an order that its input alone sets.
+// Names are the names of the cloud files of one remote in a run and of the
+// directories above them: those that its scan lists and its links hold in
+// quarantine, and those that the run gives. A name that Free, Quarantine or
+// Render gives is taken from then on, so the names depend on the order of the
+// calls, which the caller makes in an order that its input alone sets.
 type Names struct {
 	remote string
 	keys   map[[2]string]map[string]bool
@@ -84,9 +84,10 @@ func (n *Names) Render(t *template.Template, eventPath string, asset domain.Asse
 }
 
 // Doubles returns, by root and path, the names of n that naming.Doubles puts
-// in a group: the Windows client of the cloud takes them for one file, so a
-// run changes none of them. notices hold "plan.doubles" for each group with
-// the remote, the root and the paths of the group, the personal root first.
+// in a group: the Windows client of the cloud takes them for one, so a run
+// changes no file among them and puts none below a directory among them.
+// notices hold "plan.doubles" for each group with the remote, the root and
+// the paths of the group, the personal root first.
 func (n *Names) Doubles() (doubled map[domain.RemoteEntry]bool, notices []domain.Notice) {
 	doubled = map[domain.RemoteEntry]bool{}
 	for _, root := range []domain.LibraryKind{domain.LibraryPersonal, domain.LibraryShared} {
@@ -101,7 +102,8 @@ func (n *Names) Doubles() (doubled map[domain.RemoteEntry]bool, notices []domain
 }
 
 // naming.Free compares the stems of one directory and QuarantinePath whole
-// paths, so a name is kept both ways.
+// paths, so a name is kept both ways; the directories above it are names
+// too, since a file put there makes them.
 func (n *Names) take(root domain.LibraryKind, p string) {
 	k := [2]string{string(root), path.Dir(p)}
 	if n.keys[k] == nil {
@@ -111,4 +113,7 @@ func (n *Names) take(root domain.LibraryKind, p string) {
 		n.paths[root] = map[string]bool{}
 	}
 	n.keys[k][export.StemKey(path.Base(p))], n.paths[root][p] = true, true
+	if !n.paths[root][k[1]] {
+		n.take(root, k[1])
+	}
 }
