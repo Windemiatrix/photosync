@@ -63,4 +63,5 @@ var Rules = map[string]string{
 	"R-LAYOUT-08": "Copies of one file in several cloud folders are several links of one asset in several albums, not a conflict.",
 	"R-LAYOUT-09": "Irregular folders have fixed meanings: a file in the root or a year folder stays there without an album, Year/Title is an event dated by its album start or its earliest asset, Year/MM and MM - Title date to the 1st and a subfolder of a day folder is an untitled event part.",
 	"R-LAYOUT-10": "At the first sync an album pairs with an unpaired directory of the same name, else with the one that holds more than half of its matched files, else it gets a new directory.",
+	"R-LAYOUT-11": "An album renamed or moved to another folder in iCloud takes its pair and the files of the album that lie directly in it to the directory of its new path when the directory was the one of its old path and the new one is free, so a directory that the user named otherwise keeps its name.",
 }
