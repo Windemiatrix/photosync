@@ -28,6 +28,7 @@ func TestBuild(t *testing.T) {
 		original, live                 = domain.RoleOriginal, domain.RoleLiveVideo
 		holidaysDir, tripDir, partyDir = "2024/05-01 - Holidays", "2024/05-02 - Trip", "2024/05-04 - Party"
 		dayDir, catsDir                = "2024/05-01", "Albums/Cats"
+		vacationDir                    = "2024/05-01 - Vacation"
 		event                          = "{event_path}/{original_name}"
 		quarantined                    = ".photosync/quarantine/2026-11-13/"
 
@@ -99,8 +100,12 @@ func TestBuild(t *testing.T) {
 			Size: e.Size, SHA256: e.SHA256, MD5: e.MD5, ETag: e.ETag, Level: domain.LevelExact, Status: domain.StatusActive,
 		}
 	}
+	named := map[string]string{
+		holidaysDir: `["2024"] "05/01 Holidays"`, tripDir: `["2024"] "05/02 Trip"`, partyDir: `["2024"] "05/04 Party"`,
+		catsDir: `[] "Cats"`, vacationDir: `["2024"] "05/01 Vacation"`,
+	}
 	pair := func(album domain.AlbumID, remote string, root domain.LibraryKind, dir string, by domain.PairOrigin) domain.AlbumPair {
-		return domain.AlbumPair{AlbumID: album, Remote: remote, Root: root, DirPath: dir, CreatedBy: by}
+		return domain.AlbumPair{AlbumID: album, Remote: remote, Root: root, DirPath: dir, CreatedBy: by, NamedAfter: named[dir]}
 	}
 	state := func(as assets, ps pairs, ls ...domain.Link) domain.State {
 		return domain.State{Assets: as, Albums: albums, AlbumPairs: ps, Links: ls}
@@ -284,7 +289,7 @@ func TestBuild(t *testing.T) {
 	counted := func(code, remote, count string) domain.Notice {
 		return domain.Notice{Code: code, Params: []string{remote, count}}
 	}
-	vacationDir, vacationAlbums, vacationLibrary := "2024/05-01 - Vacation", slices.Clone(albums), slices.Clone(library)
+	vacationAlbums, vacationLibrary := slices.Clone(albums), slices.Clone(library)
 	vacationAlbums[2], vacationLibrary[2].Title = inYear(holidays, "u-hol", "05/01 Vacation", may1.Add(-2*time.Hour)), "05/01 Vacation"
 	inVacation := func(s domain.LibrarySnapshot) domain.LibrarySnapshot {
 		s.Albums = vacationLibrary
@@ -347,7 +352,7 @@ func TestBuild(t *testing.T) {
 			out = append(out, fmt.Sprintf("album %+v", a))
 		}
 		for _, x := range pl.Pairs {
-			out = append(out, fmt.Sprintf("pair %d %s %s:%s %s", x.AlbumID, x.Remote, x.Root, x.DirPath, x.CreatedBy))
+			out = append(out, fmt.Sprintf("pair %d %s %s:%s %s named %s", x.AlbumID, x.Remote, x.Root, x.DirPath, x.CreatedBy, x.NamedAfter))
 		}
 		for _, l := range pl.Links {
 			out = append(out, fmt.Sprintf("link %+v", l))
@@ -751,18 +756,30 @@ func TestBuild(t *testing.T) {
 			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), inVacation(snapshot(a7)), scans{"alpha": {e1}, "beta": {e1}}, specs{alpha, beta}, "alpha", p, event,
 			domain.Plan{Ops: ops{moved(photo, personal, vacationDir+"/IMG_0001.HEIC", holidays, "R-LAYOUT-11")}, Pairs: pairs{vacationPair}},
 			domain.SnapshotDelta{Assets: assets{a7}, Albums: vacationAlbums}, nil},
-		{"a full run after one remote alone took an album renamed in iCloud leaves the old directory of the other remote as it is",
+		{"a full run after one remote alone took an album renamed in iCloud takes the pair and the file of the other remote to the folder of its new title",
 			domain.State{Assets: assets{a7}, Albums: vacationAlbums, AlbumPairs: pairs{vacationPair, betaHolidays}, Links: []domain.Link{atVacation, other}},
 			inVacation(snapshot(a7)), scans{"alpha": {file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled)}, "beta": {e1}}, specs{alpha, beta}, "", p, event,
-			domain.Plan{}, domain.SnapshotDelta{Assets: assets{a7}, Albums: vacationAlbums}, nil},
-		{"an album renamed in iCloud takes along the pair that the run makes for its old folder in the shared root, and the plan keeps one pair for each root",
-			state(assets{a7, s9}, pairs{alphaHolidays}, photo, link9), inVacation(snapshot(a7, s9)), scans{"alpha": {file9, e1}}, specs{alpha}, "", p, event,
+			domain.Plan{
+				Ops:   ops{moved(other, personal, vacationDir+"/IMG_0001.HEIC", holidays, "R-LAYOUT-11")},
+				Pairs: pairs{pair(holidays, "beta", personal, vacationDir, domain.OriginICloud)},
+			},
+			domain.SnapshotDelta{Assets: assets{a7}, Albums: vacationAlbums}, nil},
+		{"an album renamed in iCloud takes along its pair in the shared root, which keeps its origin, and the file there follows",
+			state(assets{a7, s9}, pairs{alphaHolidays, pair(holidays, "alpha", shared, holidaysDir, domain.OriginRemote)}, photo, link9), inVacation(snapshot(a7, s9)),
+			scans{"alpha": {file9, e1}}, specs{alpha}, "", p, event,
 			domain.Plan{
 				Ops: ops{
 					moved(photo, personal, vacationDir+"/IMG_0001.HEIC", holidays, "R-LAYOUT-11"),
 					{Kind: domain.OpMove, Remote: "alpha", Root: shared, Src: file9.Path, DstRoot: shared, Dst: moved9.Path, Asset: 9, Rule: "R-LAYOUT-11", Links: []domain.Link{moved9}},
 				},
 				Pairs: pairs{vacationPair, pair(holidays, "alpha", shared, vacationDir, domain.OriginRemote)},
+			},
+			domain.SnapshotDelta{Assets: assets{a7, s9}, Albums: vacationAlbums}, nil},
+		{"a pair that the run makes for the folder of the old title of a renamed album is named otherwise and keeps that folder, while the pair of the state follows the album",
+			state(assets{a7, s9}, pairs{alphaHolidays}, photo, link9), inVacation(snapshot(a7, s9)), scans{"alpha": {file9, e1}}, specs{alpha}, "", p, event,
+			domain.Plan{
+				Ops:   ops{moved(photo, personal, vacationDir+"/IMG_0001.HEIC", holidays, "R-LAYOUT-11")},
+				Pairs: pairs{{AlbumID: holidays, Remote: "alpha", Root: shared, DirPath: holidaysDir, CreatedBy: domain.OriginRemote}, vacationPair},
 			},
 			domain.SnapshotDelta{Assets: assets{a7, s9}, Albums: vacationAlbums}, nil},
 	} {

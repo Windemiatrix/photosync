@@ -9,12 +9,12 @@ import (
 	"github.com/Windemiatrix/photosync/internal/domain/plan"
 )
 
-// Each row gives the albums of the state and of a run, the pairs of the run
-// and the whole listing of one remote. The expected pairs of its personal
+// Each row gives the albums and the pairs of a run and the whole listing of
+// one remote; a pair remembers the path of the album that named its
+// directory unless the row says otherwise. The expected pairs of its personal
 // root follow the rule on albums renamed in iCloud, not the code, and must
 // not depend on the order of the input nor on which of the two roots is the
-// one asked for; a second run, whose state took the albums and the pairs of
-// the first, moves no pair.
+// one asked for; a second run over the pairs that the first moved moves none.
 func TestMovePairs(t *testing.T) {
 	t.Parallel()
 	const (
@@ -49,10 +49,18 @@ func TestMovePairs(t *testing.T) {
 		}
 		return albums
 	}
+	named := map[domain.AlbumID]string{
+		year: `[] "2024"`, holidays: `["2024"] "05/01 Holidays"`, trip: `["2024"] "05/02 Trip"`, gone: `["2024"] "05/09 Gone"`,
+		printing: `["Hobby"] "3D printing"`, pets: `["Hobby"] "Pets"`, figures: `["Hobby" "Models"] "Figures"`,
+	}
 	pair := func(id domain.AlbumID, remote string, root domain.LibraryKind, dir string) domain.AlbumPair {
-		return domain.AlbumPair{AlbumID: id, Remote: remote, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud}
+		return domain.AlbumPair{AlbumID: id, Remote: remote, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud, NamedAfter: named[id]}
 	}
 	mine := func(id domain.AlbumID, dir string) domain.AlbumPair { return pair(id, "disk", personal, dir) }
+	unnamed := func(x domain.AlbumPair) domain.AlbumPair {
+		x.NamedAfter = ""
+		return x
+	}
 	prs := func(x ...domain.AlbumPair) []domain.AlbumPair { return x }
 	file := func(root domain.LibraryKind, at string) domain.RemoteEntry {
 		return domain.RemoteEntry{Root: root, Path: at, Size: 100}
@@ -62,73 +70,73 @@ func TestMovePairs(t *testing.T) {
 	listed := files(file(personal, holidaysDir+"/IMG_0001.HEIC"), file(personal, tripDir+"/IMG_0002.HEIC"))
 	trashed := album(trip, event, year, "05/03 Trip", "2023")
 	trashed.InTrash = true
-	cycle := slices.Clone(lib)
-	cycle[0].ParentID, cycle[1].ParentID = hobby, year
+	cloudy := album(printing, thematic, hobby, "3D printing", "Hobby")
+	cloudy.Key, cloudy.KeySource = "guid-12", domain.KeyCloudGUID
 	p := domain.DefaultPolicies()
 	p.UntitledEvent, p.AlbumsRoot = "Untitled", "Albums"
 	for _, c := range []struct {
 		name    string
-		before  []domain.Album
 		albums  []domain.Album
 		pairs   []domain.AlbumPair
 		listing []domain.RemoteEntry
 		mode    domain.Mode
 		want    []domain.AlbumPair
 	}{
-		{"nothing in, nothing out", nil, nil, nil, nil, twoWay, nil},
+		{"nothing in, nothing out", nil, nil, nil, twoWay, nil},
 		{"a pair stays while its album keeps its title and its folders",
-			lib, run(), prs(mine(holidays, holidaysDir), mine(trip, tripDir)), listed, twoWay, nil},
+			run(), prs(mine(holidays, holidaysDir), mine(trip, tripDir)), listed, twoWay, nil},
 		// covers: R-LAYOUT-11
 		{"an album renamed in iCloud takes its pair to the directory of its new title, and the pair of an album that kept its title stays",
-			lib, run(renamed), prs(mine(trip, tripDir), mine(holidays, holidaysDir)), listed, twoWay, prs(mine(holidays, vacationDir))},
+			run(renamed), prs(mine(trip, tripDir), mine(holidays, holidaysDir)), listed, twoWay, prs(mine(holidays, vacationDir))},
 		{"an album moved to a new year folder in iCloud takes its pair there",
-			lib, run(album(later, folder, 0, "2025"), album(holidays, event, later, "05/01 Holidays", "2025")), prs(mine(holidays, holidaysDir)), listed, twoWay,
+			run(album(later, folder, 0, "2025"), album(holidays, event, later, "05/01 Holidays", "2025")), prs(mine(holidays, holidaysDir)), listed, twoWay,
 			prs(mine(holidays, "2025/05-01 - Holidays"))},
 		{"a folder renamed in iCloud takes along the pairs of the albums in it and in its folders, in the order of their directories",
-			lib, run(album(hobby, folder, 0, "Crafts"), album(models, folder, hobby, "Models", "Crafts"), album(printing, thematic, hobby, "3D printing", "Crafts"),
+			run(album(hobby, folder, 0, "Crafts"), album(models, folder, hobby, "Models", "Crafts"), album(printing, thematic, hobby, "3D printing", "Crafts"),
 				album(pets, thematic, hobby, "Pets", "Crafts"), album(figures, thematic, models, "Figures", "Crafts", "Models")),
 			prs(mine(pets, petsDir), mine(figures, figuresDir), mine(printing, printingDir)), files(file(personal, petsDir+"/IMG_0003.HEIC")), twoWay,
 			prs(mine(printing, "Albums/Crafts/3D printing"), mine(figures, "Albums/Crafts/Models/Figures"), mine(pets, "Albums/Crafts/Pets"))},
 		{"a directory that the user named otherwise keeps its name when its album is renamed",
-			lib, run(renamed), prs(mine(holidays, "2024/Holiday trip")), files(file(personal, "2024/Holiday trip/IMG_0001.HEIC")), twoWay, nil},
+			run(renamed), prs(unnamed(mine(holidays, "2024/Holiday trip"))), files(file(personal, "2024/Holiday trip/IMG_0001.HEIC")), twoWay, nil},
 		{"a pair stays when the listing holds a file below its new directory, even below the directory of another pair",
-			lib, run(renamed), prs(mine(holidays, holidaysDir), mine(trip, vacationDir+"/raw")),
+			run(renamed), prs(mine(holidays, holidaysDir), mine(trip, vacationDir+"/raw")),
 			files(file(personal, holidaysDir+"/IMG_0001.HEIC"), file(personal, vacationDir+"/raw/IMG_0009.HEIC")), twoWay, nil},
 		{"a pair stays when another pair of the remote and root holds its new directory",
-			lib, run(album(holidays, event, year, "05/02 Trip", "2024")), prs(mine(holidays, holidaysDir), mine(trip, tripDir)),
+			run(album(holidays, event, year, "05/02 Trip", "2024")), prs(mine(holidays, holidaysDir), mine(trip, tripDir)),
 			files(file(personal, holidaysDir+"/IMG_0001.HEIC")), twoWay, nil},
 		{"of two albums renamed to one title the one whose directory comes first takes the new directory",
-			lib, run(album(printing, thematic, hobby, "Toys", "Hobby"), album(pets, thematic, hobby, "Toys", "Hobby")),
+			run(album(printing, thematic, hobby, "Toys", "Hobby"), album(pets, thematic, hobby, "Toys", "Hobby")),
 			prs(mine(pets, petsDir), mine(printing, printingDir)), nil, twoWay, prs(mine(printing, "Albums/Hobby/Toys"))},
 		{"an album renamed in case alone keeps its directory, which a client blind to case takes for the same",
-			lib, run(album(holidays, event, year, "05/01 holidays", "2024")), prs(mine(holidays, holidaysDir)), files(file(personal, tripDir+"/IMG_0002.HEIC")), twoWay, nil},
+			run(album(holidays, event, year, "05/01 holidays", "2024")), prs(mine(holidays, holidaysDir)), files(file(personal, tripDir+"/IMG_0002.HEIC")), twoWay, nil},
 		{"the pairs and the listing of another remote or root hold no directory here, and only the pairs of the remote and root move",
-			lib, run(renamed), prs(pair(trip, "other", personal, vacationDir), pair(trip, "disk", shared, vacationDir), mine(holidays, holidaysDir)),
+			run(renamed), prs(pair(trip, "other", personal, vacationDir), pair(trip, "disk", shared, vacationDir), mine(holidays, holidaysDir)),
 			files(file(shared, vacationDir+"/IMG_0001.HEIC"), file(personal, holidaysDir+"/IMG_0001.HEIC")), twoWay, prs(mine(holidays, vacationDir))},
-		{"download-only moves no pair", lib, run(renamed), prs(mine(holidays, holidaysDir)), listed, downloadOnly, nil},
-		{"upload-only moves pairs as two-way does", lib, run(renamed), prs(mine(holidays, holidaysDir)), listed, uploadOnly, prs(mine(holidays, vacationDir))},
+		{"download-only moves no pair", run(renamed), prs(mine(holidays, holidaysDir)), listed, downloadOnly, nil},
+		{"upload-only moves pairs as two-way does", run(renamed), prs(mine(holidays, holidaysDir)), listed, uploadOnly, prs(mine(holidays, vacationDir))},
 		{"the pairs of a folder, of an album in Recently Deleted and of an album gone from the library stay",
-			lib, run(album(year, folder, 0, "2023"), trashed), prs(mine(year, "2024"), mine(trip, tripDir), mine(gone, "2024/05-09 - Gone")), listed, twoWay, nil},
-		{"a cycle of folders in a state that went wrong ends the walk, and the pair stays",
-			cycle, run(renamed), prs(mine(holidays, holidaysDir)), listed, twoWay, nil},
+			run(album(year, folder, 0, "2023"), trashed), prs(mine(year, "2024"), mine(trip, tripDir), mine(gone, "2024/05-09 - Gone")), listed, twoWay, nil},
+		{"a pair stays while its album keeps its path under a cloud key, though the policies now give the album another directory",
+			run(cloudy), prs(mine(printing, "Things/Hobby/3D printing")), nil, twoWay, nil},
 		{"a pair stays when its new directory differs in case alone from a directory of the listing",
-			lib, run(renamed), prs(mine(holidays, holidaysDir)), files(file(personal, holidaysDir+"/IMG_0001.HEIC"), file(personal, "2024/05-01 - vacation/IMG_0009.HEIC")),
+			run(renamed), prs(mine(holidays, holidaysDir)), files(file(personal, holidaysDir+"/IMG_0001.HEIC"), file(personal, "2024/05-01 - vacation/IMG_0009.HEIC")),
 			twoWay, nil},
+		{"a pair that remembers no path stays when its album is renamed, even in the directory of the old path",
+			run(renamed), prs(unnamed(mine(holidays, holidaysDir))), listed, twoWay, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			r := domain.RemoteSpec{Name: "disk", Mode: c.mode}
-			input := fmt.Sprintf("%+v %+v %+v %+v", c.before, c.albums, c.pairs, c.listing)
-			got := plan.MovePairs(c.before, c.albums, c.pairs, c.listing, r, personal, p)
+			input := fmt.Sprintf("%+v %+v %+v", c.albums, c.pairs, c.listing)
+			got := plan.MovePairs(c.albums, c.pairs, c.listing, r, personal, p)
 			if !slices.Equal(got, c.want) {
 				t.Errorf("MovePairs = %+v; want %+v", got, c.want)
 			}
-			before, albums, pairs, listing := slices.Clone(c.before), slices.Clone(c.albums), slices.Clone(c.pairs), slices.Clone(c.listing)
-			slices.Reverse(before)
+			albums, pairs, listing := slices.Clone(c.albums), slices.Clone(c.pairs), slices.Clone(c.listing)
 			slices.Reverse(albums)
 			slices.Reverse(pairs)
 			slices.Reverse(listing)
-			if back := plan.MovePairs(before, albums, pairs, listing, r, personal, p); !slices.Equal(back, got) {
+			if back := plan.MovePairs(albums, pairs, listing, r, personal, p); !slices.Equal(back, got) {
 				t.Errorf("with the input reversed: %+v; want %+v", back, got)
 			}
 			swap := func(k domain.LibraryKind) domain.LibraryKind {
@@ -144,7 +152,7 @@ func TestMovePairs(t *testing.T) {
 			for i := range mirror {
 				mirror[i].Root = swap(mirror[i].Root)
 			}
-			mirrored := plan.MovePairs(c.before, c.albums, swapped, mirror, r, shared, p)
+			mirrored := plan.MovePairs(c.albums, swapped, mirror, r, shared, p)
 			for i := range mirrored {
 				mirrored[i].Root = swap(mirrored[i].Root)
 			}
@@ -157,13 +165,13 @@ func TestMovePairs(t *testing.T) {
 					return y.AlbumID == x.AlbumID && y.Remote == x.Remote && y.Root == x.Root
 				})] = x
 			}
-			if again := plan.MovePairs(c.albums, c.albums, next, c.listing, r, personal, p); len(again) > 0 {
-				t.Errorf("a second run, whose state took the albums and the pairs of the first, moves %+v; want none", again)
+			if again := plan.MovePairs(c.albums, next, c.listing, r, personal, p); len(again) > 0 {
+				t.Errorf("a second run over the pairs that the first moved moves %+v; want none", again)
 			}
 			for i := range got {
 				got[i].DirPath = "changed"
 			}
-			if after := fmt.Sprintf("%+v %+v %+v %+v", c.before, c.albums, c.pairs, c.listing); after != input {
+			if after := fmt.Sprintf("%+v %+v %+v", c.albums, c.pairs, c.listing); after != input {
 				t.Errorf("MovePairs changed its input or shares a slice with it:\n%s\nwant\n%s", after, input)
 			}
 		})
