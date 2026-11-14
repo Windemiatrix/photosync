@@ -238,6 +238,12 @@ func TestBuild(t *testing.T) {
 		n.Params[0] = "beta"
 		return n
 	}
+	aged := ".photosync/quarantine/2026-08-14/" + holidaysDir
+	aged5, kept6 := file(personal, aged+"/IMG_0005.HEIC", 10, "q5", settled), file(personal, ".photosync/quarantine/2026-08-15/"+holidaysDir+"/IMG_0006.HEIC", 10, "q6", settled)
+	aged7, aged7x := file(personal, aged+"/IMG_0007.HEIC", 10, "q7", settled), file(personal, aged+"/img_0007.heic", 10, "q8", settled)
+	expiring := func(remote string, e domain.RemoteEntry) domain.Op {
+		return domain.Op{Kind: domain.OpExpire, Remote: remote, Root: e.Root, Src: e.Path, Rule: "R-STATUS-09", Irreversible: true}
+	}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -566,6 +572,13 @@ func TestBuild(t *testing.T) {
 			scans{"alpha": {twinMov, ev, tripFile}}, specs{alpha}, "", ask, event,
 			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(tripDir, lowTrip), doubles(tripDir+"/IMG_0001.mov", twinMov.Path), settling(twinMov.Path)}},
 			delta(withVideo(in7Trip)), nil},
+		{"a file kept in quarantine longer than the policy says leaves the cloud for good, while one kept as long and two that differ in case alone stay",
+			state(nil, nil), snapshot(), scans{"alpha": {aged7x, kept6, aged7, aged5}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{expiring("alpha", aged5)}, Notices: []domain.Notice{doubles(aged7.Path, aged7x.Path)}},
+			delta(), nil},
+		{"one remote alone syncs: the quarantine of the other stays as it is",
+			state(nil, nil), snapshot(), scans{"alpha": {aged5}, "beta": {aged5}}, specs{alpha, beta}, "alpha", p, event,
+			domain.Plan{Ops: ops{expiring("alpha", aged5)}}, delta(), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

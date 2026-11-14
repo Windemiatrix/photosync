@@ -15,9 +15,9 @@ func TestOpKinds(t *testing.T) {
 	t.Parallel()
 	checkStored(t, []domain.OpKind{
 		domain.OpDelete, domain.OpCopy, domain.OpMove, domain.OpQuarantine, domain.OpPut,
-		domain.OpAlbumCreate, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumRemove, domain.OpAssetDelete,
+		domain.OpAlbumCreate, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumRemove, domain.OpAssetDelete, domain.OpExpire,
 	},
-		"delete", "copy", "move", "quarantine", "put", "album_create", "import", "album_add", "album_remove", "asset_delete")
+		"delete", "copy", "move", "quarantine", "put", "album_create", "import", "album_add", "album_remove", "asset_delete", "expire")
 }
 
 // The phases are the order in which a run makes its changes: a wrong phase
@@ -26,7 +26,7 @@ func TestOpKindPhase(t *testing.T) {
 	t.Parallel()
 	for k, want := range map[domain.OpKind]int{
 		domain.OpDelete: 1, domain.OpCopy: 1, domain.OpMove: 1, domain.OpQuarantine: 1, domain.OpAlbumCreate: 1, domain.OpPut: 2,
-		domain.OpImport: 3, domain.OpAlbumAdd: 4, domain.OpAlbumRemove: 4, domain.OpAssetDelete: 5,
+		domain.OpImport: 3, domain.OpAlbumAdd: 4, domain.OpAlbumRemove: 4, domain.OpAssetDelete: 5, domain.OpExpire: 6,
 	} {
 		if got := k.Phase(); got != want {
 			t.Errorf("%s.Phase() = %d, want %d", k, got, want)
@@ -61,6 +61,7 @@ func TestOpCompare(t *testing.T) {
 		{Kind: domain.OpAlbumAdd, Asset: 8, AlbumID: 10},
 		{Kind: domain.OpAlbumRemove, Asset: 7, AlbumID: 10},
 		{Kind: domain.OpAssetDelete, Asset: 7},
+		{Kind: domain.OpExpire, Remote: "alpha", Root: personal, Src: inQuarantine + holidays + "IMG_0001.HEIC"},
 	}
 	for i, a := range ordered {
 		for j, b := range ordered {

@@ -46,6 +46,7 @@ func TestDefaultPolicies(t *testing.T) {
 		AlbumsForPersonal:  true,
 		EditedDirs:         []string{"отредактировано", "edited"},
 		SettleMinutes:      10,
+		QuarantineKeepDays: 90,
 		NestedSeparator:    " / ",
 	}
 	got := domain.DefaultPolicies()
@@ -114,6 +115,11 @@ func TestPoliciesValidate(t *testing.T) {
 		{"settle_minutes=1", func(p *domain.Policies) { p.SettleMinutes = 1 }, nil},
 		{"settle_minutes=-1", func(p *domain.Policies) { p.SettleMinutes = -1 },
 			[]domain.PolicyError{{Key: "settle_minutes", Value: "-1"}}},
+		{"quarantine_keep_days=1", func(p *domain.Policies) { p.QuarantineKeepDays = 1 }, nil},
+		{"quarantine_keep_days=0", func(p *domain.Policies) { p.QuarantineKeepDays = 0 },
+			[]domain.PolicyError{{Key: "quarantine_keep_days", Value: "0"}}},
+		{"quarantine_keep_days=-1", func(p *domain.Policies) { p.QuarantineKeepDays = -1 },
+			[]domain.PolicyError{{Key: "quarantine_keep_days", Value: "-1"}}},
 		{"untitled_event Latin", func(p *domain.Policies) { p.UntitledEvent = "Untitled" }, nil},
 		{"untitled_event Cyrillic", func(p *domain.Policies) { p.UntitledEvent = "Без названия" }, nil},
 		// Whether a name suits the cloud is for package naming, which imports
@@ -137,7 +143,7 @@ func TestPoliciesValidate(t *testing.T) {
 			*p = domain.Policies{
 				Conflict: "remote-wins", Deletes: "Quarantine", DerivedCopy: "keep-both",
 				MultiAlbum: "closest_date", UnsupportedFormats: "convert_mp3", EditedFiles: "Ignore",
-				Hidden: "hide", Burst: "selected", SettleMinutes: -10,
+				Hidden: "hide", Burst: "selected", SettleMinutes: -10, QuarantineKeepDays: -5,
 			}
 		}, []domain.PolicyError{
 			{Key: "conflict", Value: "remote-wins"},
@@ -149,6 +155,7 @@ func TestPoliciesValidate(t *testing.T) {
 			{Key: "hidden", Value: "hide"},
 			{Key: "burst", Value: "selected"},
 			{Key: "settle_minutes", Value: "-10"},
+			{Key: "quarantine_keep_days", Value: "-5"},
 			{Key: "untitled_event"},
 			{Key: "nested_separator"},
 			{Key: "albums_root"},
@@ -189,6 +196,7 @@ func validPolicies() domain.Policies {
 		Hidden:             "skip",
 		Burst:              "selected_only",
 		SettleMinutes:      10,
+		QuarantineKeepDays: 30,
 		UntitledEvent:      "Untitled",
 		NestedSeparator:    " > ",
 		AlbumsRoot:         "Albums",
