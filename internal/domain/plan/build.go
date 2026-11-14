@@ -53,14 +53,18 @@ type Input struct {
 // counting as linked when the state or those new links name it, and
 // DecideComponents its links as the state holds them. AssetOps, then
 // FileOps, ComponentOps and SidecarOps in each remote that the run syncs, by
-// name, where the asset takes part in the plan, give its operations: FileOps with the decisions of matching there
-// unless a decision of DecideLayout deletes the asset, and with the pairs of
-// the state and those that the run made before. A remote takes its names from
-// its whole listing and its links in the state, and its sidecars by those
-// links. Ops are in the order of domain.Op.Compare; Albums are what ReadScans
-// adds, Pairs what ReadScans and then FileOps make, and Notices hold those of
-// Reconcile, ReadScans and the operations in the order of Code, then Params.
-// The inputs are not changed.
+// name, where the asset takes part in the plan, give its operations: FileOps
+// with the decisions of matching there unless a decision of DecideLayout
+// deletes the asset, and with the pairs of the state and those that the run
+// made before. A remote takes its names from its whole listing and its links
+// in the state, and its sidecars by those links. Once every asset is decided
+// on, an operation of a remote that the run syncs, other than an import,
+// whose source or destination is among the paths that Names.Doubles finds
+// there leaves the plan, and with it every operation there on its asset, if
+// it has one. Ops are in the order of domain.Op.Compare; Albums are what
+// ReadScans adds, Pairs what ReadScans and then FileOps make, and Notices
+// hold those of Reconcile, ReadScans, the operations and Names.Doubles in
+// the order of Code, then Params. The inputs are not changed.
 func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	delta, notices, err := Reconcile(in.State, in.Snapshot, in.RunID)
 	if err != nil {
@@ -149,6 +153,21 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 			out.Ops, notices = append(out.Ops, slices.Concat(main, comp, side)...), append(notices, slices.Concat(more, most, last)...)
 			pairs, out.Pairs = append(pairs, mk...), append(out.Pairs, mk...)
 		}
+	}
+	for _, r := range remotes {
+		doubled, ns := names[r.Name].Doubles()
+		hit := func(o domain.Op) bool {
+			return o.Remote == r.Name && o.Kind != domain.OpImport &&
+				(doubled[domain.RemoteEntry{Root: o.Root, Path: o.Src}] || doubled[domain.RemoteEntry{Root: o.DstRoot, Path: o.Dst}])
+		}
+		held := map[domain.AssetID]bool{}
+		for _, o := range out.Ops {
+			if hit(o) && o.Asset != 0 {
+				held[o.Asset] = true
+			}
+		}
+		out.Ops = slices.DeleteFunc(out.Ops, func(o domain.Op) bool { return hit(o) || o.Remote == r.Name && held[o.Asset] })
+		notices = append(notices, ns...)
 	}
 	slices.SortFunc(out.Ops, domain.Op.Compare)
 	slices.SortFunc(notices, func(x, y domain.Notice) int {

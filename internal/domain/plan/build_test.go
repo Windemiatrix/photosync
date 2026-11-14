@@ -164,6 +164,17 @@ func TestBuild(t *testing.T) {
 		s.Conflicts = cs
 		return s
 	}
+	loose8 := withVideo(asset(8, "IMG_0001.HEIC", 200, may1.Add(time.Hour), "run-2"))
+	youngTwin := file(personal, "2024/05-01 - holidays/IMG_0001 (1).HEIC", 50, "y1", young)
+	stray := file(personal, holidaysDir+"/img_0001.heic", 100, "n1", settled)
+	edit2 := file(personal, holidaysDir+"/IMG_0002_edited.jpg", 10, "g2", settled)
+	edit2x := file(personal, holidaysDir+"/img_0002_edited.jpg", 10, "g3", settled)
+	edit3 := file(personal, holidaysDir+"/IMG_0003_edited.jpg", 10, "g4", settled)
+	edits := p
+	edits.EditedFiles = domain.EditedQuarantine
+	doubles := func(paths ...string) domain.Notice {
+		return domain.Notice{Code: "plan.doubles", Params: append([]string{"alpha", string(personal)}, paths...)}
+	}
 
 	album := func(kind domain.OpKind, of domain.AssetID, id domain.AlbumID, rule string) domain.Op {
 		return domain.Op{Kind: kind, Asset: of, AlbumID: id, Rule: rule}
@@ -191,6 +202,11 @@ func TestBuild(t *testing.T) {
 		ID: 2, AssetID: 8, Remote: "alpha", Root: personal, Path: lesser.Path, Role: original, AlbumID: holidays, Size: 150,
 		SHA256: "sc2", MD5: "c2", ETag: "ec2", MTime: settled, Level: domain.LevelSameShot,
 		Status: domain.StatusQuarantinedRemote, QuarantinePath: quarantined + lesser.Path,
+	}
+	betaPut := func(dst string, role domain.LinkRole, size int64) domain.Op {
+		o := put(8, dst, role, holidays, size)
+		o.Remote, o.Links[0].Remote = "beta", "beta"
+		return o
 	}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
@@ -412,6 +428,35 @@ func TestBuild(t *testing.T) {
 			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, other), snapshot(a7), scans{"alpha": {lesser7}}, specs{alpha, beta}, "", p, event,
 			domain.Plan{Ops: ops{{Kind: domain.OpAssetDelete, Asset: 7, Rule: "R-STATUS-02", Links: []domain.Link{binned}}}},
 			delta(a7), nil},
+		{"a new asset whose path in a remote differs from a file there in case alone goes up only to the other remote, and still joins its album in iCloud",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7, loose8),
+			scans{"alpha": {youngTwin, e1}, "beta": {e1}}, specs{alpha, beta}, "", p, event,
+			domain.Plan{
+				Ops: ops{
+					betaPut(holidaysDir+"/IMG_0001 (1).HEIC", original, 200), betaPut(holidaysDir+"/IMG_0001 (1).mov", live, 30),
+					album(domain.OpAlbumAdd, 8, holidays, "R-LAYOUT-05"),
+				},
+				Notices: []domain.Notice{doubles(holidaysDir+"/IMG_0001 (1).HEIC", youngTwin.Path), settling(youngTwin.Path)},
+			},
+			delta(a7, loose8), nil},
+		{"under propagate a file whose path differs from another in case alone keeps its asset and its Live Photo video in the cloud, and the other file is still imported",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(), scans{"alpha": {stray, ev, e1}}, specs{alpha}, "", propagate, event,
+			domain.Plan{
+				Ops: ops{{Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: stray.Path, AlbumID: holidays, Rule: "R-LINK-02", Links: []domain.Link{{
+					Remote: "alpha", Root: personal, Path: stray.Path, Role: original, AlbumID: holidays, Size: 100,
+					SHA256: "sn1", MD5: "n1", ETag: "en1", MTime: settled, Level: domain.LevelImported, Status: domain.StatusActive,
+				}}}},
+				Notices: []domain.Notice{doubles(e1.Path, stray.Path)},
+			},
+			delta(), nil},
+		{"an edit whose path differs from another in case alone stays where it is, while a third edit goes to quarantine",
+			state(nil, nil), snapshot(), scans{"alpha": {edit3, edit2x, edit2}}, specs{alpha}, "", edits, event,
+			domain.Plan{
+				Ops: ops{{Kind: domain.OpQuarantine, Remote: "alpha", Root: personal, Src: edit3.Path, DstRoot: personal, Dst: quarantined + edit3.Path,
+					Rule: "R-STATUS-10"}},
+				Notices: []domain.Notice{doubles(quarantined+edit2.Path, quarantined+edit2x.Path), doubles(edit2.Path, edit2x.Path)},
+			},
+			delta(), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
