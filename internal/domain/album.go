@@ -26,11 +26,16 @@ type Album struct {
 }
 
 // AlbumPair ties an album or a folder of the state to the directory of a
-// remote root that stands for it.
+// remote root that stands for it. NamedAfter is the path of the album, its
+// folder titles and title as a path key of layout.Key, that layout.DirFor
+// made the name of DirPath from, so that the directory follows the album to
+// a new path; empty, it stands for a directory named otherwise, which keeps
+// its name.
 type AlbumPair struct {
-	AlbumID   AlbumID
-	Remote    string
-	Root      LibraryKind
-	DirPath   string
-	CreatedBy PairOrigin
+	AlbumID    AlbumID
+	Remote     string
+	Root       LibraryKind
+	DirPath    string
+	CreatedBy  PairOrigin
+	NamedAfter string
 }

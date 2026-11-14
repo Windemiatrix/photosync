@@ -490,6 +490,7 @@ func TestSimulateConverges(t *testing.T) {
 		original, live       = domain.RoleOriginal, domain.RoleLiveVideo
 		holidaysDir, tripDir = "2024/05-01 - Holidays", "2024/05-02 - Trip"
 		dayDir, catsDir      = "2024/05-01", "Albums/Cats"
+		vacationDir          = "2024/05-01 - Vacation"
 		aged                 = ".photosync/quarantine/2026-08-14/"
 
 		year, cats, holidays, trip domain.AlbumID = 1, 5, 10, 11
@@ -558,8 +559,9 @@ func TestSimulateConverges(t *testing.T) {
 			Size: e.Size, SHA256: e.SHA256, MD5: e.MD5, ETag: e.ETag, Level: domain.LevelExact, Status: domain.StatusActive,
 		}
 	}
+	named := map[string]string{holidaysDir: `["2024"] "05/01 Holidays"`, tripDir: `["2024"] "05/02 Trip"`, catsDir: `[] "Cats"`, vacationDir: `["2024"] "05/01 Vacation"`}
 	pair := func(album domain.AlbumID, remote string, root domain.LibraryKind, dir string) domain.AlbumPair {
-		return domain.AlbumPair{AlbumID: album, Remote: remote, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud}
+		return domain.AlbumPair{AlbumID: album, Remote: remote, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud, NamedAfter: named[dir]}
 	}
 	state := func(as assets, ps pairs, ls ...domain.Link) domain.State {
 		return domain.State{Assets: as, Albums: albums, AlbumPairs: ps, Links: ls}
@@ -619,6 +621,8 @@ func TestSimulateConverges(t *testing.T) {
 		return s
 	}
 	stray4 := file(personal, holidaysDir+"/IMG_0004.HEIC", 400, "d4", settled)
+	vacationAlbums, atVacation, vacationPair := slices.Clone(albums), photo, pair(holidays, "alpha", personal, vacationDir)
+	vacationAlbums[2], atVacation.Path = inYear(holidays, "u-hol", "05/01 Vacation", may1.Add(-2*time.Hour)), vacationDir+"/IMG_0001.HEIC"
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -706,6 +710,10 @@ func TestSimulateConverges(t *testing.T) {
 		{"an album renamed in iCloud takes its file along, while a new file of its old folder comes in there and makes no album of the old name on the next run",
 			state(assets{a7}, pairs{alphaHolidays}, photo), inVacation(snapshot(a7)), scans{"alpha": {stray4, e1}}, specs{alpha}, "", p,
 			kinds{domain.OpMove, domain.OpImport}, nil},
+		{"a full run after one remote alone took an album renamed in iCloud takes the file of the other remote to the folder of its new title",
+			domain.State{Assets: assets{a7}, Albums: vacationAlbums, AlbumPairs: pairs{vacationPair, betaHolidays}, Links: []domain.Link{atVacation, other}},
+			inVacation(snapshot(a7)), scans{"alpha": {file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled)}, "beta": {e1}}, specs{alpha, beta}, "", p,
+			kinds{domain.OpMove}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

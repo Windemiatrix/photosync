@@ -10,6 +10,7 @@ import (
 	"github.com/Windemiatrix/go-libs/osxphotos/template"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
+	"github.com/Windemiatrix/photosync/internal/domain/layout"
 )
 
 // Input is what a run plans from. State is what the last applied run left,
@@ -42,24 +43,22 @@ type Input struct {
 // remotes of Remotes, or the one that OnlyRemote names: ReadScans reads their
 // scans, and RunOps gives the operations that come from them before any asset
 // takes a name. MovePairs moves the pairs of each of them, by name, in the
-// personal root, then the shared one, with the albums of the state, the
-// albums and pairs of the run so far and its whole scan: each moved pair
-// takes the place of its old one among the pairs of the run and goes to
-// Pairs, in place of one that ReadScans made for the same album, remote and
-// root, and DecideLayout takes the old ones. Then each asset of the delta,
-// and each asset that the delta lacks and a link of the state names, found
-// false, is decided on in the order of ID. In a remote that the run does
-// not sync, or whose scan holds the asset as Settling, its links stay as the
-// state has them; elsewhere DecideRemoteLinks decides on them, and, unless
-// that freezes the asset there, DecideRemoteObject with the conflict that
-// the state keeps for the asset there, else one with only AssetID and
-// Remote. The conflict that it returns goes to Conflicts unless its Status
-// is empty. Where it takes the asset into the plan, the albums that matching
-// makes the asset join there are added to Join, and the new links that
-// matching makes there are added to its links as they lie now: so
-// DecideLayout takes them, the asset counting as linked when the state or
-// those new links name it, and DecideComponents its links as the state holds
-// them. AssetOps, ImportOps
+// personal root, then the shared one, with the albums and pairs of the run
+// so far and its whole scan: each moved pair takes the place of its old one
+// among the pairs of the run and goes to Pairs, and DecideLayout takes the
+// old ones. Then each asset of the delta, and each asset that the delta
+// lacks and a link of the state names, found false, is decided on in the
+// order of ID. In a remote that the run does not sync, or whose scan holds
+// the asset as Settling, its links stay as the state has them; elsewhere
+// DecideRemoteLinks decides on them, and, unless that freezes the asset
+// there, DecideRemoteObject with the conflict that the state keeps for the
+// asset there, else one with only AssetID and Remote. The conflict that it
+// returns goes to Conflicts unless its Status is empty. Where it takes the
+// asset into the plan, the albums that matching makes the asset join there
+// are added to Join, and the new links that matching makes there are added
+// to its links as they lie now: so DecideLayout takes them, the asset
+// counting as linked when the state or those new links name it, and
+// DecideComponents its links as the state holds them. AssetOps, ImportOps
 // with its links as they lie now, then FileOps, ComponentOps and SidecarOps
 // in each remote that the run syncs, by name, where the asset takes part in
 // the plan, give its operations: FileOps with the decisions of matching
@@ -97,20 +96,22 @@ type Input struct {
 // and the conflict of that asset there, but not its operations in iCloud; a
 // link alone holds nothing back. Ops are in the order of domain.Op.Compare;
 // Albums are what ReadScans adds, Pairs what ReadScans, MovePairs and then
-// FileOps make, and Notices hold those of Reconcile, ReadScans, the
-// operations, Names.Doubles and Build itself in the order of Code, then
-// Params. Build adds "plan.conflict_settled", with the remote, the original
-// name and the UUID of the asset and the conflict policy, wherever that
-// policy settles a conflict that the state does not keep for an asset in a
-// remote. For each remote that the run syncs it adds, with the remote and a
-// decimal count above zero, "plan.not_imported" for the new files that
-// ReadScans does not decide to import, "plan.waiting_import" for those that
-// it does but that wait for a later run, as the plan imports a file of the
-// same content instead, "plan.edits_left" for the edits of ReadScans that no
-// operation moves to quarantine, and "plan.albums_kept" for the decisions by
-// R-MODE-04, each a move of a file that the base takes while the albums stay
-// as they are. A content counts once among the new files of a remote. The
-// inputs are not changed.
+// FileOps make, each with NamedAfter the path of its album when its DirPath
+// is the directory that layout.DirFor gives the album, else empty, and
+// Notices hold those of Reconcile, ReadScans, the operations, Names.Doubles
+// and Build itself in the order of Code, then Params. Build adds
+// "plan.conflict_settled", with the remote, the original name and the UUID
+// of the asset and the conflict policy, wherever that policy settles a
+// conflict that the state does not keep for an asset in a remote. For each
+// remote that the run syncs it adds, with the remote and a decimal count
+// above zero, "plan.not_imported" for the new files that ReadScans does not
+// decide to import, "plan.waiting_import" for those that it does but that
+// wait for a later run, as the plan imports a file of the same content
+// instead, "plan.edits_left" for the edits of ReadScans that no operation
+// moves to quarantine, and "plan.albums_kept" for the decisions by
+// R-MODE-04, each a move of a file that the base takes while the albums
+// stay as they are. A content counts once among the new files of a remote.
+// The inputs are not changed.
 func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	delta, notices, err := Reconcile(in.State, in.Snapshot, in.RunID)
 	if err != nil {
@@ -154,12 +155,11 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	var moved []domain.AlbumPair
 	for _, r := range byName {
 		for _, root := range []domain.LibraryKind{domain.LibraryPersonal, domain.LibraryShared} {
-			for _, x := range MovePairs(in.State.Albums, albums, pairs, in.Scans[r.Name], r, root, in.Policies) {
-				same := func(y domain.AlbumPair) bool {
+			for _, x := range MovePairs(albums, pairs, in.Scans[r.Name], r, root, in.Policies) {
+				i := slices.IndexFunc(pairs, func(y domain.AlbumPair) bool {
 					return y.AlbumID == x.AlbumID && y.Remote == x.Remote && y.Root == x.Root
-				}
-				i := slices.IndexFunc(pairs, same)
-				moved, pairs[i], out.Pairs = append(moved, pairs[i]), x, append(slices.DeleteFunc(out.Pairs, same), x)
+				})
+				moved, pairs[i], out.Pairs = append(moved, pairs[i]), x, append(out.Pairs, x)
 			}
 		}
 	}
@@ -381,6 +381,11 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	for k, n := range later {
 		if n > 0 {
 			notices = append(notices, domain.Notice{Code: k[0], Params: []string{k[1], strconv.Itoa(n)}})
+		}
+	}
+	for i, x := range out.Pairs {
+		if a := albums[slices.IndexFunc(albums, func(y domain.Album) bool { return y.ID == x.AlbumID })]; layout.DirFor(a, in.Policies) == x.DirPath {
+			out.Pairs[i].NamedAfter = pathKey(a)
 		}
 	}
 	slices.SortFunc(out.Ops, domain.Op.Compare)
