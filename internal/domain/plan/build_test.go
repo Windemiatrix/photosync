@@ -27,10 +27,11 @@ func TestBuild(t *testing.T) {
 		personal, shared               = domain.LibraryPersonal, domain.LibraryShared
 		original, live                 = domain.RoleOriginal, domain.RoleLiveVideo
 		holidaysDir, tripDir, partyDir = "2024/05-01 - Holidays", "2024/05-02 - Trip", "2024/05-04 - Party"
-		dayDir                         = "2024/05-01"
+		dayDir, catsDir                = "2024/05-01", "Albums/Cats"
 		event                          = "{event_path}/{original_name}"
+		quarantined                    = ".photosync/quarantine/2026-11-13/"
 
-		year, holidays, trip, party domain.AlbumID = 1, 10, 11, 12
+		year, cats, holidays, trip, party domain.AlbumID = 1, 5, 10, 11, 12
 	)
 	type (
 		assets = []domain.Asset
@@ -51,6 +52,7 @@ func TestBuild(t *testing.T) {
 	}
 	albums := []domain.Album{
 		{ID: year, UUID: "u-2024", Key: `[] "2024"`, KeySource: domain.KeyPath, Kind: domain.KindFolder, Title: "2024"},
+		{ID: cats, UUID: "u-cats", Key: `[] "Cats"`, KeySource: domain.KeyPath, Kind: domain.KindThematic, Title: "Cats"},
 		inYear(holidays, "u-hol", "05/01 Holidays", may1.Add(-2*time.Hour)),
 		inYear(trip, "u-trip", "05/02 Trip", may2.Add(-2*time.Hour)),
 	}
@@ -62,7 +64,7 @@ func TestBuild(t *testing.T) {
 		}
 		library = append(library, a)
 	}
-	uuidOf := map[domain.AlbumID]string{holidays: "u-hol", trip: "u-trip"}
+	uuidOf := map[domain.AlbumID]string{cats: "u-cats", holidays: "u-hol", trip: "u-trip"}
 	asset := func(id domain.AssetID, name string, size int64, taken time.Time, run string, in ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{
 			ID: id, Key: domain.AssetKey{CloudAssetGUID: fmt.Sprintf("guid-%d", id), UUID: fmt.Sprintf("uuid-%d", id)},
@@ -140,6 +142,28 @@ func TestBuild(t *testing.T) {
 	historyGone := history
 	historyGone.Deleted = true
 	restored := asset(6, "IMG_0006.HEIC", 100, may1, "run-2")
+	dayFile, catsFile := file(personal, dayDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, catsDir+"/IMG_0001.HEIC", 100, "a1", settled)
+	lesser, lesser7 := file(personal, holidaysDir+"/IMG_0002.jpg", 150, "c2", settled), file(personal, holidaysDir+"/IMG_0001.jpg", 150, "c1", settled)
+	lesser.Meta = domain.MediaMeta{Taken: may1, Width: 1600, Height: 1200}
+	lesser7.Meta = lesser.Meta
+	youngBeta := file(personal, tripDir+"/IMG_0002.HEIC", 50, "y2", young)
+	dayPhoto, inTrip, inCats, binned := photo, photo, photo, other
+	dayPhoto.Path, dayPhoto.AlbumID = dayFile.Path, 0
+	inTrip.Path, inTrip.AlbumID = tripDir+"/IMG_0001.HEIC", trip
+	inCats.Path, inCats.AlbumID = catsFile.Path, cats
+	binned.Status = domain.StatusQuarantinedICloud
+	copied := inCats
+	copied.ID, copied.Path, copied.AlbumID = 0, e1.Path, holidays
+	catsHolidays := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", cats, holidays)
+	catsAll := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", cats, holidays, trip)
+	alphaCats := pair(cats, "alpha", personal, catsDir, domain.OriginICloud)
+	conflict := func(remote string, status domain.ConflictStatus, choice domain.ConflictPolicy) domain.Conflict {
+		return domain.Conflict{AssetID: 7, Remote: remote, Status: status, Resolution: choice}
+	}
+	recorded := func(s domain.State, cs ...domain.Conflict) domain.State {
+		s.Conflicts = cs
+		return s
+	}
 
 	album := func(kind domain.OpKind, of domain.AssetID, id domain.AlbumID, rule string) domain.Op {
 		return domain.Op{Kind: kind, Asset: of, AlbumID: id, Rule: rule}
@@ -161,6 +185,13 @@ func TestBuild(t *testing.T) {
 	noPath := func(uuid string) domain.Notice {
 		return domain.Notice{Code: "plan.no_path", Params: []string{"alpha", uuid, "pathtemplate: invalid cloud path: asset " + uuid + " has no original file"}}
 	}
+	swapped := put(8, holidaysDir+"/IMG_0002 (1).HEIC", original, holidays, 200)
+	swapped.Rule, swapped.Links[0].ID = "R-OBJECT-10", 2
+	parked := domain.Link{
+		ID: 2, AssetID: 8, Remote: "alpha", Root: personal, Path: lesser.Path, Role: original, AlbumID: holidays, Size: 150,
+		SHA256: "sc2", MD5: "c2", ETag: "ec2", MTime: settled, Level: domain.LevelSameShot,
+		Status: domain.StatusQuarantinedRemote, QuarantinePath: quarantined + lesser.Path,
+	}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -174,13 +205,14 @@ func TestBuild(t *testing.T) {
 	reversed := func(in plan.Input) plan.Input {
 		s, snap, scan := in.State, in.Snapshot, scans{}
 		s.Assets, s.Albums, s.AlbumPairs = slices.Clone(s.Assets), slices.Clone(s.Albums), slices.Clone(s.AlbumPairs)
-		s.Links, s.History = slices.Clone(s.Links), slices.Clone(s.History)
+		s.Links, s.History, s.Conflicts = slices.Clone(s.Links), slices.Clone(s.History), slices.Clone(s.Conflicts)
 		snap.Assets, snap.Albums = slices.Clone(snap.Assets), slices.Clone(snap.Albums)
 		slices.Reverse(s.Assets)
 		slices.Reverse(s.Albums)
 		slices.Reverse(s.AlbumPairs)
 		slices.Reverse(s.Links)
 		slices.Reverse(s.History)
+		slices.Reverse(s.Conflicts)
 		slices.Reverse(snap.Assets)
 		slices.Reverse(snap.Albums)
 		for name, es := range in.Scans {
@@ -212,6 +244,9 @@ func TestBuild(t *testing.T) {
 		for _, x := range pl.Pairs {
 			out = append(out, fmt.Sprintf("pair %d %s %s:%s %s", x.AlbumID, x.Remote, x.Root, x.DirPath, x.CreatedBy))
 		}
+		for _, c := range pl.Conflicts {
+			out = append(out, fmt.Sprintf("conflict %+v", c))
+		}
 		for _, n := range pl.Notices {
 			out = append(out, fmt.Sprintf("notice %s %q", n.Code, n.Params))
 		}
@@ -224,25 +259,26 @@ func TestBuild(t *testing.T) {
 		snapshot domain.LibrarySnapshot
 		scans    scans
 		remotes  specs
+		only     string
 		p        domain.Policies
 		tmpl     string
 		plan     domain.Plan
 		delta    domain.SnapshotDelta
 		err      error
 	}{
-		{"nothing at all", domain.State{}, domain.LibrarySnapshot{}, nil, nil, p, event, domain.Plan{}, domain.SnapshotDelta{}, nil},
+		{"nothing at all", domain.State{}, domain.LibrarySnapshot{}, nil, nil, "", p, event, domain.Plan{}, domain.SnapshotDelta{}, nil},
 		{"a file that the user moved takes the asset into the album of its new folder, and a new asset in Recently Deleted goes nowhere",
 			domain.State{Assets: assets{a7}, Albums: albums, AlbumPairs: pairs{alphaHolidays, alphaTrip}, Links: []domain.Link{photo},
 				History: []domain.AssetHistory{history}},
-			snapshot(a7, trashed), scans{"alpha": {file(personal, tripDir+"/IMG_0001.HEIC", 100, "a1", settled)}}, specs{alpha}, p, event,
+			snapshot(a7, trashed), scans{"alpha": {file(personal, tripDir+"/IMG_0001.HEIC", 100, "a1", settled)}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{album(domain.OpAlbumAdd, 7, trip, "R-LINK-05"), album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05")}},
 			domain.SnapshotDelta{Assets: assets{a7, trashed}, Albums: albums, History: []domain.AssetHistory{historyGone}}, nil},
 		{"a new asset goes up into its event under a name that no file of the folder takes, its Live Photo video beside it",
-			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n8), scans{"alpha": {e1}}, specs{alpha}, p, event,
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n8), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{put(8, holidaysDir+"/IMG_0001 (1).HEIC", original, holidays, 200), put(8, holidaysDir+"/IMG_0001 (1).mov", live, holidays, 30)}},
 			delta(a7, n8), nil},
 		{"the first placement takes a new asset into the only event of its day, and two new assets make one pair for an album without a folder",
-			state(nil, pairs{alphaHolidays}), snapshot(n2, n1), nil, specs{alpha}, p, event,
+			state(nil, pairs{alphaHolidays}), snapshot(n2, n1), nil, specs{alpha}, "", p, event,
 			domain.Plan{
 				Ops: ops{
 					put(2, tripDir+"/IMG_0001 (1).HEIC", original, trip, 200), put(1, tripDir+"/IMG_0001.HEIC", original, trip, 100),
@@ -253,7 +289,7 @@ func TestBuild(t *testing.T) {
 			delta(n1, n2), nil},
 		{"a file that is still being written keeps its asset as the state has it in its remote, while another remote follows the asset to its new event",
 			state(assets{a7}, pairs{alphaHolidays, alphaTrip, betaHolidays}, photo, other), snapshot(in7Trip),
-			scans{"alpha": {rewritten}, "beta": {e1}}, specs{alpha, beta}, p, event,
+			scans{"alpha": {rewritten}, "beta": {e1}}, specs{alpha, beta}, "", p, event,
 			domain.Plan{
 				Ops:     ops{moved(other, personal, tripDir+"/IMG_0001.HEIC", trip, "R-OBJECT-05")},
 				Pairs:   pairs{pair(trip, "beta", personal, tripDir, domain.OriginICloud)},
@@ -261,11 +297,11 @@ func TestBuild(t *testing.T) {
 			},
 			delta(in7Trip), nil},
 		{"matching links a new asset with a new file of a paired folder: the asset joins its album, and nothing goes up",
-			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, m8), scans{"alpha": {e2, e1}}, specs{alpha}, p, event,
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, m8), scans{"alpha": {e2, e1}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{album(domain.OpAlbumAdd, 8, holidays, "R-LINK-03")}},
 			delta(a7, m8), nil},
 		{"under propagate an asset gone from the library takes its file, its Live Photo video and its sidecar out of the cloud for good, under its ID in the state",
-			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(), scans{"alpha": {xmp, ev, e1}}, specs{alpha}, propagate, event,
+			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(), scans{"alpha": {xmp, ev, e1}}, specs{alpha}, "", propagate, event,
 			domain.Plan{Ops: ops{
 				{Kind: domain.OpDelete, Remote: "alpha", Root: personal, Src: e1.Path, Asset: 7, Rule: "R-STATUS-06", Irreversible: true, Links: []domain.Link{removed}},
 				{Kind: domain.OpDelete, Remote: "alpha", Root: personal, Src: ev.Path, Asset: 7, Rule: "R-STATUS-06", Irreversible: true, Links: []domain.Link{removedVideo}},
@@ -274,7 +310,7 @@ func TestBuild(t *testing.T) {
 			delta(), nil},
 		{"a file that the user moved into a new folder beside a new file: the album comes to iCloud, then the import and the asset join it",
 			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7),
-			scans{"alpha": {e4, file(personal, partyDir+"/IMG_0001.HEIC", 100, "a1", settled)}}, specs{alpha}, p, event,
+			scans{"alpha": {e4, file(personal, partyDir+"/IMG_0001.HEIC", 100, "a1", settled)}}, specs{alpha}, "", p, event,
 			domain.Plan{
 				Ops: ops{
 					{Kind: domain.OpAlbumCreate, AlbumID: party, Rule: "R-LAYOUT-06"},
@@ -289,13 +325,13 @@ func TestBuild(t *testing.T) {
 				Pairs:  pairs{pair(party, "alpha", personal, partyDir, domain.OriginRemote)},
 			},
 			delta(a7), nil},
-		{"an unknown field of the template stops the run", state(nil, pairs{alphaHolidays}), snapshot(h1), nil, specs{alpha}, p, "{event_path}/{foo}",
+		{"an unknown field of the template stops the run", state(nil, pairs{alphaHolidays}), snapshot(h1), nil, specs{alpha}, "", p, "{event_path}/{foo}",
 			domain.Plan{}, domain.SnapshotDelta{}, pathtemplate.ErrUnknownField},
-		{"two assets with one cloud GUID stop the run", state(nil, nil), snapshot(h1, twin), nil, specs{alpha}, p, event,
+		{"two assets with one cloud GUID stop the run", state(nil, nil), snapshot(h1, twin), nil, specs{alpha}, "", p, event,
 			domain.Plan{}, domain.SnapshotDelta{}, plan.ErrBadSnapshot},
 		{"a photo that the plan moves to its new event takes its Live Photo video and its sidecar along",
 			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(in7Trip)),
-			scans{"alpha": {xmp, ev, e1}}, specs{alpha}, p, event,
+			scans{"alpha": {xmp, ev, e1}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{
 				moved(photo, personal, tripDir+"/IMG_0001.HEIC", trip, "R-OBJECT-05"),
 				moved(video, personal, tripDir+"/IMG_0001.mov", trip, "R-COMPONENT-04"),
@@ -303,12 +339,12 @@ func TestBuild(t *testing.T) {
 			}},
 			delta(withVideo(in7Trip)), nil},
 		{"the notices of the scans and of the operations come in the order of their code, then of their parameters",
-			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, bare8, bare9), scans{"alpha": {rewritten}}, specs{alpha}, p, event,
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, bare8, bare9), scans{"alpha": {rewritten}}, specs{alpha}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{noPath("uuid-8"), noPath("uuid-9"), settling(rewritten.Path)}},
 			delta(a7, bare8, bare9), nil},
 		{"a file that the user moved to the shared root takes the asset to the shared library, and the file of another remote follows",
 			state(assets{a7}, pairs{alphaHolidays, pair(holidays, "alpha", shared, holidaysDir, domain.OriginICloud), betaHolidays}, photo, other),
-			snapshot(a7), scans{"alpha": {file(shared, holidaysDir+"/IMG_0001.HEIC", 100, "a1", settled)}, "beta": {e1}}, specs{alpha, beta}, p, event,
+			snapshot(a7), scans{"alpha": {file(shared, holidaysDir+"/IMG_0001.HEIC", 100, "a1", settled)}, "beta": {e1}}, specs{alpha, beta}, "", p, event,
 			domain.Plan{
 				Ops:   ops{moved(other, shared, holidaysDir+"/IMG_0001.HEIC", holidays, "R-OBJECT-07")},
 				Pairs: pairs{pair(holidays, "beta", shared, holidaysDir, domain.OriginICloud)},
@@ -316,29 +352,66 @@ func TestBuild(t *testing.T) {
 			delta(a7), nil},
 		{"a conflict under ask leaves the asset as the state has it in its remote",
 			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip),
-			scans{"alpha": {file(personal, dayDir+"/IMG_0001.HEIC", 100, "a1", settled)}}, specs{alpha}, ask, event,
-			domain.Plan{}, delta(in7Trip), nil},
+			scans{"alpha": {dayFile}}, specs{alpha}, "", ask, event,
+			domain.Plan{Conflicts: []domain.Conflict{conflict("alpha", domain.ConflictStatusOpen, "")}}, delta(in7Trip), nil},
 		{"download-only: under propagate an asset gone from the library leaves its file and its sidecar in the cloud",
-			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(), scans{"alpha": {xmp, e1}}, specs{down}, propagate, event,
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(), scans{"alpha": {xmp, e1}}, specs{down}, "", propagate, event,
 			domain.Plan{}, delta(), nil},
 		{"an earlier identity that the user brings back from Recently Deleted comes with a notice and takes no ID of its own",
-			domain.State{Albums: albums, History: []domain.AssetHistory{historyGone}}, snapshot(restored), nil, specs{alpha}, p, event,
+			domain.State{Albums: albums, History: []domain.AssetHistory{historyGone}}, snapshot(restored), nil, specs{alpha}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{{Code: "plan.replaced_restored", Params: []string{"IMG_0006.HEIC", "uuid-6"}}}},
 			domain.SnapshotDelta{Albums: albums, History: []domain.AssetHistory{historyGone}}, nil},
-		{"an asset that moves to a new event in two remotes makes a pair in each, in the order of their names",
-			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(in7Trip),
-			scans{"alpha": {e1}, "beta": {e1}}, specs{beta, alpha}, p, event,
+		{"an asset that moves to a new event in two remotes makes a pair in each and closes its recorded conflicts there, in the order of their names",
+			recorded(state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other),
+				conflict("beta", domain.ConflictStatusSkipped, ""), conflict("alpha", domain.ConflictStatusSkipped, "")),
+			snapshot(in7Trip), scans{"alpha": {e1}, "beta": {e1}}, specs{beta, alpha}, "", p, event,
 			domain.Plan{
 				Ops: ops{
 					moved(photo, personal, tripDir+"/IMG_0001.HEIC", trip, "R-OBJECT-05"),
 					moved(other, personal, tripDir+"/IMG_0001.HEIC", trip, "R-OBJECT-05"),
 				},
-				Pairs: pairs{pair(trip, "alpha", personal, tripDir, domain.OriginICloud), pair(trip, "beta", personal, tripDir, domain.OriginICloud)},
+				Pairs:     pairs{pair(trip, "alpha", personal, tripDir, domain.OriginICloud), pair(trip, "beta", personal, tripDir, domain.OriginICloud)},
+				Conflicts: []domain.Conflict{conflict("alpha", domain.ConflictStatusResolved, ""), conflict("beta", domain.ConflictStatusResolved, "")},
 			},
 			delta(in7Trip), nil},
 		{"a detached link keeps its asset out of sync in its remote: the asset moves to a new event, and its file neither follows nor goes up again",
-			state(assets{a7}, pairs{alphaHolidays}, detached), snapshot(in7Trip), scans{"alpha": {e1}}, specs{alpha}, p, event,
+			state(assets{a7}, pairs{alphaHolidays}, detached), snapshot(in7Trip), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
 			domain.Plan{}, delta(in7Trip), nil},
+		{"the choice of the user for a recorded conflict wins over the conflict policy",
+			recorded(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), conflict("alpha", domain.ConflictStatusOpen, domain.ConflictICloudWins)),
+			snapshot(in7Trip), scans{"alpha": {dayFile}}, specs{alpha}, "", ask, event,
+			domain.Plan{
+				Ops:       ops{moved(dayPhoto, personal, tripDir+"/IMG_0001.HEIC", trip, "R-OBJECT-05")},
+				Conflicts: []domain.Conflict{conflict("alpha", domain.ConflictStatusResolved, domain.ConflictICloudWins)},
+			},
+			delta(in7Trip), nil},
+		{"matching finds a lesser copy of a new asset in a paired folder: the original goes up beside it, and the copy goes to quarantine",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, m8), scans{"alpha": {lesser, e1}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{
+				{Kind: domain.OpQuarantine, Remote: "alpha", Root: personal, Src: lesser.Path, DstRoot: personal, Dst: parked.QuarantinePath,
+					Asset: 8, Rule: "R-OBJECT-10", Links: []domain.Link{parked}},
+				swapped,
+				album(domain.OpAlbumAdd, 8, holidays, "R-LINK-03"),
+			}},
+			delta(a7, m8), nil},
+		{"a conflict under ask keeps the copy that matching finds in its remote out of the layout of the other remotes",
+			state(assets{catsAll}, pairs{alphaHolidays, alphaTrip, alphaCats, betaHolidays}, inTrip, other), snapshot(catsHolidays),
+			scans{"alpha": {catsFile, dayFile}, "beta": {e1}}, specs{alpha, beta}, "", ask, event,
+			domain.Plan{Conflicts: []domain.Conflict{conflict("alpha", domain.ConflictStatusOpen, "")}}, delta(catsHolidays), nil},
+		{"one remote alone syncs: the other is neither read nor changed, while its files still count for the layout",
+			state(assets{catsHolidays}, pairs{alphaHolidays, alphaCats, betaHolidays}, inCats, other), snapshot(catsHolidays),
+			scans{"alpha": {catsFile}, "beta": {youngBeta, e1}}, specs{alpha, beta}, "alpha", p, event,
+			domain.Plan{Ops: ops{{Kind: domain.OpCopy, Remote: "alpha", Root: personal, Src: catsFile.Path, DstRoot: personal, Dst: e1.Path,
+				Asset: 7, Rule: "R-OBJECT-03", Links: []domain.Link{copied}}}},
+			delta(catsHolidays), nil},
+		{"a remote that the configuration lacks leaves nothing to sync",
+			state(assets{catsHolidays}, pairs{alphaHolidays, alphaCats, betaHolidays}, inCats, other), snapshot(catsHolidays),
+			scans{"alpha": {catsFile}, "beta": {youngBeta, e1}}, specs{alpha, beta}, "gamma", p, event,
+			domain.Plan{}, delta(catsHolidays), nil},
+		{"an asset that another remote deletes gets no original in place of the lesser copy that matching finds",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, other), snapshot(a7), scans{"alpha": {lesser7}}, specs{alpha, beta}, "", p, event,
+			domain.Plan{Ops: ops{{Kind: domain.OpAssetDelete, Asset: 7, Rule: "R-STATUS-02", Links: []domain.Link{binned}}}},
+			delta(a7), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -347,7 +420,7 @@ func TestBuild(t *testing.T) {
 				t.Fatalf("template.Parse(%q): %v", c.tmpl, err)
 			}
 			in := plan.Input{
-				State: c.state, Snapshot: c.snapshot, Scans: c.scans, Remotes: c.remotes, Policies: c.p,
+				State: c.state, Snapshot: c.snapshot, Scans: c.scans, Remotes: c.remotes, OnlyRemote: c.only, Policies: c.p,
 				Template: tmpl, Fields: fieldsOf(c.snapshot), Now: now, RunID: "run-2",
 			}
 			input := fmt.Sprintf("%+v", in)
