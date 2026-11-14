@@ -208,6 +208,27 @@ func TestBuild(t *testing.T) {
 		o.Remote, o.Links[0].Remote = "beta", "beta"
 		return o
 	}
+	holding := func(o domain.Op, ls ...domain.Link) domain.Op {
+		o.Links = ls
+		return o
+	}
+	took := func(l domain.Link, e domain.RemoteEntry, id domain.AlbumID) domain.Link {
+		l.Root, l.Path, l.AlbumID, l.Size, l.SHA256, l.MD5, l.ETag, l.MTime = e.Root, e.Path, id, e.Size, e.SHA256, e.MD5, e.ETag, e.MTime
+		return l
+	}
+	tripFile, tripVideo := file(personal, tripDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, tripDir+"/IMG_0001.MOV", 30, "v1", settled)
+	partyFile, replaced := file(personal, partyDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, holidaysDir+"/IMG_0001.HEIC", 120, "b1", settled)
+	twinMov, twinHeic := file(personal, "2024/05-02 - trip/IMG_0001.mov", 30, "y3", young), file(personal, "2024/05-02 - trip/IMG_0001.HEIC", 50, "y4", young)
+	photo3, trip3, back := photo, inTrip, photo
+	photo3.ID, trip3.ID = 3, 3
+	back.Status, back.QuarantinePath = domain.StatusQuarantinedRemote, quarantined+e1.Path
+	paired, matched3 := took(link(2, "alpha", e2, original), e2, holidays), took(link(3, "alpha", lesser7, original), lesser7, holidays)
+	paired.AssetID, matched3.Level = 8, domain.LevelSameShot
+	a7both, m8trip, moving := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", holidays, trip), asset(8, "IMG_0002.HEIC", 200, may1, "run-2", trip), a7
+	moving.TargetLibrary = shared
+	reup := put(7, tripDir+"/IMG_0001.HEIC", original, trip, 100)
+	reup.Rule = "R-LINK-10"
+	alphaUp := spec("alpha", domain.ModeUploadOnly)
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -260,6 +281,9 @@ func TestBuild(t *testing.T) {
 		for _, x := range pl.Pairs {
 			out = append(out, fmt.Sprintf("pair %d %s %s:%s %s", x.AlbumID, x.Remote, x.Root, x.DirPath, x.CreatedBy))
 		}
+		for _, l := range pl.Links {
+			out = append(out, fmt.Sprintf("link %+v", l))
+		}
 		for _, c := range pl.Conflicts {
 			out = append(out, fmt.Sprintf("conflict %+v", c))
 		}
@@ -287,7 +311,7 @@ func TestBuild(t *testing.T) {
 			domain.State{Assets: assets{a7}, Albums: albums, AlbumPairs: pairs{alphaHolidays, alphaTrip}, Links: []domain.Link{photo},
 				History: []domain.AssetHistory{history}},
 			snapshot(a7, trashed), scans{"alpha": {file(personal, tripDir+"/IMG_0001.HEIC", 100, "a1", settled)}}, specs{alpha}, "", p, event,
-			domain.Plan{Ops: ops{album(domain.OpAlbumAdd, 7, trip, "R-LINK-05"), album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05")}},
+			domain.Plan{Ops: ops{holding(album(domain.OpAlbumAdd, 7, trip, "R-LINK-05"), took(photo, tripFile, trip)), album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05")}},
 			domain.SnapshotDelta{Assets: assets{a7, trashed}, Albums: albums, History: []domain.AssetHistory{historyGone}}, nil},
 		{"a new asset goes up into its event under a name that no file of the folder takes, its Live Photo video beside it",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n8), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
@@ -314,7 +338,7 @@ func TestBuild(t *testing.T) {
 			delta(in7Trip), nil},
 		{"matching links a new asset with a new file of a paired folder: the asset joins its album, and nothing goes up",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, m8), scans{"alpha": {e2, e1}}, specs{alpha}, "", p, event,
-			domain.Plan{Ops: ops{album(domain.OpAlbumAdd, 8, holidays, "R-LINK-03")}},
+			domain.Plan{Ops: ops{holding(album(domain.OpAlbumAdd, 8, holidays, "R-LINK-03"), paired)}},
 			delta(a7, m8), nil},
 		{"under propagate an asset gone from the library takes its file, its Live Photo video and its sidecar out of the cloud for good, under its ID in the state",
 			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(), scans{"alpha": {xmp, ev, e1}}, specs{alpha}, "", propagate, event,
@@ -334,7 +358,7 @@ func TestBuild(t *testing.T) {
 						Remote: "alpha", Root: personal, Path: e4.Path, Role: original, AlbumID: party, Size: 400,
 						SHA256: "sd4", MD5: "d4", ETag: "ed4", MTime: settled, Level: domain.LevelImported, Status: domain.StatusActive,
 					}}},
-					album(domain.OpAlbumAdd, 7, party, "R-LINK-05"),
+					holding(album(domain.OpAlbumAdd, 7, party, "R-LINK-05"), took(photo, partyFile, party)),
 					album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05"),
 				},
 				Albums: []domain.Album{{ID: party, Kind: domain.KindEvent, Title: "05/04 Party", ParentID: year, FolderTitles: []string{"2024"}}},
@@ -364,15 +388,16 @@ func TestBuild(t *testing.T) {
 			domain.Plan{
 				Ops:   ops{moved(other, shared, holidaysDir+"/IMG_0001.HEIC", holidays, "R-OBJECT-07")},
 				Pairs: pairs{pair(holidays, "beta", shared, holidaysDir, domain.OriginICloud)},
+				Links: []domain.Link{took(photo, file(shared, holidaysDir+"/IMG_0001.HEIC", 100, "a1", settled), holidays)},
 			},
-			delta(a7), nil},
+			delta(moving), nil},
 		{"a conflict under ask leaves the asset as the state has it in its remote",
 			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip),
 			scans{"alpha": {dayFile}}, specs{alpha}, "", ask, event,
 			domain.Plan{Conflicts: []domain.Conflict{conflict("alpha", domain.ConflictStatusOpen, "")}}, delta(in7Trip), nil},
 		{"download-only: under propagate an asset gone from the library leaves its file and its sidecar in the cloud",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(), scans{"alpha": {xmp, e1}}, specs{down}, "", propagate, event,
-			domain.Plan{}, delta(), nil},
+			domain.Plan{Links: []domain.Link{detached}}, delta(), nil},
 		{"an earlier identity that the user brings back from Recently Deleted comes with a notice and takes no ID of its own",
 			domain.State{Albums: albums, History: []domain.AssetHistory{historyGone}}, snapshot(restored), nil, specs{alpha}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{{Code: "plan.replaced_restored", Params: []string{"IMG_0006.HEIC", "uuid-6"}}}},
@@ -426,7 +451,7 @@ func TestBuild(t *testing.T) {
 			domain.Plan{}, delta(catsHolidays), nil},
 		{"an asset that another remote deletes gets no original in place of the lesser copy that matching finds",
 			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, other), snapshot(a7), scans{"alpha": {lesser7}}, specs{alpha, beta}, "", p, event,
-			domain.Plan{Ops: ops{{Kind: domain.OpAssetDelete, Asset: 7, Rule: "R-STATUS-02", Links: []domain.Link{binned}}}},
+			domain.Plan{Ops: ops{{Kind: domain.OpAssetDelete, Asset: 7, Rule: "R-STATUS-02", Links: []domain.Link{binned}}}, Links: []domain.Link{matched3}},
 			delta(a7), nil},
 		{"a new asset whose path in a remote differs from a file there in case alone goes up only to the other remote, and still joins its album in iCloud",
 			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7, loose8),
@@ -457,6 +482,51 @@ func TestBuild(t *testing.T) {
 				Notices: []domain.Notice{doubles(quarantined+edit2.Path, quarantined+edit2x.Path), doubles(edit2.Path, edit2x.Path)},
 			},
 			delta(), nil},
+		{"a photo that the user moved with its Live Photo video into the folder of another event takes the asset there, and both links take their new place with the album that it joins",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo3, video), snapshot(withVideo(a7)),
+			scans{"alpha": {tripVideo, tripFile}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{
+				holding(album(domain.OpAlbumAdd, 7, trip, "R-LINK-05"), took(video, tripVideo, trip), took(photo3, tripFile, trip)),
+				album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05"),
+			}},
+			delta(withVideo(a7)), nil},
+		{"a file of an asset in two events that the user deleted takes the asset out of the album of its folder, and its link leaves with it",
+			state(assets{a7both}, pairs{alphaHolidays, alphaTrip}, photo, trip3), snapshot(a7both), scans{"alpha": {tripFile}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{holding(album(domain.OpAlbumRemove, 7, holidays, "R-OBJECT-02"), removed)}},
+			delta(a7both), nil},
+		{"upload-only: a file that the user replaced in place keeps its asset, and its link takes the new content",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {replaced}}, specs{alphaUp}, "", p, event,
+			domain.Plan{Links: []domain.Link{took(photo, replaced, holidays)}}, delta(a7), nil},
+		{"an asset that moves to another event while the user deletes its file goes up there again under a new link, and the old link leaves",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip), nil, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{reup}, Links: []domain.Link{removed}}, delta(in7Trip), nil},
+		{"a file that the user brings back from quarantine takes its link back out of quarantine",
+			state(assets{a7}, pairs{alphaHolidays}, back), snapshot(a7), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
+			domain.Plan{Links: []domain.Link{took(photo, e1, holidays)}}, delta(a7), nil},
+		{"upload-only: a new file that matching links in the folder of another album moves to the album of its asset, and its link goes with the move",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7, m8trip), scans{"alpha": {e2, e1}}, specs{alphaUp}, "", p, event,
+			domain.Plan{Ops: ops{{Kind: domain.OpMove, Remote: "alpha", Root: personal, Src: e2.Path, DstRoot: personal, Dst: tripDir + "/IMG_0002.HEIC",
+				Asset: 8, Rule: "R-OBJECT-05", Links: []domain.Link{took(paired, file(personal, tripDir+"/IMG_0002.HEIC", 200, "b2", settled), trip)}}}},
+			delta(a7, m8trip), nil},
+		{"a photo whose Live Photo video would move to a path that differs from another file in case alone leaves both links as the state has them in the remote, while the asset still changes album",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(a7)),
+			scans{"alpha": {twinMov, ev, tripFile}}, specs{alpha}, "", p, event,
+			domain.Plan{
+				Ops:     ops{album(domain.OpAlbumAdd, 7, trip, "R-LINK-05"), album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05")},
+				Notices: []domain.Notice{doubles(tripDir+"/IMG_0001.mov", twinMov.Path), settling(twinMov.Path)},
+			},
+			delta(withVideo(a7)), nil},
+		{"the choice of the user for a recorded conflict stays recorded while the move that it asks for would land on a path that differs from another file in case alone",
+			recorded(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), conflict("alpha", domain.ConflictStatusOpen, domain.ConflictICloudWins)),
+			snapshot(in7Trip), scans{"alpha": {twinHeic, dayFile}}, specs{alpha}, "", ask, event,
+			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(tripDir+"/IMG_0001.HEIC", twinHeic.Path), settling(twinHeic.Path)}},
+			delta(in7Trip), nil},
+		{"a file that the user brings back from quarantine for an asset gone from the library keeps its link in quarantine, since no operation imports it",
+			state(assets{a7}, pairs{alphaHolidays}, back), snapshot(), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
+			domain.Plan{}, delta(), nil},
+		{"a file that the user moved out of its event into the day folder takes the asset out of the album, and its link goes with the album that it leaves",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {dayFile}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{holding(album(domain.OpAlbumRemove, 7, holidays, "R-LINK-05"), took(photo, dayFile, 0))}}, delta(a7), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
