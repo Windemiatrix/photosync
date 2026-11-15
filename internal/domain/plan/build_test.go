@@ -305,6 +305,7 @@ func TestBuild(t *testing.T) {
 	moved9.Path = vacationDir + "/IMG_0009.HEIC"
 	vacationFile := file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled)
 	holidaysFolder := domain.RemoteEntry{Root: personal, Path: holidaysDir, IsDir: true, MTime: settled}
+	yearFolder := domain.RemoteEntry{Root: personal, Path: "2024", IsDir: true, MTime: settled}
 	renaming := domain.Op{Kind: domain.OpAlbumRename, AlbumID: holidays, Dst: "05/01 Vacation", Rule: "R-LAYOUT-12"}
 	laterFile := file(personal, laterDir+"/IMG_0001.HEIC", 100, "a1", settled)
 	refiling := domain.Op{Kind: domain.OpAlbumMove, AlbumID: holidays, ParentID: folder2023, Rule: "R-LAYOUT-13"}
@@ -813,7 +814,7 @@ func TestBuild(t *testing.T) {
 			},
 			delta(a7), nil},
 		{"a folder of an album that the user moved to another year in the cloud moves the album into a year folder that iCloud adds, takes its pair along, and the folder of another remote follows in the same run",
-			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {laterFile}, "beta": {e1}}, specs{alpha, beta}, "", p, event,
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {laterFile, yearFolder}, "beta": {e1}}, specs{alpha, beta}, "", p, event,
 			domain.Plan{
 				Ops: ops{
 					{Kind: domain.OpAlbumCreate, AlbumID: folder2023, Rule: "R-LAYOUT-06"}, refiling,
@@ -822,6 +823,17 @@ func TestBuild(t *testing.T) {
 				Albums: []domain.Album{{ID: folder2023, Kind: domain.KindFolder, Title: "2023", FolderTitles: []string{}}},
 				Pairs:  pairs{pair(holidays, "alpha", personal, laterDir, domain.OriginICloud), pair(holidays, "beta", personal, laterDir, domain.OriginICloud)},
 				Links:  []domain.Link{took(photo, laterFile, holidays)},
+			},
+			delta(a7), nil},
+		{"a year folder that the user renamed in one remote takes the new title in iCloud, and the folder of its album in another remote follows in the same run",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {laterFile}, "beta": {e1}}, specs{alpha, beta}, "", p, event,
+			domain.Plan{
+				Ops: ops{
+					{Kind: domain.OpAlbumRename, AlbumID: year, Dst: "2023", Rule: "R-LAYOUT-14"},
+					moved(other, personal, laterDir+"/IMG_0001.HEIC", holidays, "R-LAYOUT-11"),
+				},
+				Pairs: pairs{pair(holidays, "alpha", personal, laterDir, domain.OriginICloud), pair(holidays, "beta", personal, laterDir, domain.OriginICloud)},
+				Links: []domain.Link{took(photo, laterFile, holidays)},
 			},
 			delta(a7), nil},
 	} {

@@ -262,6 +262,7 @@ func TestRenamedDirs(t *testing.T) {
 	const (
 		cats, holidays, trip, beach domain.AlbumID = 5, 10, 11, 12
 		gone, models, last          domain.AlbumID = 15, 16, 8
+		hobby, kits, lego           domain.AlbumID = 8, 17, 18
 
 		personal, shared                 = domain.LibraryPersonal, domain.LibraryShared
 		event, thematic                  = domain.KindEvent, domain.KindThematic
@@ -298,6 +299,7 @@ func TestRenamedDirs(t *testing.T) {
 	named := map[domain.AlbumID]string{
 		cats: `[] "Cats"`, holidays: `["2024"] "05/01 Holidays"`, trip: `["2024"] "05/02 Trip"`,
 		beach: `["2024"] "05/01 Holidays / Beach"`, gone: `[] "Gone"`, models: `["Hobby"] "Models"`,
+		kits: `["Hobby" "Lego"] "Kits"`,
 	}
 	pair := func(id domain.AlbumID, remote string, root domain.LibraryKind, dir string) domain.AlbumPair {
 		return domain.AlbumPair{AlbumID: id, Remote: remote, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud, NamedAfter: named[id]}
@@ -334,6 +336,13 @@ func TestRenamedDirs(t *testing.T) {
 	modelsLater, l16 := file(personal, "Albums/Models/IMG_0016.HEIC"), link(16, personal, modelsDir+"/IMG_0016.HEIC", original)
 	binnedYear, modelsAlbum := folder(3, 0, "2025"), album(models, thematic, "Models", "Hobby")
 	binnedYear.InTrash, modelsAlbum.ParentID = true, 8
+	year24, kitsAlbum := folder(1, 0, "2024"), album(kits, thematic, "Kits", "Hobby", "Lego")
+	kitsAlbum.ParentID = lego
+	dated := als(year24, catsAlbum, filed(holidaysAlbum, event, 1, "2024"), filed(tripAlbum, event, 1, "2024"), filed(beachAlbum, event, 1, "2024"))
+	crafts := append(slices.Clone(lib), folder(hobby, 0, "Hobby"), modelsAlbum, folder(lego, hobby, "Lego", "Hobby"), kitsAlbum)
+	h23, t23, b23 := file(personal, "2023/05-01 - Holidays/IMG_0001.HEIC"), file(personal, "2023/05-02 - Trip/IMG_0003.HEIC"), file(personal, "2023/05-01 - Holidays/Beach/IMG_0004.HEIC")
+	l17, m2, k2 := link(17, personal, "Albums/Hobby/Lego/Kits/IMG_0017.HEIC", original), file(personal, "Albums/Crafts/Models/IMG_0016.HEIC"), file(personal, "Albums/Crafts/Lego/Kits/IMG_0017.HEIC")
+	sub, toys := file(personal, "Albums/Crafts/Sub/Models/IMG_0016.HEIC"), file(personal, "Albums/Hobby/Toys/Kits/IMG_0017.HEIC")
 	p := domain.DefaultPolicies()
 	p.UntitledEvent, p.AlbumsRoot = "Untitled", "Albums"
 	local := p
@@ -455,6 +464,27 @@ func TestRenamedDirs(t *testing.T) {
 		{"while albums for personal is false a pair of the personal root follows a directory moved to another year, and the album stays where it is",
 			lib, prs(mine(holidays, holidaysDir)), lks(l1), found{1: l1later}, listed(l1later), twoWay, personal, local,
 			prs(unnamed(mine(holidays, laterDir))), nil, nil, nil},
+		// covers: R-LAYOUT-14
+		{"a year folder that the user renamed in the cloud takes the new title in iCloud while iCloud lacks a folder of that title, and the pairs of the albums in it, a nested part among them, follow with no move of an album",
+			dated, prs(mine(holidays, holidaysDir), mine(trip, tripDir), mine(beach, beachDir)), lks(l1, l3, l4), found{1: h23, 3: t23, 4: b23}, listed(h23, t23, b23, file(personal, "2024-old/IMG_0009.HEIC")), twoWay, personal, p,
+			prs(unnamed(mine(holidays, "2023/05-01 - Holidays")), unnamed(mine(beach, "2023/05-01 - Holidays/Beach")), unnamed(mine(trip, "2023/05-02 - Trip"))),
+			als(folder(1, 0, "2023")), nil, nil},
+		{"a folder of the albums root that the user renamed takes the new title in iCloud by one operation, and the pairs of the albums in it and in a folder inside it follow",
+			crafts, prs(mine(models, modelsDir), mine(kits, "Albums/Hobby/Lego/Kits")), lks(l16, l17), found{16: m2, 17: k2}, listed(m2, k2), twoWay, personal, p,
+			prs(unnamed(mine(kits, "Albums/Crafts/Lego/Kits")), unnamed(mine(models, "Albums/Crafts/Models"))), als(folder(hobby, 0, "Crafts")), nil, nil},
+		{"a folder whose directory the listing still holds, if only in the other root, keeps its title, and the album moved out of it goes into a folder that the run adds",
+			crafts, prs(mine(models, modelsDir)), lks(l16), found{16: m2}, listed(m2, file(shared, "Albums/Hobby/Lego/Kits/IMG_0017.HEIC")), twoWay, personal, p,
+			prs(unnamed(mine(models, "Albums/Crafts/Models"))), nil, als(filed(modelsAlbum, thematic, 19, "Crafts")), als(folder(19, 0, "Crafts"))},
+		{"a folder renamed in the cloud to the title of a folder that iCloud has keeps its title, and its album moves into that folder",
+			append(slices.Clone(crafts), folder(9, 0, "Crafts")), prs(mine(models, modelsDir)), lks(l16), found{16: m2}, listed(m2), twoWay, personal, p,
+			prs(unnamed(mine(models, "Albums/Crafts/Models"))), nil, als(filed(modelsAlbum, thematic, 9, "Crafts")), nil},
+		{"an album moved where its folders differ from its own in more than one title leaves its old folder as it is, though the directory of that folder is gone, and the run adds the new folders",
+			crafts, prs(mine(models, modelsDir)), lks(l16), found{16: sub}, listed(sub), twoWay, personal, p,
+			prs(unnamed(mine(models, "Albums/Crafts/Sub/Models"))), nil, als(filed(modelsAlbum, thematic, 20, "Crafts", "Sub")),
+			als(folder(19, 0, "Crafts"), folder(20, 19, "Sub", "Crafts"))},
+		{"a folder inside a folder that the user renamed in the cloud takes the new title in iCloud, and the pair of its album follows",
+			crafts, prs(mine(kits, "Albums/Hobby/Lego/Kits")), lks(l17), found{17: toys}, listed(toys), twoWay, personal, p,
+			prs(unnamed(mine(kits, "Albums/Hobby/Toys/Kits"))), als(folder(lego, hobby, "Toys", "Hobby")), nil, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

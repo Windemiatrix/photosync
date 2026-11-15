@@ -46,6 +46,8 @@ func TestOpCompare(t *testing.T) {
 	)
 	ordered := []domain.Op{
 		{Kind: domain.OpAlbumCreate, AlbumID: 12},
+		{Kind: domain.OpAlbumMove, AlbumID: 10, ParentID: 12},
+		{Kind: domain.OpAlbumRename, AlbumID: 9, Dst: "2023"},
 		{Kind: domain.OpCopy, Remote: "alpha", Root: personal, Src: trip + "IMG_0001.HEIC", DstRoot: personal, Dst: holidays + "IMG_0001.HEIC", Asset: 8},
 		{Kind: domain.OpCopy, Remote: "alpha", Root: personal, Src: trip + "IMG_0001.HEIC", DstRoot: personal, Dst: party + "IMG_0001.HEIC", Asset: 7},
 		{Kind: domain.OpDelete, Remote: "alpha", Root: personal, Src: holidays + "IMG_0002.HEIC", Asset: 8},

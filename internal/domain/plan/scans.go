@@ -15,9 +15,9 @@ import (
 // the decisions on its new links as JoinFresh gives them with DecideDerived
 // applied, Join and NewFiles are as JoinFresh gives them, Edited is as
 // ReadScan gives it, Settling holds the assets that the run must leave as
-// they are in the remote, a file of theirs there not having settled, and
-// Renamed and Refiled hold the albums that take the titles and the folders of
-// their directories there.
+// they are in the remote, a file of theirs there not having settled, Renamed
+// holds the albums and the folders of albums that take the titles of their
+// directories there, and Refiled the albums that take their folders.
 type RemoteScan struct {
 	Linked   []domain.LinkDecision
 	Join     map[domain.AssetID][]domain.AlbumChange
@@ -41,7 +41,8 @@ type RemoteScan struct {
 // p.EditedDirs, and MatchFresh matches its fresh with delta.Assets, new link
 // IDs running on from the highest link ID of state. For the personal root,
 // then the shared one, RenamedDirs runs with the albums of delta, each as the
-// last RenamedDirs gave it, and those added before, the pairs of state and
+// last RenamedDirs gave it or, inside a folder that it renamed, under the
+// new title of that folder, and those added before, the pairs of state and
 // those made before, the highest AlbumID of state, the links of state, the
 // files of ReadScan and the scan that it reads, and then PairDirs with the
 // albums and pairs as they are by then and that AlbumID; the dirs and files of
@@ -56,11 +57,11 @@ type RemoteScan struct {
 // those made, and DecideDerived with fresh and p.DerivedCopy. files is the
 // union of what ReadScan gives, added and made are what RenamedDirs and
 // PairDirs add and make, in the order of the calls, the Renamed and the
-// Refiled of a remote hold the albums that RenamedDirs renames and refiles
-// there, and notices hold, for each remote in turn, those of settling,
-// ReadScan, MatchFresh and DecideDerived. An entry under the directory
-// .photosync at the top of a root, which ReadScan leaves out, has settled
-// whatever its MTime. The inputs are not changed.
+// Refiled of a remote hold what RenamedDirs renames and refiles there, and
+// notices hold, for each remote in turn, those of settling, ReadScan,
+// MatchFresh and DecideDerived. An entry under the directory .photosync at
+// the top of a root, which ReadScan leaves out, has settled whatever its
+// MTime. The inputs are not changed.
 func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string][]domain.RemoteEntry, remotes []domain.RemoteSpec, p domain.Policies, now time.Time) (files map[domain.LinkID]domain.RemoteEntry, read map[string]RemoteScan, added []domain.Album, made []domain.AlbumPair, notices []domain.Notice) {
 	var lastLink domain.LinkID
 	byAsset := map[domain.AssetID][]domain.Link{}
@@ -149,7 +150,9 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 		for _, root := range []domain.LibraryKind{domain.LibraryPersonal, domain.LibraryShared} {
 			moved, titled, filed, folders := RenamedDirs(albums, pairs, lastAlbum, state.Links, fs, scan, r, root, p)
 			for _, a := range slices.Concat(titled, filed) {
-				albums[slices.IndexFunc(albums, func(b domain.Album) bool { return b.ID == a.ID })] = a
+				for _, b := range underFolder(albums, a) {
+					albums[slices.IndexFunc(albums, func(c domain.Album) bool { return c.ID == b.ID })] = b
+				}
 			}
 			made, pairs, renamed, refiled = append(made, moved...), append(pairs, moved...), append(renamed, titled...), append(refiled, filed...)
 			added, albums = append(added, folders...), append(albums, folders...)
