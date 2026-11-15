@@ -150,6 +150,23 @@ func TestSimulate(t *testing.T) {
 	holidaysMoved.Key, holidaysMoved.ParentID, holidaysMoved.ParentUUID, holidaysMoved.FolderTitles = `["2023"] "05/01 Holidays"`, folder2023.ID, "u-2023", []string{"2023"}
 	tripMoved.Kind, tripMoved.FolderTitles = domain.KindThematic, nil
 	catsMoved.Key, catsMoved.Kind, catsMoved.ParentID, catsMoved.ParentUUID, catsMoved.FolderTitles = `["2023"] "Cats"`, domain.KindEvent, folder2023.ID, "u-2023", []string{"2023"}
+	trips := domain.Album{
+		ID: 13, UUID: "u-trips", Key: `["2024"] "Trips"`, KeySource: domain.KeyPath, Kind: domain.KindFolder, Title: "Trips",
+		ParentID: year.ID, ParentUUID: year.UUID, FolderTitles: []string{"2024"},
+	}
+	catsInTrips := domain.Album{
+		ID: cats.ID, UUID: cats.UUID, Key: `["2024" "Trips"] "Cats"`, KeySource: domain.KeyPath, Kind: domain.KindEvent, Title: "Cats",
+		ParentID: trips.ID, ParentUUID: trips.UUID, FolderTitles: []string{"2024", "Trips"},
+	}
+	holidaysIn, tripIn, partyIn := byPath, byCloud, partyAlbum
+	holidaysIn.ParentID, holidaysIn.ParentUUID, tripIn.ParentID, tripIn.ParentUUID = year.ID, year.UUID, year.ID, year.UUID
+	partyIn.ParentID, partyIn.ParentUUID, partyIn.FolderTitles = folder2023.ID, folder2023.UUID, []string{"2023"}
+	archive, holidaysArchived, tripArchived, tripsArchived, catsArchived := year, holidaysIn, tripIn, trips, catsInTrips
+	archive.Key, archive.Title = `[] "Archive"`, "Archive"
+	holidaysArchived.Key, holidaysArchived.Kind, holidaysArchived.FolderTitles = `["Archive"] "05/01 Holidays"`, domain.KindThematic, []string{"Archive"}
+	tripArchived.Kind, tripArchived.FolderTitles = domain.KindThematic, []string{"Archive"}
+	tripsArchived.Key, tripsArchived.FolderTitles = `["Archive"] "Trips"`, []string{"Archive"}
+	catsArchived.Key, catsArchived.Kind, catsArchived.FolderTitles = `["Archive" "Trips"] "Cats"`, domain.KindThematic, []string{"Archive", "Trips"}
 	creating := func(id domain.AlbumID) domain.Op {
 		return domain.Op{Kind: domain.OpAlbumCreate, AlbumID: id, Rule: "R-LAYOUT-06"}
 	}
@@ -474,6 +491,28 @@ func TestSimulate(t *testing.T) {
 				{UUID: "u-trip", Title: "05/02 Trip"},
 			}},
 			scans{}},
+		{"a folder rename gives the folder its new title, and all inside it at any depth the new path in the state and the snapshot, with the kind of that path and its key unless the key is a cloud one, while an album of another folder stays",
+			domain.State{Albums: []domain.Album{catsInTrips, partyIn, trips, tripIn, holidaysIn, folder2023, year}},
+			domain.LibrarySnapshot{Albums: []domain.Album{
+				{UUID: "u-cats", Title: "Cats", ParentUUID: "u-trips", FolderTitles: []string{"2024", "Trips"}},
+				{UUID: "u-trips", Kind: domain.KindFolder, Title: "Trips", ParentUUID: "u-2024", FolderTitles: []string{"2024"}},
+				{UUID: "u-trip", Title: "05/02 Trip", ParentUUID: "u-2024", FolderTitles: []string{"2024"}},
+				{UUID: "u-hol", Title: "05/01 Holidays", ParentUUID: "u-2024", FolderTitles: []string{"2024"}},
+				{UUID: "u-party", Title: "05/04 Party", ParentUUID: "u-2023", FolderTitles: []string{"2023"}},
+				{UUID: "u-2024", Kind: domain.KindFolder, Title: "2024"}, {UUID: "u-2023", Kind: domain.KindFolder, Title: "2023"},
+			}}, nil,
+			domain.Plan{Ops: ops{{Kind: domain.OpAlbumRename, AlbumID: year.ID, Dst: "Archive", Rule: "R-LAYOUT-14"}}},
+			domain.SnapshotDelta{Albums: []domain.Album{year, folder2023, holidaysIn, tripIn, trips, partyIn, catsInTrips}},
+			domain.State{Albums: []domain.Album{archive, folder2023, catsArchived, holidaysArchived, tripArchived, partyIn, tripsArchived}},
+			domain.LibrarySnapshot{Albums: []domain.Album{
+				{UUID: "u-2023", Kind: domain.KindFolder, Title: "2023"}, {UUID: "u-2024", Kind: domain.KindFolder, Title: "Archive"},
+				{UUID: "u-cats", Title: "Cats", ParentUUID: "u-trips", FolderTitles: []string{"Archive", "Trips"}},
+				{UUID: "u-hol", Title: "05/01 Holidays", ParentUUID: "u-2024", FolderTitles: []string{"Archive"}},
+				{UUID: "u-party", Title: "05/04 Party", ParentUUID: "u-2023", FolderTitles: []string{"2023"}},
+				{UUID: "u-trip", Title: "05/02 Trip", ParentUUID: "u-2024", FolderTitles: []string{"Archive"}},
+				{UUID: "u-trips", Kind: domain.KindFolder, Title: "Trips", ParentUUID: "u-2024", FolderTitles: []string{"Archive"}},
+			}},
+			scans{}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -673,6 +712,7 @@ func TestSimulateConverges(t *testing.T) {
 	vacationFile, beachFile := file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, "2024/05-01 - Beach/IMG_0001.HEIC", 100, "a1", settled)
 	holidaysFolder := domain.RemoteEntry{Root: personal, Path: holidaysDir, IsDir: true, MTime: settled}
 	laterFile := file(personal, "2023/05-01 - Holidays/IMG_0001.HEIC", 100, "a1", settled)
+	yearFolder := domain.RemoteEntry{Root: personal, Path: "2024", IsDir: true, MTime: settled}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -770,10 +810,13 @@ func TestSimulateConverges(t *testing.T) {
 		{"a folder that the user renamed in the cloud while its album took another title in iCloud follows its files, and the album keeps the title of iCloud",
 			state(assets{a7}, pairs{alphaHolidays}, photo), inVacation(snapshot(a7)), scans{"alpha": {beachFile}}, specs{alpha}, "", p, nil, nil},
 		{"a folder that the user moved to another year in one remote moves its album into a year folder that iCloud adds, and the folder of another remote follows",
-			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {laterFile}, "beta": {e1}}, specs{alpha, beta}, "", p,
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {laterFile, yearFolder}, "beta": {e1}}, specs{alpha, beta}, "", p,
 			kinds{domain.OpAlbumCreate, domain.OpAlbumMove, domain.OpMove}, nil},
 		{"a folder that the user moved to another year while its album took another title in iCloud follows its files, and the album stays where iCloud has it",
 			state(assets{a7}, pairs{alphaHolidays}, photo), inVacation(snapshot(a7)), scans{"alpha": {laterFile}}, specs{alpha}, "", p, nil, nil},
+		{"a year folder that the user renamed in one remote takes the new title in iCloud with all its albums, and the folder of another remote follows",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {laterFile}, "beta": {e1}}, specs{alpha, beta}, "", p,
+			kinds{domain.OpAlbumRename, domain.OpMove}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

@@ -223,6 +223,18 @@ func TestReadScans(t *testing.T) {
 	later, party25 := file(personal, "2025/05-01 - Holidays/IMG_0001.HEIC", 100, "a1", settled), file(personal, "2025/05-04 - Party/IMG_0004.HEIC", 400, "d4", settled)
 	refiled := scanned(nil, nil, news{imported(party25, next+1)}, nil)
 	refiled.Refiled = []domain.Album{{ID: holidays, Kind: event, Title: "05/01 Holidays", ParentID: next, FolderTitles: []string{"2025"}}}
+	yearDir := domain.RemoteEntry{Root: personal, Path: "2024", IsDir: true, MTime: settled}
+	h23, n23 := file(personal, "2023/05-01 - Holidays/IMG_0001.HEIC", 100, "a1", settled), file(personal, "2023/05-02 - Trip/IMG_0009.HEIC", 900, "t9", settled)
+	renamedYear := scanned(nil, nil, news{imported(n23, trip)}, nil)
+	renamedYear.Renamed = []domain.Album{album(year, folder, "2023")}
+	inTrip, trip25 := file(personal, tripDir+"/IMG_0002.HEIC", 200, "b2", settled), file(personal, "2025/05-02 - Trip/IMG_0002.HEIC", 200, "b2", settled)
+	tripNamed := pair(trip, "beta", personal, tripDir, domain.OriginICloud)
+	tripNamed.NamedAfter = `["2024"] "05/02 Trip"`
+	movedTwo := domain.State{Albums: stateAlbums, Links: []domain.Link{link(1, 7, "alpha", e1, original, holidays), link(7, 8, "beta", inTrip, original, trip)},
+		AlbumPairs: []domain.AlbumPair{named(pair(holidays, "alpha", personal, holidaysDir, domain.OriginICloud)), tripNamed}}
+	filedHolidays, filedTrip := scanned(nil, nil, nil, nil), scanned(nil, nil, nil, nil)
+	filedHolidays.Refiled = []domain.Album{{ID: holidays, Kind: event, Title: "05/01 Holidays", ParentID: next, FolderTitles: []string{"2025"}}}
+	filedTrip.Refiled = []domain.Album{{ID: trip, Kind: event, Title: "05/02 Trip", ParentID: next, FolderTitles: []string{"2025"}}}
 
 	same := func(x, y result) bool {
 		sameScan := func(a, b plan.RemoteScan) bool {
@@ -373,11 +385,20 @@ func TestReadScans(t *testing.T) {
 			result{found{1: v1, 6: v1}, reads{"alpha": retitled, "beta": scanned(nil, nil, nil, nil)}, nil,
 				[]domain.AlbumPair{pair(holidays, "alpha", personal, vacationDir, domain.OriginICloud), pair(holidays, "beta", personal, vacationDir, domain.OriginICloud)}, nil}},
 		{"a directory that the user moved to another year takes its pair along in each remote, and the album moves into a year folder that the first remote by name adds, where a new album of that year goes too",
-			renamedAway, delta(a7), scans{"alpha": {party25, later}, "beta": {later}}, specs{beta, alpha}, p,
+			renamedAway, delta(a7), scans{"alpha": {party25, later, yearDir}, "beta": {later}}, specs{beta, alpha}, p,
 			result{found{1: later, 6: later}, reads{"alpha": refiled, "beta": scanned(nil, nil, nil, nil)},
 				[]domain.Album{album(next, folder, "2025"), {ID: next + 1, Kind: event, Title: "05/04 Party", ParentID: next, FolderTitles: []string{"2025"}}},
 				[]domain.AlbumPair{pair(holidays, "alpha", personal, "2025/05-01 - Holidays", domain.OriginICloud), pair(next+1, "alpha", personal, "2025/05-04 - Party", byRemote),
 					pair(holidays, "beta", personal, "2025/05-01 - Holidays", domain.OriginICloud)}, nil}},
+		{"a year folder that the user renamed takes the pairs along in each remote and the new title in iCloud from the first remote by name, and the directory of another album in it pairs with that album, where a new file goes",
+			renamedAway, delta(a7), scans{"alpha": {n23, h23}, "beta": {h23}}, specs{beta, alpha}, p,
+			result{found{1: h23, 6: h23}, reads{"alpha": renamedYear, "beta": scanned(nil, nil, nil, nil)}, nil,
+				[]domain.AlbumPair{pair(holidays, "alpha", personal, "2023/05-01 - Holidays", domain.OriginICloud), pair(trip, "alpha", personal, "2023/05-02 - Trip", byRemote),
+					pair(holidays, "beta", personal, "2023/05-01 - Holidays", domain.OriginICloud)}, nil}},
+		{"directories that the user moved to another year in two remotes, while the old year stays in the listing, move their albums into one year folder, which the first remote by name adds",
+			movedTwo, delta(a7, a8), scans{"alpha": {later, yearDir}, "beta": {trip25}}, specs{beta, alpha}, p,
+			result{found{1: later, 7: trip25}, reads{"alpha": filedHolidays, "beta": filedTrip}, []domain.Album{album(next, folder, "2025")},
+				[]domain.AlbumPair{pair(holidays, "alpha", personal, "2025/05-01 - Holidays", domain.OriginICloud), pair(trip, "beta", personal, "2025/05-02 - Trip", domain.OriginICloud)}, nil}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

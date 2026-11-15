@@ -41,23 +41,27 @@ import (
 // the key of the album is a cloud one, the path key of its new path in the
 // state. An OpAlbumRename gives its album the title Dst in the state and the
 // snapshot alike and, unless the key of the album is a cloud one, the path key
-// of its new title in the state. An OpImport adds to the snapshot an asset of
-// the personal library named by the base of Src, with the capture time,
-// offset, fraction of a second, width and height of the Meta of the entry at
-// Src as the operations before it leave it, in the album of AlbumID unless it
-// is zero, and with a resource for each of its links in their order, the first
-// the original, each named by the base of its path, with its size. The state
-// takes that asset with the hashes of the links in its resources, Root as its
-// TargetLibrary and in.RunID as the FirstSeenRun of the album: under the ID of
-// Asset, whose key before goes to History with Deleted false, or, for a zero
-// Asset, under the next ID above every asset ID of in.State, delta and the
-// imports before it, which its links with a zero AssetID take. An OpAlbumAdd
-// or an OpAlbumRemove puts its asset into its album, with in.RunID as
-// FirstSeenRun, or takes it out, in the state and the snapshot alike, unless
-// the asset is in the album already or not in it. An OpAssetDelete moves to
-// Recently Deleted, in the snapshot, each identity of its asset that History
-// holds with Deleted false, which turns true, and, unless under R-STATUS-08,
-// the asset itself, in the state too.
+// of its new title in the state; for a folder, each album and folder inside it
+// at any depth, by ParentID, takes Dst at that level of its FolderTitles in
+// both and, in the state, the kind that layout.Classify gives it and, unless
+// its key is a cloud one, the path key of its new path. An OpImport adds to
+// the snapshot an asset of the personal library named by the base of Src,
+// with the capture time, offset, fraction of a second, width and height of
+// the Meta of the entry at Src as the operations before it leave it, in the
+// album of AlbumID unless it is zero, and with a resource for each of its
+// links in their order, the first the original, each named by the base of its
+// path, with its size. The state takes that asset with the hashes of the
+// links in its resources, Root as its TargetLibrary and in.RunID as the
+// FirstSeenRun of the album: under the ID of Asset, whose key before goes to
+// History with Deleted false, or, for a zero Asset, under the next ID above
+// every asset ID of in.State, delta and the imports before it, which its
+// links with a zero AssetID take. An OpAlbumAdd or an OpAlbumRemove puts its
+// asset into its album, with in.RunID as FirstSeenRun, or takes it out, in
+// the state and the snapshot alike, unless the asset is in the album already
+// or not in it. An OpAssetDelete moves to Recently Deleted, in the snapshot,
+// each identity of its asset that History holds with Deleted false, which
+// turns true, and, unless under R-STATUS-08, the asset itself, in the state
+// too.
 //
 // The assets, albums and links of the state are in the order of ID, its
 // pairs of AlbumID, Remote and Root, its History of AssetID, then
@@ -148,13 +152,19 @@ func Simulate(in Input, p domain.Plan, delta domain.SnapshotDelta) (domain.State
 		case domain.OpAlbumRename:
 			a := albums[o.AlbumID]
 			a.Title = o.Dst
-			if a.KeySource == domain.KeyPath {
-				a.Key = pathKey(a)
-			}
-			albums[a.ID] = a
-			for j := range shown {
-				if shown[j].UUID == a.UUID {
-					shown[j].Title = o.Dst
+			for _, b := range underFolder(slices.SortedFunc(maps.Values(albums), func(x, y domain.Album) int { return cmp.Compare(x.ID, y.ID) }), a) {
+				if b.KeySource == domain.KeyPath {
+					b.Key = pathKey(b)
+				}
+				albums[b.ID] = b
+				for j := range shown {
+					switch {
+					case shown[j].UUID != b.UUID:
+					case b.ID == a.ID:
+						shown[j].Title = o.Dst
+					default:
+						shown[j].FolderTitles = b.FolderTitles
+					}
 				}
 			}
 		case domain.OpAlbumMove:

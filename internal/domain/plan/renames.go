@@ -88,10 +88,11 @@ func FollowPairs(links []domain.Link, moved []domain.AlbumPair, remote string, p
 // empty NamedAfter, in the order of their old DirPath, so that a nested part
 // reads under the new directory of its parent; renamed and refiled, in the
 // same order, the albums of those that take the title (R-LAYOUT-12) or the
-// folders (R-LAYOUT-13) that the new directory reads as; and added, the
-// folders that refiled albums need and albums lack, in the order of AlbumID.
-// albums and pairs are those of the run, last the highest AlbumID of the
-// state, links those of the state, files the entries of r where ReadScan
+// folders (R-LAYOUT-13) that the new directory reads as, renamed also the
+// folders of albums that take a new title instead (R-LAYOUT-14); and added,
+// the folders that refiled albums need and albums lack, in the order of
+// AlbumID. albums and pairs are those of the run, last the highest AlbumID of
+// the state, links those of the state, files the entries of r where ReadScan
 // finds them, and listing what ReadScan reads. A pair of an album that
 // albums hold outside Recently Deleted, with neither its directory nor a
 // path below it in listing, claims d when the files of the active links of
@@ -108,8 +109,14 @@ func FollowPairs(links []domain.Link, moved []domain.AlbumPair, remote string, p
 // another depth, and else takes the folders read, the kind that
 // layout.Classify gives it and, as its parent, the folder of albums at that
 // path outside Recently Deleted, the lowest AlbumID first, or one added for
-// each level missing, with an AlbumID above last and those of albums. A pair
-// of a folder moves nothing. The inputs are not changed.
+// each level missing, with an AlbumID above last and those of albums. A level
+// missing where the folders read differ from those of the album at it alone
+// is not added when the folder at the old path to it, found the same way, has
+// neither its directory, as layout.DirFor gives it, nor a path below it in
+// listing, in any root: that folder takes the new title, and so does that
+// level of the folders of all inside it, at any depth, for the pairs that
+// follow. An album is refiled only when its parent changes, and a pair of a
+// folder moves nothing. The inputs are not changed.
 func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.AlbumID, links []domain.Link, files map[domain.LinkID]domain.RemoteEntry, listing []domain.RemoteEntry, r domain.RemoteSpec, root domain.LibraryKind, p domain.Policies) (moved []domain.AlbumPair, renamed, refiled, added []domain.Album) {
 	own := slices.DeleteFunc(slices.Clone(pairs), func(x domain.AlbumPair) bool { return x.Remote != r.Name || x.Root != root })
 	slices.SortFunc(own, func(x, y domain.AlbumPair) int { return cmp.Compare(x.DirPath, y.DirPath) })
@@ -126,6 +133,14 @@ func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Al
 	slices.SortFunc(known, func(x, y domain.Album) int { return cmp.Compare(x.ID, y.ID) })
 	for _, a := range known {
 		last = max(last, a.ID)
+	}
+	folder := func(titles []string, title string) int {
+		return slices.IndexFunc(known, func(b domain.Album) bool {
+			return !b.InTrash && b.Kind == domain.KindFolder && b.Title == title && slices.Equal(b.FolderTitles, titles)
+		})
+	}
+	gone := func(dir string) bool {
+		return !slices.ContainsFunc(listing, func(e domain.RemoteEntry) bool { return strings.HasPrefix(e.Path+"/", dir+"/") })
 	}
 	adds := r.Mode != domain.ModeUploadOnly && (root != domain.LibraryPersonal || p.AlbumsForPersonal)
 	for _, x := range own {
@@ -157,12 +172,21 @@ func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Al
 			renamed = append(renamed, a)
 		case slices.Equal(read.FolderTitles, a.FolderTitles):
 		default:
+			from := a.FolderTitles
 			a.FolderTitles, a.ParentID = read.FolderTitles, 0
 			for j, title := range read.FolderTitles {
 				f := domain.Album{Kind: domain.KindFolder, Title: title, ParentID: a.ParentID, FolderTitles: slices.Clone(read.FolderTitles[:j])}
-				if k := slices.IndexFunc(known, func(b domain.Album) bool {
-					return !b.InTrash && b.Kind == domain.KindFolder && b.Title == title && slices.Equal(b.FolderTitles, f.FolderTitles)
-				}); k >= 0 {
+				k := folder(f.FolderTitles, title)
+				if k < 0 && j < len(from) && slices.Equal(slices.Concat(from[:j], []string{title}, from[j+1:]), read.FolderTitles) {
+					if old := folder(from[:j], from[j]); old >= 0 && old < len(albums) && gone(layout.DirFor(known[old], p)) {
+						known[old].Title, k = title, old
+						for _, b := range underFolder(known, known[old]) {
+							known[slices.IndexFunc(known, func(c domain.Album) bool { return c.ID == b.ID })] = b
+						}
+						renamed = append(renamed, known[old])
+					}
+				}
+				if k >= 0 {
 					a.ParentID = known[k].ID
 					continue
 				}
@@ -171,10 +195,30 @@ func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Al
 				known, added = append(known, f), append(added, f)
 			}
 			a.Kind = layout.Classify(a)
-			refiled = append(refiled, a)
+			if a.ParentID != albums[i].ParentID {
+				refiled = append(refiled, a)
+			}
 		}
 		x.DirPath, x.NamedAfter = at[0], ""
 		moved = append(moved, x)
 	}
 	return moved, renamed, refiled, added
+}
+
+// Albums and folders may share a path, so only ParentID tells what lies in
+// a folder. f comes first, so that one loop puts any album in its place.
+func underFolder(albums []domain.Album, f domain.Album) []domain.Album {
+	out, in := []domain.Album{f}, map[domain.AlbumID]bool{f.ID: true}
+	for grew := true; grew; {
+		grew = false
+		for _, a := range albums {
+			if in[a.ParentID] && !in[a.ID] && len(a.FolderTitles) > len(f.FolderTitles) {
+				a.FolderTitles = slices.Clone(a.FolderTitles)
+				a.FolderTitles[len(f.FolderTitles)], in[a.ID], grew = f.Title, true, true
+				a.Kind = layout.Classify(a)
+				out = append(out, a)
+			}
+		}
+	}
+	return out
 }

@@ -173,6 +173,10 @@ func TestRunOps(t *testing.T) {
 		{"an album whose directory the user moved to another folder moves there in iCloud, after the folder that the run adds for it",
 			reads{"alpha": {Refiled: []domain.Album{event(10, 21, "2025", "05/01 Holidays")}}}, added[:1], albums, specs{alpha}, ignore,
 			[]domain.Op{create(21), {Kind: domain.OpAlbumMove, AlbumID: 10, ParentID: 21, Rule: "R-LAYOUT-13"}}},
+		// covers: R-LAYOUT-14
+		{"a folder whose directory the user renamed takes the new title in iCloud under the rule of folders",
+			reads{"alpha": {Renamed: []domain.Album{{ID: 1, Kind: domain.KindFolder, Title: "2023"}}}}, nil, albums, specs{alpha}, ignore,
+			[]domain.Op{{Kind: domain.OpAlbumRename, AlbumID: 1, Dst: "2023", Rule: "R-LAYOUT-14"}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
