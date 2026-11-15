@@ -302,6 +302,14 @@ func TestBuild(t *testing.T) {
 	link9.AssetID = 9
 	moved9 := link9
 	moved9.Path = vacationDir + "/IMG_0009.HEIC"
+	vacationFile := file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled)
+	holidaysFolder := domain.RemoteEntry{Root: personal, Path: holidaysDir, IsDir: true, MTime: settled}
+	renaming := domain.Op{Kind: domain.OpAlbumRename, AlbumID: holidays, Dst: "05/01 Vacation", Rule: "R-LAYOUT-12"}
+	new9, new10 := asset(9, "IMG_0009.HEIC", 900, may1, "run-2", holidays), asset(10, "IMG_0010.HEIC", 1000, may2, "run-2", trip)
+	new9.Library, new9.TargetLibrary, new10.Key.CloudAssetGUID = shared, shared, ""
+	sharedHolidays := domain.AlbumPair{AlbumID: holidays, Remote: "alpha", Root: shared, DirPath: holidaysDir, CreatedBy: domain.OriginRemote}
+	sharedPut := put(9, holidaysDir+"/IMG_0009.HEIC", original, holidays, 900)
+	sharedPut.DstRoot, sharedPut.Links[0].Root = shared, shared
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -423,7 +431,7 @@ func TestBuild(t *testing.T) {
 			delta(), nil},
 		{"a file that the user moved into a new folder beside a new file: the album comes to iCloud, then the import and the asset join it",
 			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7),
-			scans{"alpha": {e4, file(personal, partyDir+"/IMG_0001.HEIC", 100, "a1", settled)}}, specs{alpha}, "", p, event,
+			scans{"alpha": {e4, file(personal, partyDir+"/IMG_0001.HEIC", 100, "a1", settled), holidaysFolder}}, specs{alpha}, "", p, event,
 			domain.Plan{
 				Ops: ops{
 					{Kind: domain.OpAlbumCreate, AlbumID: party, Rule: "R-LAYOUT-06"},
@@ -782,6 +790,25 @@ func TestBuild(t *testing.T) {
 				Pairs: pairs{{AlbumID: holidays, Remote: "alpha", Root: shared, DirPath: holidaysDir, CreatedBy: domain.OriginRemote}, vacationPair},
 			},
 			domain.SnapshotDelta{Assets: assets{a7, s9}, Albums: vacationAlbums}, nil},
+		{"a folder of an album that the user renamed in the cloud renames the album in iCloud and takes its pair along, and a new asset of the album goes up there, while new assets of another album and of the shared root go to the folders of their pairs",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip, sharedHolidays}, photo), snapshot(a7, h8, new9, new10), scans{"alpha": {vacationFile}}, specs{alpha}, "", p, event,
+			domain.Plan{
+				Ops: ops{
+					renaming, sharedPut, put(8, vacationDir+"/IMG_0002.HEIC", original, holidays, 200),
+					put(10, tripDir+"/IMG_0010.HEIC", original, trip, 1000),
+				},
+				Pairs: pairs{vacationPair},
+				Links: []domain.Link{took(photo, vacationFile, holidays)},
+			},
+			delta(a7, h8, new9, new10), nil},
+		{"a folder that the user renamed in one remote renames the album, and the folder of another remote follows the new title in the same run",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {vacationFile}, "beta": {e1}}, specs{alpha, beta}, "", p, event,
+			domain.Plan{
+				Ops:   ops{renaming, moved(other, personal, vacationDir+"/IMG_0001.HEIC", holidays, "R-LAYOUT-11")},
+				Pairs: pairs{vacationPair, pair(holidays, "beta", personal, vacationDir, domain.OriginICloud)},
+				Links: []domain.Link{took(photo, vacationFile, holidays)},
+			},
+			delta(a7), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

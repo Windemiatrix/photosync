@@ -9,7 +9,8 @@ type OpKind string
 // copy and move one there, OpQuarantine moves one to the quarantine of its
 // root, and OpPut uploads the file of an asset with the role of its link.
 // OpAlbumCreate adds to iCloud an album or a folder of albums that the run
-// adds, and OpImport makes a new asset of iCloud from a file of the cloud.
+// adds, OpAlbumRename gives an album of iCloud a new title, and OpImport
+// makes a new asset of iCloud from a file of the cloud.
 // OpAlbumAdd and OpAlbumRemove put an asset into an album of iCloud and take
 // it out of one, and OpAssetDelete moves an asset to Recently Deleted along
 // with the earlier identities that State.History holds for it with Deleted
@@ -22,6 +23,7 @@ const (
 	OpQuarantine  OpKind = "quarantine"
 	OpPut         OpKind = "put"
 	OpAlbumCreate OpKind = "album_create"
+	OpAlbumRename OpKind = "album_rename"
 	OpImport      OpKind = "import"
 	OpAlbumAdd    OpKind = "album_add"
 	OpAlbumRemove OpKind = "album_remove"
@@ -31,12 +33,12 @@ const (
 
 // Phase is the phase of a run that runs the operations of kind k. A run
 // takes its phases in increasing order and starts one only once the one
-// before it is done: the files of the cloud change and the albums that the
-// run adds come to iCloud in phase 1, new files go up in phase 2, new assets
-// come in from the cloud in phase 3, into albums that are there by then, the
-// albums of assets change in phase 4, the assets that iCloud loses go in
-// phase 5 and the files whose time in the quarantine is over leave the cloud
-// in phase 6.
+// before it is done: the files of the cloud change, the albums that the run
+// adds come to iCloud and albums take new titles in phase 1, new files go up
+// in phase 2, new assets come in from the cloud in phase 3, into albums that
+// are there by then, the albums of assets change in phase 4, the assets that
+// iCloud loses go in phase 5 and the files whose time in the quarantine is
+// over leave the cloud in phase 6.
 func (k OpKind) Phase() int {
 	switch k {
 	case OpPut:
@@ -59,13 +61,14 @@ func (k OpKind) Phase() int {
 // removes the file at Src under its Root and writes the one at Dst under
 // DstRoot, and an import reads the file at Src under Root; a put has no Root
 // and Src, a delete, an expire and an import no DstRoot and Dst, and an
-// album_create none of the four, and those fields stay empty. Asset is the
-// asset whose file, album or self the operation changes, zero for none, as
-// for an import of a new asset; an import with an Asset replaces that asset
-// with the one that it makes, which takes its ID in the state, whose History
-// gains the old key with Deleted false. AlbumID is the album that the asset
-// joins or leaves, or that an album_create adds. Rule is the ID of the rule
-// in Rules that chose the operation, and Irreversible reports that undo
+// album_create none of the four, and an album_rename only Dst, the new title
+// of its album, and those fields stay empty. Asset is the asset whose file,
+// album or self the operation changes, zero for none, as for an import of a
+// new asset; an import with an Asset replaces that asset with the one that it
+// makes, which takes its ID in the state, whose History gains the old key
+// with Deleted false. AlbumID is the album that the asset joins or leaves, or
+// that an album_create adds or an album_rename renames. Rule is the ID of the
+// rule in Rules that chose the operation, and Irreversible reports that undo
 // cannot bring back what the operation removes. Links are the links that the
 // operation changes, each as the state keeps it once the operation is done,
 // in the order of ID, and those of an import with the link of its main file

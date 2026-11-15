@@ -12,7 +12,7 @@ import (
 )
 
 // The digest of a small plan is the SHA-256 of its JSON as written out here.
-// Each row then changes a plan of nine operations on three assets, two albums
+// Each row then changes a plan of ten operations on three assets, two albums
 // of the snapshot with one title and an album that the run adds, in one way:
 // a run must take the plan for the same when only the IDs that it gives
 // assets, albums and links, a cloud GUID, the times of files, the order of the
@@ -115,6 +115,7 @@ func TestDigest(t *testing.T) {
 				},
 				join(7, 10), join(7, 13), join(8, 10),
 				{Kind: domain.OpAssetDelete, Asset: 9, Rule: "R-LINK-09"},
+				{Kind: domain.OpAlbumRename, AlbumID: 13, Dst: "05/01 Vacation", Rule: "R-LAYOUT-12"},
 			},
 			Albums: []domain.Album{{ID: 23, Kind: domain.KindEvent, Title: "05/02 Trip", FolderTitles: []string{"2024"}}},
 			Pairs:  []domain.AlbumPair{{AlbumID: 23, Remote: "alpha", Root: personal, DirPath: "2024/05-02 - Trip", CreatedBy: domain.OriginICloud}},
@@ -236,6 +237,7 @@ func TestDigest(t *testing.T) {
 			})
 		}},
 		{"another title of the album that the run adds", false, func(p *domain.Plan, _ *domain.SnapshotDelta) { p.Albums[0].Title = "05/03 Trip" }},
+		{"another title of a renamed album", false, func(p *domain.Plan, _ *domain.SnapshotDelta) { p.Ops[9].Dst = "05/01 Beach" }},
 		{"one operation less", false, func(p *domain.Plan, _ *domain.SnapshotDelta) { p.Ops = slices.Delete(p.Ops, 6, 7) }},
 	} {
 		p, d := world()

@@ -31,27 +31,29 @@ import (
 //
 // In iCloud, the album or the asset that an operation makes takes the UUID
 // "sim-", in.RunID, "-" and i, the index of the operation in p.Ops, and no
-// cloud GUID. An OpAlbumCreate adds the album of p.Albums with its AlbumID
-// to the state with that UUID, the UUID of the album of its ParentID as
+// cloud GUID. An OpAlbumCreate adds the album of p.Albums with its AlbumID to
+// the state with that UUID, the UUID of the album of its ParentID as
 // ParentUUID and the key that layout.Key gives it, and to the snapshot
 // without ID, ParentID and key, and without Kind unless it is a folder. An
-// OpImport adds to the snapshot an asset of the personal library named by
-// the base of Src, with the capture time, offset, fraction of a second,
-// width and height of the Meta of the entry at Src as the operations before
-// it leave it, in the album of AlbumID unless it is zero, and with a
-// resource for each of its links in their order, the first the original,
-// each named by the base of its path, with its size. The state takes that
-// asset with the hashes of the links in its resources, Root as its
+// OpAlbumRename gives its album the title Dst in the state and the snapshot
+// alike and, unless the key of the album is a cloud one, the path key of its
+// new title in the state. An OpImport adds to the snapshot an asset of the
+// personal library named by the base of Src, with the capture time, offset,
+// fraction of a second, width and height of the Meta of the entry at Src as
+// the operations before it leave it, in the album of AlbumID unless it is
+// zero, and with a resource for each of its links in their order, the first
+// the original, each named by the base of its path, with its size. The state
+// takes that asset with the hashes of the links in its resources, Root as its
 // TargetLibrary and in.RunID as the FirstSeenRun of the album: under the ID
 // of Asset, whose key before goes to History with Deleted false, or, for a
 // zero Asset, under the next ID above every asset ID of in.State, delta and
 // the imports before it, which its links with a zero AssetID take. An
-// OpAlbumAdd or an OpAlbumRemove puts its asset into its album, with
-// in.RunID as FirstSeenRun, or takes it out, in the state and the snapshot
-// alike, unless the asset is in the album already or not in it. An
-// OpAssetDelete moves to Recently Deleted, in the snapshot, each identity of
-// its asset that History holds with Deleted false, which turns true, and,
-// unless under R-STATUS-08, the asset itself, in the state too.
+// OpAlbumAdd or an OpAlbumRemove puts its asset into its album, with in.RunID
+// as FirstSeenRun, or takes it out, in the state and the snapshot alike,
+// unless the asset is in the album already or not in it. An OpAssetDelete
+// moves to Recently Deleted, in the snapshot, each identity of its asset that
+// History holds with Deleted false, which turns true, and, unless under
+// R-STATUS-08, the asset itself, in the state too.
 //
 // The assets, albums and links of the state are in the order of ID, its
 // pairs of AlbumID, Remote and Root, its History of AssetID, then
@@ -139,6 +141,18 @@ func Simulate(in Input, p domain.Plan, delta domain.SnapshotDelta) (domain.State
 				kind = ""
 			}
 			shown = append(shown, domain.Album{UUID: a.UUID, Kind: kind, Title: a.Title, ParentUUID: a.ParentUUID, FolderTitles: a.FolderTitles})
+		case domain.OpAlbumRename:
+			a := albums[o.AlbumID]
+			a.Title = o.Dst
+			if a.KeySource == domain.KeyPath {
+				a.Key = pathKey(a)
+			}
+			albums[a.ID] = a
+			for j := range shown {
+				if shown[j].UUID == a.UUID {
+					shown[j].Title = o.Dst
+				}
+			}
 		case domain.OpImport:
 			if before, ok := assets[o.Asset]; ok {
 				history = append(history, domain.AssetHistory{AssetID: o.Asset, Key: before.Key})
