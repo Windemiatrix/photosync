@@ -15,9 +15,9 @@ import (
 
 // Each row is the state, the snapshot reconciled with it and the scans of a
 // run. The expected files, links, albums, pairs, new files, edits, settling
-// assets and notices are written from the rules on settling, matching, album
-// pairs, derived copies and modes, not from the code, and must not depend on
-// the order of the input.
+// assets, renamed albums and notices are written from the rules on settling,
+// matching, album pairs, derived copies and modes, not from the code, and
+// must not depend on the order of the input.
 func TestReadScans(t *testing.T) {
 	t.Parallel()
 	const (
@@ -37,6 +37,7 @@ func TestReadScans(t *testing.T) {
 		picnicDir, copiesDir = "2024/05-07 - Picnic", "2024/05-08 - Copies"
 		movedDir, zooDir     = "2024/05-09 - Moved", "2024/05-10 - Zoo"
 		photosDir, picsDir   = "2024/Trip photos", "2024/Trip pics"
+		vacationDir          = "2024/05-01 - Vacation"
 	)
 	type (
 		decided = []domain.LinkDecision
@@ -210,11 +211,21 @@ func TestReadScans(t *testing.T) {
 		pair(holidays, "alpha", personal, movedDir, domain.OriginICloud), pair(holidays, "beta", personal, holidaysDir, domain.OriginICloud),
 		pair(holidays, "alpha", shared, holidaysDir, domain.OriginICloud),
 	}}
+	v1 := file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled)
+	named := func(x domain.AlbumPair) domain.AlbumPair {
+		x.NamedAfter = `["2024"] "05/01 Holidays"`
+		return x
+	}
+	renamedAway := domain.State{Albums: stateAlbums, Links: []domain.Link{link(1, 7, "alpha", e1, original, holidays), link(6, 7, "beta", e1, original, holidays)},
+		AlbumPairs: []domain.AlbumPair{named(pair(holidays, "alpha", personal, holidaysDir, domain.OriginICloud)), named(pair(holidays, "beta", personal, holidaysDir, domain.OriginICloud))}}
+	retitled := scanned(nil, nil, nil, nil)
+	retitled.Renamed = []domain.Album{album(holidays, event, "05/01 Vacation")}
 
 	same := func(x, y result) bool {
 		sameScan := func(a, b plan.RemoteScan) bool {
 			return slices.Equal(a.Linked, b.Linked) && maps.EqualFunc(a.Join, b.Join, slices.Equal[[]domain.AlbumChange]) &&
-				reflect.DeepEqual(a.NewFiles, b.NewFiles) && slices.Equal(a.Edited, b.Edited) && maps.Equal(a.Settling, b.Settling)
+				reflect.DeepEqual(a.NewFiles, b.NewFiles) && slices.Equal(a.Edited, b.Edited) && maps.Equal(a.Settling, b.Settling) &&
+				fmt.Sprintf("%+v", a.Renamed) == fmt.Sprintf("%+v", b.Renamed)
 		}
 		sameNotice := func(a, b domain.Notice) bool { return a.Code == b.Code && slices.Equal(a.Params, b.Params) }
 		return maps.Equal(x.files, y.files) && maps.EqualFunc(x.read, y.read, sameScan) &&
@@ -252,12 +263,15 @@ func TestReadScans(t *testing.T) {
 			for _, id := range slices.Sorted(maps.Keys(s.Settling)) {
 				out = append(out, fmt.Sprintf("%s settling %d", name, id))
 			}
+			for _, a := range s.Renamed {
+				out = append(out, fmt.Sprintf("%s renamed %+v", name, a))
+			}
 		}
 		for _, a := range x.added {
 			out = append(out, fmt.Sprintf("album %+v", a))
 		}
 		for _, pr := range x.made {
-			out = append(out, fmt.Sprintf("pair %d %s %s:%s %s", pr.AlbumID, pr.Remote, pr.Root, pr.DirPath, pr.CreatedBy))
+			out = append(out, fmt.Sprintf("pair %d %s %s:%s %s named %s", pr.AlbumID, pr.Remote, pr.Root, pr.DirPath, pr.CreatedBy, pr.NamedAfter))
 		}
 		for _, n := range x.notices {
 			out = append(out, fmt.Sprintf("notice %s %q", n.Code, n.Params))
@@ -348,6 +362,10 @@ func TestReadScans(t *testing.T) {
 			state(link(1, 7, "alpha", e1, original, holidays), link(2, 8, "alpha", e2, original, 0)), delta(both, a8), scans{"alpha": {e2, e1}}, specs{alpha}, p,
 			result{found{1: e1, 2: e2}, reads{"alpha": scanned(nil, nil, nil, nil)},
 				[]domain.Album{album(next, event, "Trip photos")}, []domain.AlbumPair{pair(next, "alpha", personal, photosDir, byRemote)}, nil}},
+		{"a directory that the user renamed takes its pair along in each remote, and the album takes its new title from the first remote by name",
+			renamedAway, delta(a7), scans{"alpha": {v1}, "beta": {v1}}, specs{beta, alpha}, p,
+			result{found{1: v1, 6: v1}, reads{"alpha": retitled, "beta": scanned(nil, nil, nil, nil)}, nil,
+				[]domain.AlbumPair{pair(holidays, "alpha", personal, vacationDir, domain.OriginICloud), pair(holidays, "beta", personal, vacationDir, domain.OriginICloud)}, nil}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

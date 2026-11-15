@@ -128,6 +128,18 @@ func TestSimulate(t *testing.T) {
 	betaHolidays, alphaTrip := pair(holidays, "beta", personal, holidaysDir), pair(trip, "alpha", personal, tripDir)
 	year := domain.Album{ID: 1, UUID: "u-2024", Key: `[] "2024"`, KeySource: domain.KeyPath, Kind: domain.KindFolder, Title: "2024"}
 	cats := domain.Album{ID: 5, UUID: "u-cats", Kind: domain.KindThematic, Title: "Cats"}
+	renaming := func(id domain.AlbumID, title string) domain.Op {
+		return domain.Op{Kind: domain.OpAlbumRename, AlbumID: id, Dst: title, Rule: "R-LAYOUT-12"}
+	}
+	byPath := domain.Album{
+		ID: holidays, UUID: "u-hol", Key: `["2024"] "05/01 Holidays"`, KeySource: domain.KeyPath, Kind: domain.KindEvent, Title: "05/01 Holidays",
+		FolderTitles: []string{"2024"},
+	}
+	byCloud := domain.Album{
+		ID: trip, UUID: "u-trip", Key: "guid-11", KeySource: domain.KeyCloudGUID, Kind: domain.KindEvent, Title: "05/02 Trip", FolderTitles: []string{"2024"},
+	}
+	byPathAfter, byCloudAfter := byPath, byCloud
+	byPathAfter.Key, byPathAfter.Title, byCloudAfter.Title = `["2024"] "05/01 Vacation"`, "05/01 Vacation", "05/02 Trip by the sea"
 	creating := func(id domain.AlbumID) domain.Op {
 		return domain.Op{Kind: domain.OpAlbumCreate, AlbumID: id, Rule: "R-LAYOUT-06"}
 	}
@@ -427,6 +439,14 @@ func TestSimulate(t *testing.T) {
 			domain.SnapshotDelta{},
 			domain.State{AlbumPairs: pairs{pair(holidays, "alpha", personal, "2024/05-01 - Vacation"), betaHolidays, alphaTrip}},
 			domain.LibrarySnapshot{}, scans{}},
+		{"an album rename gives its album the new title in the state and the snapshot, and the key of its new path unless its key is a cloud one",
+			domain.State{Albums: []domain.Album{byPath, byCloud}},
+			domain.LibrarySnapshot{Albums: []domain.Album{{UUID: "u-trip", Title: "05/02 Trip"}, {UUID: "u-hol", Title: "05/01 Holidays"}}}, nil,
+			domain.Plan{Ops: ops{renaming(holidays, "05/01 Vacation"), renaming(trip, "05/02 Trip by the sea")}},
+			domain.SnapshotDelta{Albums: []domain.Album{byPath, byCloud}},
+			domain.State{Albums: []domain.Album{byPathAfter, byCloudAfter}},
+			domain.LibrarySnapshot{Albums: []domain.Album{{UUID: "u-hol", Title: "05/01 Vacation"}, {UUID: "u-trip", Title: "05/02 Trip by the sea"}}},
+			scans{}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -623,6 +643,8 @@ func TestSimulateConverges(t *testing.T) {
 	stray4 := file(personal, holidaysDir+"/IMG_0004.HEIC", 400, "d4", settled)
 	vacationAlbums, atVacation, vacationPair := slices.Clone(albums), photo, pair(holidays, "alpha", personal, vacationDir)
 	vacationAlbums[2], atVacation.Path = inYear(holidays, "u-hol", "05/01 Vacation", may1.Add(-2*time.Hour)), vacationDir+"/IMG_0001.HEIC"
+	vacationFile, beachFile := file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, "2024/05-01 - Beach/IMG_0001.HEIC", 100, "a1", settled)
+	holidaysFolder := domain.RemoteEntry{Root: personal, Path: holidaysDir, IsDir: true, MTime: settled}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -684,7 +706,7 @@ func TestSimulateConverges(t *testing.T) {
 		{"matching links a new asset with a new file of a paired folder, and the asset joins its album",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, m8), scans{"alpha": {e2, e1}}, specs{alpha}, "", p, kinds{domain.OpAlbumAdd}, nil},
 		{"a file that the user moved into a new folder beside a new file: the album comes to iCloud, then the import and the asset join it",
-			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7), scans{"alpha": {e4, partyFile}}, specs{alpha}, "", p,
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7), scans{"alpha": {e4, partyFile, holidaysFolder}}, specs{alpha}, "", p,
 			kinds{domain.OpAlbumCreate, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumRemove}, nil},
 		{"the first placement takes a new asset into the only event of its day, where two new assets go up",
 			state(nil, pairs{alphaHolidays}), snapshot(n2, n1), nil, specs{alpha}, "", p, kinds{domain.OpPut, domain.OpPut, domain.OpAlbumAdd}, nil},
@@ -714,6 +736,11 @@ func TestSimulateConverges(t *testing.T) {
 			domain.State{Assets: assets{a7}, Albums: vacationAlbums, AlbumPairs: pairs{vacationPair, betaHolidays}, Links: []domain.Link{atVacation, other}},
 			inVacation(snapshot(a7)), scans{"alpha": {file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled)}, "beta": {e1}}, specs{alpha, beta}, "", p,
 			kinds{domain.OpMove}, nil},
+		{"a folder that the user renamed in one remote renames its album in iCloud, and the folder of another remote follows",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {vacationFile}, "beta": {e1}}, specs{alpha, beta}, "", p,
+			kinds{domain.OpAlbumRename, domain.OpMove}, nil},
+		{"a folder that the user renamed in the cloud while its album took another title in iCloud follows its files, and the album keeps the title of iCloud",
+			state(assets{a7}, pairs{alphaHolidays}, photo), inVacation(snapshot(a7)), scans{"alpha": {beachFile}}, specs{alpha}, "", p, nil, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

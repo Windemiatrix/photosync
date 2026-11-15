@@ -13,22 +13,23 @@ import (
 // them, albums are the albums of the run, those of the snapshot reconciled
 // with the state and added, and names give, by the name of each of remotes,
 // its names in the run, which the operations take. Each album or folder of
-// added comes to iCloud by an OpAlbumCreate under R-LAYOUT-06. Each NewFile
-// with ActionImport, the remotes taken in the order of their names, gives an
-// OpImport of its Main from where it lies under the rule of its decision,
-// into its AlbumID while albums hold that album outside Recently Deleted and
-// else into none, but for one whose Main has, by the hash of kind
-// Capabilities.ContentHash of its remote, the content of the Main of one
-// imported before, an empty hash matching none: it waits for a later run.
-// The links of an import are new and of no asset yet: the Main with the role
-// of the file, then the Live Photo video and the RAW file, if any, each where
-// its entry lies, with the size, hashes, ETag and MTime of the entry, the
-// level imported and the album of the import. When p.EditedFiles is
-// quarantine, each of the Edited of a remote where ModeAllows
-// ActionQuarantineFile moves without a link under R-STATUS-10, in the order
-// of Root, then Path, to the path that Names.Quarantine gives it on day now.
-// The operations are in the order of domain.Op.Compare, and the inputs but
-// names are not changed.
+// added comes to iCloud by an OpAlbumCreate under R-LAYOUT-06, and each album
+// of the Renamed of a remote takes its title by an OpAlbumRename with the
+// title as Dst under R-LAYOUT-12. Each NewFile with ActionImport, the remotes
+// taken in the order of their names, gives an OpImport of its Main from where
+// it lies under the rule of its decision, into its AlbumID while albums hold
+// that album outside Recently Deleted and else into none, but for one whose
+// Main has, by the hash of kind Capabilities.ContentHash of its remote, the
+// content of the Main of one imported before, an empty hash matching none: it
+// waits for a later run. The links of an import are new and of no asset yet:
+// the Main with the role of the file, then the Live Photo video and the RAW
+// file, if any, each where its entry lies, with the size, hashes, ETag and
+// MTime of the entry, the level imported and the album of the import. When
+// p.EditedFiles is quarantine, each of the Edited of a remote where
+// ModeAllows ActionQuarantineFile moves without a link under R-STATUS-10, in
+// the order of Root, then Path, to the path that Names.Quarantine gives it on
+// day now. The operations are in the order of domain.Op.Compare, and the
+// inputs but names are not changed.
 func RunOps(read map[string]RemoteScan, added, albums []domain.Album, names map[string]*Names, remotes []domain.RemoteSpec, p domain.Policies, now time.Time) []domain.Op {
 	var ops []domain.Op
 	for _, a := range added {
@@ -36,6 +37,9 @@ func RunOps(read map[string]RemoteScan, added, albums []domain.Album, names map[
 	}
 	seen := map[string]bool{}
 	for _, r := range slices.SortedFunc(slices.Values(remotes), func(x, y domain.RemoteSpec) int { return cmp.Compare(x.Name, y.Name) }) {
+		for _, a := range read[r.Name].Renamed {
+			ops = append(ops, domain.Op{Kind: domain.OpAlbumRename, AlbumID: a.ID, Dst: a.Title, Rule: "R-LAYOUT-12"})
+		}
 		for _, f := range read[r.Name].NewFiles {
 			k := moveKey(f.File.Main.MD5, f.File.Main.SHA256, r.Capabilities.ContentHash)
 			if f.Decision.Action != domain.ActionImport || k != "" && seen[k] {

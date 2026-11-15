@@ -165,6 +165,10 @@ func TestRunOps(t *testing.T) {
 			reads{"alpha": {Edited: entries{xa}}, "beta": {Edited: entries{xa}}, "gamma": {Edited: entries{xa}}},
 			nil, albums, specs{gammaDown, betaUp, alpha}, quarantine, []domain.Op{aside("alpha", xa, "x (1).jpg"), aside("beta", xa, "x.jpg")}},
 		{"under edited_files ignore the edits stay", reads{"alpha": {Edited: entries{xs, xa, xb}}}, nil, albums, specs{alpha}, ignore, nil},
+		// covers: R-LAYOUT-12
+		{"an album whose directory the user renamed takes the new title in iCloud",
+			reads{"alpha": {Renamed: []domain.Album{event(10, 1, "2024", "05/01 Vacation")}}}, nil, albums, specs{alpha}, ignore,
+			[]domain.Op{{Kind: domain.OpAlbumRename, AlbumID: 10, Dst: "05/01 Vacation", Rule: "R-LAYOUT-12"}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

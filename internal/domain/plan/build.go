@@ -42,22 +42,25 @@ type Input struct {
 // plan and delta, is that of Reconcile or of FileOps. The run syncs the
 // remotes of Remotes, or the one that OnlyRemote names: ReadScans reads their
 // scans, and RunOps gives the operations that come from them before any asset
-// takes a name. MovePairs moves the pairs of each of them, by name, in the
-// personal root, then the shared one, with the albums and pairs of the run
-// so far and its whole scan: each moved pair takes the place of its old one
-// among the pairs of the run and goes to Pairs, and DecideLayout takes the
-// old ones. Then each asset of the delta, and each asset that the delta
-// lacks and a link of the state names, found false, is decided on in the
-// order of ID. In a remote that the run does not sync, or whose scan holds
-// the asset as Settling, its links stay as the state has them; elsewhere
-// DecideRemoteLinks decides on them, and, unless that freezes the asset
-// there, DecideRemoteObject with the conflict that the state keeps for the
-// asset there, else one with only AssetID and Remote. The conflict that it
-// returns goes to Conflicts unless its Status is empty. Where it takes the
-// asset into the plan, the albums that matching makes the asset join there
-// are added to Join, and the new links that matching makes there are added
-// to its links as they lie now: so DecideLayout takes them, the asset
-// counting as linked when the state or those new links name it, and
+// takes a name. The albums of the run are those of the delta, each as the
+// Renamed of ReadScans gives it, and those that ReadScans adds; its pairs are
+// those of the state for an album, remote and root for which ReadScans makes
+// none, then those that ReadScans makes. MovePairs moves the pairs of each
+// remote, by name, in the personal root, then the shared one, with the albums
+// and pairs of the run so far and its whole scan: each moved pair takes the
+// place of its old one among the pairs of the run and goes to Pairs, and
+// DecideLayout takes the old ones. Then each asset of the delta, and each
+// asset that the delta lacks and a link of the state names, found false, is
+// decided on in the order of ID. In a remote that the run does not sync, or
+// whose scan holds the asset as Settling, its links stay as the state has
+// them; elsewhere DecideRemoteLinks decides on them, and, unless that freezes
+// the asset there, DecideRemoteObject with the conflict that the state keeps
+// for the asset there, else one with only AssetID and Remote. The conflict
+// that it returns goes to Conflicts unless its Status is empty. Where it
+// takes the asset into the plan, the albums that matching makes the asset
+// join there are added to Join, and the new links that matching makes there
+// are added to its links as they lie now: so DecideLayout takes them, the
+// asset counting as linked when the state or those new links name it, and
 // DecideComponents its links as the state holds them. AssetOps, ImportOps
 // with its links as they lie now, then FileOps, ComponentOps and SidecarOps
 // in each remote that the run syncs, by name, where the asset takes part in
@@ -120,7 +123,18 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	aside := func(r domain.RemoteSpec) bool { return in.OnlyRemote != "" && r.Name != in.OnlyRemote }
 	remotes := slices.DeleteFunc(slices.Clone(in.Remotes), aside)
 	files, read, added, made, ns := ReadScans(in.State, delta, in.Scans, remotes, in.Policies, in.Now)
-	albums, pairs := slices.Concat(delta.Albums, added), slices.Concat(in.State.AlbumPairs, made)
+	albums, pairs := slices.Concat(delta.Albums, added), slices.DeleteFunc(slices.Clone(in.State.AlbumPairs), func(x domain.AlbumPair) bool {
+		return slices.ContainsFunc(made, func(y domain.AlbumPair) bool {
+			return y.AlbumID == x.AlbumID && y.Remote == x.Remote && y.Root == x.Root
+		})
+	})
+	pairs = append(pairs, made...)
+	byName := slices.SortedFunc(slices.Values(remotes), func(x, y domain.RemoteSpec) int { return cmp.Compare(x.Name, y.Name) })
+	for _, r := range byName {
+		for _, a := range read[r.Name].Renamed {
+			albums[slices.IndexFunc(albums, func(b domain.Album) bool { return b.ID == a.ID })] = a
+		}
+	}
 	notices = append(notices, ns...)
 	names, sides := map[string]*Names{}, map[string]map[domain.LinkID][]domain.RemoteEntry{}
 	fresh := map[domain.AssetID][]domain.LinkDecision{}
@@ -151,7 +165,6 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	for _, c := range in.State.Conflicts {
 		stored[domain.Conflict{AssetID: c.AssetID, Remote: c.Remote}] = c
 	}
-	byName := slices.SortedFunc(slices.Values(remotes), func(x, y domain.RemoteSpec) int { return cmp.Compare(x.Name, y.Name) })
 	var moved []domain.AlbumPair
 	for _, r := range byName {
 		for _, root := range []domain.LibraryKind{domain.LibraryPersonal, domain.LibraryShared} {

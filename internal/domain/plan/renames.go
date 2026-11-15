@@ -82,3 +82,64 @@ func FollowPairs(links []domain.Link, moved []domain.AlbumPair, remote string, p
 	}
 	return out
 }
+
+// RenamedDirs returns moved, the pairs of remote r in root whose directory
+// the user renamed in the cloud, each with its new DirPath and an empty
+// NamedAfter, in the order of their old DirPath, so that a nested part reads
+// under the new directory of its parent, and renamed, in the same order, the
+// albums of those that take the title that the new directory reads as
+// (R-LAYOUT-12). albums and pairs are those of the run, links those of the
+// state, files the entries of r where ReadScan finds them, and listing what
+// ReadScan reads. A pair of an album that albums hold outside Recently
+// Deleted, with neither its directory nor a path below it in listing, claims
+// d when the files of the active links of the original or the source role in
+// root that lay directly in its directory lie now, one at least, directly in
+// d of root at the depth of its old directory, unless a pair of r in root
+// holds d or another claimed it first; it moves to d when layout.AlbumFor,
+// with the directories of those pairs and those claimed, reads d as an album,
+// not a folder, in the folders of its album. The album takes the title read
+// when NamedAfter is its path, which iCloud has kept, and r adds albums in
+// root: it is not upload-only, and root is not the personal one while
+// p.AlbumsForPersonal is false. The inputs are not changed.
+func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, links []domain.Link, files map[domain.LinkID]domain.RemoteEntry, listing []domain.RemoteEntry, r domain.RemoteSpec, root domain.LibraryKind, p domain.Policies) (moved []domain.AlbumPair, renamed []domain.Album) {
+	own := slices.DeleteFunc(slices.Clone(pairs), func(x domain.AlbumPair) bool { return x.Remote != r.Name || x.Root != root })
+	slices.SortFunc(own, func(x, y domain.AlbumPair) int { return cmp.Compare(x.DirPath, y.DirPath) })
+	listed, held := map[string]bool{}, map[string]bool{}
+	for _, e := range listing {
+		for d := e.Path; e.Root == root && !listed[d]; d = path.Dir(d) {
+			listed[d] = true
+		}
+	}
+	for _, x := range own {
+		held[x.DirPath] = true
+	}
+	adds := r.Mode != domain.ModeUploadOnly && (root != domain.LibraryPersonal || p.AlbumsForPersonal)
+	for _, x := range own {
+		i := slices.IndexFunc(albums, func(a domain.Album) bool { return a.ID == x.AlbumID && !a.InTrash })
+		if i < 0 || listed[x.DirPath] {
+			continue
+		}
+		var at []string
+		for _, l := range links {
+			if e, ok := files[l.ID]; ok && e.Root == root && l.Root == root && path.Dir(l.Path) == x.DirPath && objectFile(l) {
+				at = append(at, path.Dir(e.Path))
+			}
+		}
+		if len(slices.Compact(at)) != 1 || held[at[0]] || strings.Count(at[0], "/") != strings.Count(x.DirPath, "/") {
+			continue
+		}
+		held[at[0]] = true
+		a := albums[i]
+		read, ok := layout.AlbumFor(at[0], held, p)
+		if !ok || read.Kind == domain.KindFolder || !slices.Equal(read.FolderTitles, a.FolderTitles) {
+			continue
+		}
+		if x.NamedAfter == pathKey(a) && adds {
+			a.Title = read.Title
+			renamed = append(renamed, a)
+		}
+		x.DirPath, x.NamedAfter = at[0], ""
+		moved = append(moved, x)
+	}
+	return moved, renamed
+}
