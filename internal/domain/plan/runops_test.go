@@ -115,8 +115,8 @@ func TestRunOps(t *testing.T) {
 	show := func(ops []domain.Op) string {
 		var out []string
 		for _, o := range ops {
-			line := fmt.Sprintf("%s %s %s:%s -> %s:%s asset %d album %d %s irreversible=%t",
-				o.Kind, o.Remote, o.Root, o.Src, o.DstRoot, o.Dst, o.Asset, o.AlbumID, o.Rule, o.Irreversible)
+			line := fmt.Sprintf("%s %s %s:%s -> %s:%s asset %d album %d parent %d %s irreversible=%t",
+				o.Kind, o.Remote, o.Root, o.Src, o.DstRoot, o.Dst, o.Asset, o.AlbumID, o.ParentID, o.Rule, o.Irreversible)
 			for _, l := range o.Links {
 				line += fmt.Sprintf(" %+v", l)
 			}
@@ -169,6 +169,10 @@ func TestRunOps(t *testing.T) {
 		{"an album whose directory the user renamed takes the new title in iCloud",
 			reads{"alpha": {Renamed: []domain.Album{event(10, 1, "2024", "05/01 Vacation")}}}, nil, albums, specs{alpha}, ignore,
 			[]domain.Op{{Kind: domain.OpAlbumRename, AlbumID: 10, Dst: "05/01 Vacation", Rule: "R-LAYOUT-12"}}},
+		// covers: R-LAYOUT-13
+		{"an album whose directory the user moved to another folder moves there in iCloud, after the folder that the run adds for it",
+			reads{"alpha": {Refiled: []domain.Album{event(10, 21, "2025", "05/01 Holidays")}}}, added[:1], albums, specs{alpha}, ignore,
+			[]domain.Op{create(21), {Kind: domain.OpAlbumMove, AlbumID: 10, ParentID: 21, Rule: "R-LAYOUT-13"}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

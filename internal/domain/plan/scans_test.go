@@ -15,9 +15,9 @@ import (
 
 // Each row is the state, the snapshot reconciled with it and the scans of a
 // run. The expected files, links, albums, pairs, new files, edits, settling
-// assets, renamed albums and notices are written from the rules on settling,
-// matching, album pairs, derived copies and modes, not from the code, and
-// must not depend on the order of the input.
+// assets, renamed and refiled albums and notices are written from the rules
+// on settling, matching, album pairs, derived copies and modes, not from the
+// code, and must not depend on the order of the input.
 func TestReadScans(t *testing.T) {
 	t.Parallel()
 	const (
@@ -220,12 +220,15 @@ func TestReadScans(t *testing.T) {
 		AlbumPairs: []domain.AlbumPair{named(pair(holidays, "alpha", personal, holidaysDir, domain.OriginICloud)), named(pair(holidays, "beta", personal, holidaysDir, domain.OriginICloud))}}
 	retitled := scanned(nil, nil, nil, nil)
 	retitled.Renamed = []domain.Album{album(holidays, event, "05/01 Vacation")}
+	later, party25 := file(personal, "2025/05-01 - Holidays/IMG_0001.HEIC", 100, "a1", settled), file(personal, "2025/05-04 - Party/IMG_0004.HEIC", 400, "d4", settled)
+	refiled := scanned(nil, nil, news{imported(party25, next+1)}, nil)
+	refiled.Refiled = []domain.Album{{ID: holidays, Kind: event, Title: "05/01 Holidays", ParentID: next, FolderTitles: []string{"2025"}}}
 
 	same := func(x, y result) bool {
 		sameScan := func(a, b plan.RemoteScan) bool {
 			return slices.Equal(a.Linked, b.Linked) && maps.EqualFunc(a.Join, b.Join, slices.Equal[[]domain.AlbumChange]) &&
 				reflect.DeepEqual(a.NewFiles, b.NewFiles) && slices.Equal(a.Edited, b.Edited) && maps.Equal(a.Settling, b.Settling) &&
-				fmt.Sprintf("%+v", a.Renamed) == fmt.Sprintf("%+v", b.Renamed)
+				fmt.Sprintf("%+v", a.Renamed) == fmt.Sprintf("%+v", b.Renamed) && fmt.Sprintf("%+v", a.Refiled) == fmt.Sprintf("%+v", b.Refiled)
 		}
 		sameNotice := func(a, b domain.Notice) bool { return a.Code == b.Code && slices.Equal(a.Params, b.Params) }
 		return maps.Equal(x.files, y.files) && maps.EqualFunc(x.read, y.read, sameScan) &&
@@ -265,6 +268,9 @@ func TestReadScans(t *testing.T) {
 			}
 			for _, a := range s.Renamed {
 				out = append(out, fmt.Sprintf("%s renamed %+v", name, a))
+			}
+			for _, a := range s.Refiled {
+				out = append(out, fmt.Sprintf("%s refiled %+v", name, a))
 			}
 		}
 		for _, a := range x.added {
@@ -366,6 +372,12 @@ func TestReadScans(t *testing.T) {
 			renamedAway, delta(a7), scans{"alpha": {v1}, "beta": {v1}}, specs{beta, alpha}, p,
 			result{found{1: v1, 6: v1}, reads{"alpha": retitled, "beta": scanned(nil, nil, nil, nil)}, nil,
 				[]domain.AlbumPair{pair(holidays, "alpha", personal, vacationDir, domain.OriginICloud), pair(holidays, "beta", personal, vacationDir, domain.OriginICloud)}, nil}},
+		{"a directory that the user moved to another year takes its pair along in each remote, and the album moves into a year folder that the first remote by name adds, where a new album of that year goes too",
+			renamedAway, delta(a7), scans{"alpha": {party25, later}, "beta": {later}}, specs{beta, alpha}, p,
+			result{found{1: later, 6: later}, reads{"alpha": refiled, "beta": scanned(nil, nil, nil, nil)},
+				[]domain.Album{album(next, folder, "2025"), {ID: next + 1, Kind: event, Title: "05/04 Party", ParentID: next, FolderTitles: []string{"2025"}}},
+				[]domain.AlbumPair{pair(holidays, "alpha", personal, "2025/05-01 - Holidays", domain.OriginICloud), pair(next+1, "alpha", personal, "2025/05-04 - Party", byRemote),
+					pair(holidays, "beta", personal, "2025/05-01 - Holidays", domain.OriginICloud)}, nil}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

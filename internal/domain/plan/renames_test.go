@@ -253,14 +253,15 @@ func TestFollowPairs(t *testing.T) {
 // Each row gives the albums and the pairs of a run, the links of the state,
 // the files of one remote where its scan finds them and its listing; a pair
 // remembers the path of its album unless the row says otherwise. The
-// expected pairs and albums follow the rule on directories renamed in the
-// cloud, not the code, and must not depend on the order of the input; a
-// second run, with the links where their files lie now, renames none.
+// expected pairs, albums and folders follow the rules on directories renamed
+// and moved in the cloud, not the code, and must not depend on the order of
+// the input; a second run, with the links where their files lie now, changes
+// none.
 func TestRenamedDirs(t *testing.T) {
 	t.Parallel()
 	const (
 		cats, holidays, trip, beach domain.AlbumID = 5, 10, 11, 12
-		gone                        domain.AlbumID = 15
+		gone, models, last          domain.AlbumID = 15, 16, 8
 
 		personal, shared                 = domain.LibraryPersonal, domain.LibraryShared
 		event, thematic                  = domain.KindEvent, domain.KindThematic
@@ -270,15 +271,23 @@ func TestRenamedDirs(t *testing.T) {
 		holidaysDir, tripDir, vacationDir = "2024/05-01 - Holidays", "2024/05-02 - Trip", "2024/05-01 - Vacation"
 		beachDir, catsDir, goneDir        = "2024/05-01 - Holidays/Beach", "Albums/Cats", "Albums/Gone"
 		trip2Dir, movedDir                = "2024/05-02 - Trip 2", "2024/05-09 - Moved"
+		laterDir, modelsDir               = "2025/05-01 - Holidays", "Albums/Hobby/Models"
 	)
 	album := func(id domain.AlbumID, kind domain.AlbumKind, title string, folders ...string) domain.Album {
 		return domain.Album{ID: id, Kind: kind, Title: title, FolderTitles: folders}
+	}
+	folder := func(id, parent domain.AlbumID, title string, folders ...string) domain.Album {
+		return domain.Album{ID: id, Kind: domain.KindFolder, Title: title, ParentID: parent, FolderTitles: folders}
 	}
 	catsAlbum, holidaysAlbum := album(cats, thematic, "Cats"), album(holidays, event, "05/01 Holidays", "2024")
 	tripAlbum, beachAlbum := album(trip, event, "05/02 Trip", "2024"), album(beach, event, "05/01 Holidays / Beach", "2024")
 	lib := []domain.Album{catsAlbum, holidaysAlbum, tripAlbum, beachAlbum}
 	titled := func(a domain.Album, title string) domain.Album {
 		a.Title = title
+		return a
+	}
+	filed := func(a domain.Album, kind domain.AlbumKind, parent domain.AlbumID, folders ...string) domain.Album {
+		a.Kind, a.ParentID, a.FolderTitles = kind, parent, folders
 		return a
 	}
 	run := func(change domain.Album) []domain.Album {
@@ -288,7 +297,7 @@ func TestRenamedDirs(t *testing.T) {
 	}
 	named := map[domain.AlbumID]string{
 		cats: `[] "Cats"`, holidays: `["2024"] "05/01 Holidays"`, trip: `["2024"] "05/02 Trip"`,
-		beach: `["2024"] "05/01 Holidays / Beach"`, gone: `[] "Gone"`,
+		beach: `["2024"] "05/01 Holidays / Beach"`, gone: `[] "Gone"`, models: `["Hobby"] "Models"`,
 	}
 	pair := func(id domain.AlbumID, remote string, root domain.LibraryKind, dir string) domain.AlbumPair {
 		return domain.AlbumPair{AlbumID: id, Remote: remote, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud, NamedAfter: named[id]}
@@ -319,6 +328,12 @@ func TestRenamedDirs(t *testing.T) {
 	trashed.InTrash = true
 	underDay, underTrip := file(personal, "2024/05-03/05-01 - Holidays/IMG_0001.HEIC"), file(personal, tripDir+"/05-01 - Holidays/Beach/IMG_0004.HEIC")
 	lower := file(personal, "2024/05-01 - holidays/IMG_0001.HEIC")
+	l1later, b4later := file(personal, laterDir+"/IMG_0001.HEIC"), file(personal, laterDir+"/Beach/IMG_0004.HEIC")
+	deep, catsLater := file(personal, "Albums/Pets/Home/Cats/IMG_0005.HEIC"), file(personal, "2025/Cats/IMG_0005.HEIC")
+	picsLater, elsewhere := file(personal, "2025/Trip pics/IMG_0003.HEIC"), file(personal, "2025/05-01 - Vacation/IMG_0001.HEIC")
+	modelsLater, l16 := file(personal, "Albums/Models/IMG_0016.HEIC"), link(16, personal, modelsDir+"/IMG_0016.HEIC", original)
+	binnedYear, modelsAlbum := folder(3, 0, "2025"), album(models, thematic, "Models", "Hobby")
+	binnedYear.InTrash, modelsAlbum.ParentID = true, 8
 	p := domain.DefaultPolicies()
 	p.UntitledEvent, p.AlbumsRoot = "Untitled", "Albums"
 	local := p
@@ -335,115 +350,156 @@ func TestRenamedDirs(t *testing.T) {
 		p       domain.Policies
 		moved   []domain.AlbumPair
 		renamed []domain.Album
+		refiled []domain.Album
+		added   []domain.Album
 	}{
-		{"nothing in, nothing out", nil, nil, nil, nil, nil, twoWay, personal, p, nil, nil},
+		{"nothing in, nothing out", nil, nil, nil, nil, nil, twoWay, personal, p, nil, nil, nil, nil},
 		// covers: R-LAYOUT-12
 		{"a directory that the user renamed in the cloud takes its pair along and gives its album the title that the new name reads as, while a directory still listed keeps its pair",
-			lib, both, world, away, after, twoWay, personal, p, prs(unnamed(mine(holidays, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation"))},
+			lib, both, world, away, after, twoWay, personal, p, prs(unnamed(mine(holidays, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation")), nil, nil},
 		{"a nested part follows the new directory of its parent under the new title of the parent, whatever the order of the input",
 			lib, prs(mine(beach, beachDir), mine(holidays, holidaysDir)), lks(l4, l1), found{1: v1, 4: v4}, listed(v4, v1), twoWay, personal, p,
 			prs(unnamed(mine(holidays, vacationDir)), unnamed(mine(beach, vacationDir+"/Beach"))),
-			als(titled(holidaysAlbum, "05/01 Vacation"), titled(beachAlbum, "05/01 Vacation / Beach"))},
+			als(titled(holidaysAlbum, "05/01 Vacation"), titled(beachAlbum, "05/01 Vacation / Beach")), nil, nil},
 		{"a directory that the user named otherwise follows its files under the new name, and its album keeps its title",
 			lib, prs(unnamed(mine(holidays, "2024/Holiday trip"))), lks(link(1, personal, "2024/Holiday trip/IMG_0001.HEIC", original)), found{1: v1}, listed(v1),
-			twoWay, personal, p, prs(unnamed(mine(holidays, vacationDir))), nil},
+			twoWay, personal, p, prs(unnamed(mine(holidays, vacationDir))), nil, nil, nil},
 		{"an album that the user renamed in iCloud as well keeps the title of iCloud, and only its pair follows the directory",
-			run(titled(holidaysAlbum, "05/01 Beach")), both, world, away, after, twoWay, personal, p, prs(unnamed(mine(holidays, vacationDir))), nil},
+			run(titled(holidaysAlbum, "05/01 Beach")), both, world, away, after, twoWay, personal, p, prs(unnamed(mine(holidays, vacationDir))), nil, nil, nil},
 		{"upload-only takes the pair along and leaves the album as it is",
-			lib, both, world, away, after, uploadOnly, personal, p, prs(unnamed(mine(holidays, vacationDir))), nil},
+			lib, both, world, away, after, uploadOnly, personal, p, prs(unnamed(mine(holidays, vacationDir))), nil, nil, nil},
 		{"download-only renames the album as two-way does",
-			lib, both, world, away, after, downloadOnly, personal, p, prs(unnamed(mine(holidays, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation"))},
+			lib, both, world, away, after, downloadOnly, personal, p, prs(unnamed(mine(holidays, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation")), nil, nil},
 		{"while albums_for_personal is false a pair of the personal root follows its directory, and the album keeps its title",
-			lib, both, world, away, after, twoWay, personal, local, prs(unnamed(mine(holidays, vacationDir))), nil},
+			lib, both, world, away, after, twoWay, personal, local, prs(unnamed(mine(holidays, vacationDir))), nil, nil, nil},
 		{"while albums_for_personal is false a directory renamed in the shared root renames the album",
 			lib, prs(pair(holidays, "disk", shared, holidaysDir)), lks(s1), found{1: sv1}, listed(sv1), twoWay, shared, local,
-			prs(unnamed(pair(holidays, "disk", shared, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation"))},
+			prs(unnamed(pair(holidays, "disk", shared, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation")), nil, nil},
 		{"a pair stays while the listing holds a path below its directory",
-			lib, both, world, away, listed(v1, v2, t3, file(personal, holidaysDir+"/raw/IMG_0009.HEIC")), twoWay, personal, p, nil, nil},
+			lib, both, world, away, listed(v1, v2, t3, file(personal, holidaysDir+"/raw/IMG_0009.HEIC")), twoWay, personal, p, nil, nil, nil, nil},
 		{"a pair stays when the files of its directory went to two directories, and another when its file went nowhere",
 			lib, both, world, found{1: v1, 2: file(personal, movedDir+"/IMG_0002.HEIC")}, listed(v1, file(personal, movedDir+"/IMG_0002.HEIC")),
-			twoWay, personal, p, nil, nil},
+			twoWay, personal, p, nil, nil, nil, nil},
 		{"a pair stays when the files of its directory went to the directory of another pair",
 			lib, both, world, found{1: file(personal, tripDir+"/IMG_0001.HEIC"), 2: file(personal, tripDir+"/IMG_0002.HEIC"), 3: t3},
-			listed(file(personal, tripDir+"/IMG_0001.HEIC"), file(personal, tripDir+"/IMG_0002.HEIC"), t3), twoWay, personal, p, nil, nil},
+			listed(file(personal, tripDir+"/IMG_0001.HEIC"), file(personal, tripDir+"/IMG_0002.HEIC"), t3), twoWay, personal, p, nil, nil, nil, nil},
 		{"of two directories whose files went to one new directory the one first by its old path takes it",
 			lib, both, world, found{1: v1, 2: v2, 3: file(personal, vacationDir+"/IMG_0003.HEIC")}, listed(v1, v2, file(personal, vacationDir+"/IMG_0003.HEIC")),
-			twoWay, personal, p, prs(unnamed(mine(holidays, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation"))},
+			twoWay, personal, p, prs(unnamed(mine(holidays, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation")), nil, nil},
 		{"a pair stays when the files of its directory went to a day folder",
 			lib, prs(mine(cats, catsDir)), lks(l5), found{5: file(personal, "2024/05-03/IMG_0005.HEIC")}, listed(file(personal, "2024/05-03/IMG_0005.HEIC")),
-			twoWay, personal, p, nil, nil},
+			twoWay, personal, p, nil, nil, nil, nil},
 		{"a pair stays when the files of its directory went straight into a year folder",
 			lib, prs(mine(cats, "Cats")), lks(link(5, personal, "Cats/IMG_0005.HEIC", original)), found{5: file(personal, "2025/IMG_0005.HEIC")}, listed(file(personal, "2025/IMG_0005.HEIC")),
-			twoWay, personal, p, nil, nil},
-		{"a pair stays when its directory went to another folder",
-			lib, prs(mine(holidays, holidaysDir)), lks(l1), found{1: file(personal, "2025/05-01 - Holidays/IMG_0001.HEIC")},
-			listed(file(personal, "2025/05-01 - Holidays/IMG_0001.HEIC")), twoWay, personal, p, nil, nil},
+			twoWay, personal, p, nil, nil, nil, nil},
+		// covers: R-LAYOUT-13
+		{"a directory that the user moved to another year takes its pair along and moves its album into the folder of that year, which the run adds",
+			lib, prs(mine(holidays, holidaysDir)), lks(l1), found{1: l1later}, listed(l1later), twoWay, personal, p,
+			prs(unnamed(mine(holidays, laterDir))), nil, als(filed(holidaysAlbum, event, 13, "2025")), als(folder(13, 0, "2025"))},
 		{"the pairs of an album in Recently Deleted and of an album gone from the library stay",
 			run(trashed), prs(mine(trip, tripDir), mine(gone, goneDir)), lks(l3, link(6, personal, goneDir+"/IMG_0006.HEIC", original)),
 			found{3: t3moved, 6: file(personal, "Albums/Gone 2/IMG_0006.HEIC")}, listed(t3moved, file(personal, "Albums/Gone 2/IMG_0006.HEIC")),
-			twoWay, personal, p, nil, nil},
+			twoWay, personal, p, nil, nil, nil, nil},
 		{"the pairs and the listing of another remote or root count for nothing here",
 			lib, prs(pair(holidays, "other", personal, holidaysDir), pair(holidays, "disk", shared, holidaysDir), mine(trip, tripDir)), lks(l1, l3),
 			found{1: v1, 3: t3moved}, listed(v1, t3moved, file(shared, tripDir+"/IMG_0009.HEIC")), twoWay, personal, p,
-			prs(unnamed(mine(trip, trip2Dir))), als(titled(tripAlbum, "05/02 Trip 2"))},
+			prs(unnamed(mine(trip, trip2Dir))), als(titled(tripAlbum, "05/02 Trip 2")), nil, nil},
 		{"a file that went to the other root, and the file of a link of the other root, count for nothing",
 			lib, prs(mine(trip, tripDir)), lks(l3, link(6, personal, tripDir+"/IMG_0006.HEIC", original), link(7, shared, tripDir+"/IMG_0007.HEIC", original)),
 			found{3: t3moved, 6: file(shared, movedDir+"/IMG_0006.HEIC"), 7: file(personal, movedDir+"/IMG_0007.HEIC")},
 			listed(t3moved, file(shared, movedDir+"/IMG_0006.HEIC"), file(personal, movedDir+"/IMG_0007.HEIC")), twoWay, personal, p,
-			prs(unnamed(mine(trip, trip2Dir))), als(titled(tripAlbum, "05/02 Trip 2"))},
+			prs(unnamed(mine(trip, trip2Dir))), als(titled(tripAlbum, "05/02 Trip 2")), nil, nil},
 		{"a Live Photo video that went elsewhere does not hold the pair back",
 			lib, prs(mine(holidays, holidaysDir)), lks(l1, link(8, personal, holidaysDir+"/IMG_0001.MOV", liveVideo)),
 			found{1: v1, 8: file(personal, movedDir+"/IMG_0001.MOV")}, listed(v1, file(personal, movedDir+"/IMG_0001.MOV")), twoWay, personal, p,
-			prs(unnamed(mine(holidays, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation"))},
+			prs(unnamed(mine(holidays, vacationDir))), als(titled(holidaysAlbum, "05/01 Vacation")), nil, nil},
 		{"a directory moved under a day folder or under the directory of another album: the pair stays and the album keeps its title",
 			lib, prs(mine(holidays, holidaysDir), mine(beach, beachDir), mine(trip, tripDir)), lks(l1, l4, l3), found{1: underDay, 4: underTrip, 3: t3},
-			listed(underDay, underTrip, t3), twoWay, personal, p, nil, nil},
+			listed(underDay, underTrip, t3), twoWay, personal, p, nil, nil, nil, nil},
 		{"a nested part moved out of its parent into the year folder: the pair stays and the album keeps its title",
 			lib, prs(mine(holidays, holidaysDir), mine(beach, beachDir)), lks(l1, l4),
 			found{1: file(personal, holidaysDir+"/IMG_0001.HEIC"), 4: file(personal, "2024/Beach/IMG_0004.HEIC")},
-			listed(file(personal, holidaysDir+"/IMG_0001.HEIC"), file(personal, "2024/Beach/IMG_0004.HEIC")), twoWay, personal, p, nil, nil},
+			listed(file(personal, holidaysDir+"/IMG_0001.HEIC"), file(personal, "2024/Beach/IMG_0004.HEIC")), twoWay, personal, p, nil, nil, nil, nil},
 		{"a directory renamed only in letter case takes its pair along and gives its album the title in the new case",
 			lib, prs(mine(holidays, holidaysDir)), lks(l1), found{1: lower}, listed(lower), twoWay, personal, p,
-			prs(unnamed(mine(holidays, "2024/05-01 - holidays"))), als(titled(holidaysAlbum, "05/01 holidays"))},
+			prs(unnamed(mine(holidays, "2024/05-01 - holidays"))), als(titled(holidaysAlbum, "05/01 holidays")), nil, nil},
+		{"a directory moved into a folder that iCloud has moves its album into that folder outside Recently Deleted, the lowest ID first",
+			slices.Concat(lib, als(folder(7, 0, "2025"), folder(6, 0, "2025"), folder(4, 0, "2025", "Old"), binnedYear, album(2, thematic, "2025"), folder(1, 0, "2023"))),
+			prs(mine(holidays, holidaysDir)), lks(l1), found{1: l1later}, listed(l1later), twoWay, personal, p,
+			prs(unnamed(mine(holidays, laterDir))), nil, als(filed(holidaysAlbum, event, 6, "2025")), nil},
+		{"a directory moved under folders that iCloud lacks moves its album there, and the run adds each folder on the way, the outer first",
+			append(slices.Clone(lib), folder(6, 0, "Home")), prs(mine(cats, catsDir)), lks(l5), found{5: deep}, listed(deep), twoWay, personal, p,
+			prs(unnamed(mine(cats, "Albums/Pets/Home/Cats"))), nil, als(filed(catsAlbum, thematic, 14, "Pets", "Home")),
+			als(folder(13, 0, "Pets"), folder(14, 13, "Home", "Pets"))},
+		{"a nested part follows its parent into another year and into the folder that the run adds for the parent, whatever the order of the input",
+			lib, prs(mine(beach, beachDir), mine(holidays, holidaysDir)), lks(l4, l1), found{1: l1later, 4: b4later}, listed(b4later, l1later), twoWay, personal, p,
+			prs(unnamed(mine(holidays, laterDir)), unnamed(mine(beach, laterDir+"/Beach"))), nil,
+			als(filed(holidaysAlbum, event, 13, "2025"), filed(beachAlbum, event, 13, "2025")), als(folder(13, 0, "2025"))},
+		{"an album that the user moved in iCloud as well keeps the folder of iCloud, and so does the album of a directory named otherwise: only their pairs follow",
+			run(album(holidays, event, "05/01 Holidays", "2023")), prs(mine(holidays, holidaysDir), unnamed(mine(trip, "2024/Trip pics"))),
+			lks(l1, link(3, personal, "2024/Trip pics/IMG_0003.HEIC", original)), found{1: l1later, 3: picsLater}, listed(l1later, picsLater), twoWay, personal, p,
+			prs(unnamed(mine(holidays, laterDir)), unnamed(mine(trip, "2025/Trip pics"))), nil, nil, nil},
+		{"a directory moved to another year under another title: the pair stays and the album keeps its folder and title",
+			lib, prs(mine(holidays, holidaysDir)), lks(l1), found{1: elsewhere}, listed(elsewhere), twoWay, personal, p, nil, nil, nil, nil},
+		{"a thematic album moved into a year folder becomes an event there, and an album moved out of its folders goes to the top level",
+			append(slices.Clone(lib), folder(2, 0, "2025"), folder(8, 0, "Hobby"), modelsAlbum), prs(mine(models, modelsDir), mine(cats, catsDir)),
+			lks(l16, l5), found{5: catsLater, 16: modelsLater}, listed(modelsLater, catsLater), twoWay, personal, p,
+			prs(unnamed(mine(cats, "2025/Cats")), unnamed(mine(models, "Albums/Models"))), nil,
+			als(filed(catsAlbum, event, 2, "2025"), filed(modelsAlbum, thematic, 0)), nil},
+		{"a directory moved in or out of the albums root keeps its album in its folders, and only its pair follows",
+			lib, prs(mine(cats, catsDir)), lks(l5), found{5: file(personal, "Cats/IMG_0005.HEIC")}, listed(file(personal, "Cats/IMG_0005.HEIC")), twoWay, personal, p,
+			prs(unnamed(mine(cats, "Cats"))), nil, nil, nil},
+		{"upload-only takes the pair of a directory moved to another year along and leaves the album where it is",
+			lib, prs(mine(holidays, holidaysDir)), lks(l1), found{1: l1later}, listed(l1later), uploadOnly, personal, p,
+			prs(unnamed(mine(holidays, laterDir))), nil, nil, nil},
+		{"while albums for personal is false a pair of the personal root follows a directory moved to another year, and the album stays where it is",
+			lib, prs(mine(holidays, holidaysDir)), lks(l1), found{1: l1later}, listed(l1later), twoWay, personal, local,
+			prs(unnamed(mine(holidays, laterDir))), nil, nil, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
 			r := domain.RemoteSpec{Name: "disk", Mode: c.mode}
 			input := fmt.Sprintf("%+v %+v %+v %+v %+v", c.albums, c.pairs, c.links, c.files, c.listing)
-			moved, renamed := plan.RenamedDirs(c.albums, c.pairs, c.links, c.files, c.listing, r, c.root, c.p)
-			if !slices.Equal(moved, c.moved) || fmt.Sprintf("%+v", renamed) != fmt.Sprintf("%+v", c.renamed) {
-				t.Errorf("RenamedDirs = %+v, %+v; want %+v, %+v", moved, renamed, c.moved, c.renamed)
+			moved, renamed, refiled, added := plan.RenamedDirs(c.albums, c.pairs, last, c.links, c.files, c.listing, r, c.root, c.p)
+			if !slices.Equal(moved, c.moved) || fmt.Sprintf("%+v %+v %+v", renamed, refiled, added) != fmt.Sprintf("%+v %+v %+v", c.renamed, c.refiled, c.added) {
+				t.Errorf("RenamedDirs = %+v, %+v, %+v, %+v; want %+v, %+v, %+v, %+v", moved, renamed, refiled, added, c.moved, c.renamed, c.refiled, c.added)
 			}
 			albums, pairs, links, listing := slices.Clone(c.albums), slices.Clone(c.pairs), slices.Clone(c.links), slices.Clone(c.listing)
 			slices.Reverse(albums)
 			slices.Reverse(pairs)
 			slices.Reverse(links)
 			slices.Reverse(listing)
-			if back, again := plan.RenamedDirs(albums, pairs, links, c.files, listing, r, c.root, c.p); !slices.Equal(back, moved) ||
-				fmt.Sprintf("%+v", again) != fmt.Sprintf("%+v", renamed) {
-				t.Errorf("with the input reversed: %+v, %+v; want %+v, %+v", back, again, moved, renamed)
+			if back, again, refiledBack, addedBack := plan.RenamedDirs(albums, pairs, last, links, c.files, listing, r, c.root, c.p); !slices.Equal(back, moved) ||
+				fmt.Sprintf("%+v %+v %+v", again, refiledBack, addedBack) != fmt.Sprintf("%+v %+v %+v", renamed, refiled, added) {
+				t.Errorf("with the input reversed: %+v, %+v, %+v, %+v; want %+v, %+v, %+v, %+v", back, again, refiledBack, addedBack, moved, renamed, refiled, added)
 			}
 			for _, x := range moved {
 				pairs[slices.IndexFunc(pairs, func(y domain.AlbumPair) bool {
 					return y.AlbumID == x.AlbumID && y.Remote == x.Remote && y.Root == x.Root
 				})] = x
 			}
-			for _, a := range renamed {
+			for _, a := range slices.Concat(renamed, refiled) {
 				albums[slices.IndexFunc(albums, func(b domain.Album) bool { return b.ID == a.ID })] = a
 			}
+			albums = append(albums, added...)
 			for i, l := range links {
 				if e, ok := c.files[l.ID]; ok {
 					links[i].Root, links[i].Path = e.Root, e.Path
 				}
 			}
-			if more, again := plan.RenamedDirs(albums, pairs, links, c.files, listing, r, c.root, c.p); len(more)+len(again) > 0 {
-				t.Errorf("a second run, with the links where their files lie now, gives %+v, %+v; want none", more, again)
+			if more, again, refiledAgain, addedAgain := plan.RenamedDirs(albums, pairs, last, links, c.files, listing, r, c.root, c.p); len(more)+len(again)+len(refiledAgain)+len(addedAgain) > 0 {
+				t.Errorf("a second run, with the links where their files lie now, gives %+v, %+v, %+v, %+v; want none", more, again, refiledAgain, addedAgain)
 			}
 			for i := range moved {
 				moved[i].DirPath = "changed"
 			}
 			for i := range renamed {
 				renamed[i].Title = "changed"
+			}
+			for _, a := range slices.Concat(refiled, added) {
+				for i := range a.FolderTitles {
+					a.FolderTitles[i] = "changed"
+				}
 			}
 			if after := fmt.Sprintf("%+v %+v %+v %+v %+v", c.albums, c.pairs, c.links, c.files, c.listing); after != input {
 				t.Errorf("RenamedDirs changed its input or shares a slice with it:\n%s\nwant\n%s", after, input)

@@ -43,36 +43,35 @@ type Input struct {
 // remotes of Remotes, or the one that OnlyRemote names: ReadScans reads their
 // scans, and RunOps gives the operations that come from them before any asset
 // takes a name. The albums of the run are those of the delta, each as the
-// Renamed of ReadScans gives it, and those that ReadScans adds; its pairs are
-// those of the state for an album, remote and root for which ReadScans makes
-// none, then those that ReadScans makes. MovePairs moves the pairs of each
-// remote, by name, in the personal root, then the shared one, with the albums
-// and pairs of the run so far and its whole scan: each moved pair takes the
-// place of its old one among the pairs of the run and goes to Pairs, and
-// DecideLayout takes the old ones. Then each asset of the delta, and each
-// asset that the delta lacks and a link of the state names, found false, is
-// decided on in the order of ID. In a remote that the run does not sync, or
-// whose scan holds the asset as Settling, its links stay as the state has
-// them; elsewhere DecideRemoteLinks decides on them, and, unless that freezes
-// the asset there, DecideRemoteObject with the conflict that the state keeps
-// for the asset there, else one with only AssetID and Remote. The conflict
-// that it returns goes to Conflicts unless its Status is empty. Where it
-// takes the asset into the plan, the albums that matching makes the asset
+// Renamed or the Refiled of ReadScans gives it, and those that ReadScans adds;
+// its pairs are those of the state for an album, remote and root for which
+// ReadScans makes none, then those that ReadScans makes. MovePairs moves the
+// pairs of each remote, by name, in the personal root, then the shared one,
+// with the albums and pairs of the run so far and its whole scan: each moved
+// pair takes the place of its old one among the pairs of the run and goes to
+// Pairs, and DecideLayout takes the old ones. Then each asset of the delta,
+// and each asset that the delta lacks and a link of the state names, found
+// false, is decided on in the order of ID. In a remote that the run does not
+// sync, or whose scan holds the asset as Settling, its links stay as the state
+// has them; elsewhere DecideRemoteLinks decides on them, and, unless that
+// freezes the asset there, DecideRemoteObject with the conflict that the state
+// keeps for the asset there, else one with only AssetID and Remote. The
+// conflict that it returns goes to Conflicts unless its Status is empty. Where
+// it takes the asset into the plan, the albums that matching makes the asset
 // join there are added to Join, and the new links that matching makes there
 // are added to its links as they lie now: so DecideLayout takes them, the
 // asset counting as linked when the state or those new links name it, and
-// DecideComponents its links as the state holds them. AssetOps, ImportOps
-// with its links as they lie now, then FileOps, ComponentOps and SidecarOps
-// in each remote that the run syncs, by name, where the asset takes part in
-// the plan, give its operations: FileOps with the decisions of matching
-// there, each replacement turned into ActionLink when a decision of
-// DecideLayout deletes the asset, and with the pairs of the state and those
-// that the run made before. A remote takes its names from its whole listing
-// and its links in the state, and its sidecars by those links. ReplaceOps
-// then gives the replacement of the asset from its links as they lie now and
-// its operations so far. ExpireOps, with Policies.QuarantineKeepDays, gives
-// the operations on the quarantine of each remote that the run syncs, from
-// its whole listing.
+// DecideComponents its links as the state holds them. AssetOps, ImportOps with
+// its links as they lie now, then FileOps, ComponentOps and SidecarOps in each
+// remote that the run syncs, by name, where the asset takes part in the plan,
+// give its operations: FileOps with the decisions of matching there, each
+// replacement turned into ActionLink when a decision of DecideLayout deletes
+// the asset, and with the pairs of the state and those that the run made
+// before. A remote takes its names from its whole listing and its links in the
+// state, and its sidecars by those links. ReplaceOps then gives the
+// replacement of the asset from its links as they lie now and its operations
+// so far. ExpireOps, with Policies.QuarantineKeepDays, gives the operations on
+// the quarantine of each remote that the run syncs, from its whole listing.
 //
 // The delta gives each asset found the TargetLibrary of its target. A link of
 // a decision of DecideLayout or DecideComponents with ActionMoveAsset,
@@ -131,7 +130,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	pairs = append(pairs, made...)
 	byName := slices.SortedFunc(slices.Values(remotes), func(x, y domain.RemoteSpec) int { return cmp.Compare(x.Name, y.Name) })
 	for _, r := range byName {
-		for _, a := range read[r.Name].Renamed {
+		for _, a := range slices.Concat(read[r.Name].Renamed, read[r.Name].Refiled) {
 			albums[slices.IndexFunc(albums, func(b domain.Album) bool { return b.ID == a.ID })] = a
 		}
 	}

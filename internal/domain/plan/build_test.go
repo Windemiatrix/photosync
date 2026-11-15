@@ -28,11 +28,12 @@ func TestBuild(t *testing.T) {
 		original, live                 = domain.RoleOriginal, domain.RoleLiveVideo
 		holidaysDir, tripDir, partyDir = "2024/05-01 - Holidays", "2024/05-02 - Trip", "2024/05-04 - Party"
 		dayDir, catsDir                = "2024/05-01", "Albums/Cats"
-		vacationDir                    = "2024/05-01 - Vacation"
+		vacationDir, laterDir          = "2024/05-01 - Vacation", "2023/05-01 - Holidays"
 		event                          = "{event_path}/{original_name}"
 		quarantined                    = ".photosync/quarantine/2026-11-13/"
 
 		year, cats, holidays, trip, party domain.AlbumID = 1, 5, 10, 11, 12
+		folder2023                        domain.AlbumID = 12
 	)
 	type (
 		assets = []domain.Asset
@@ -102,7 +103,7 @@ func TestBuild(t *testing.T) {
 	}
 	named := map[string]string{
 		holidaysDir: `["2024"] "05/01 Holidays"`, tripDir: `["2024"] "05/02 Trip"`, partyDir: `["2024"] "05/04 Party"`,
-		catsDir: `[] "Cats"`, vacationDir: `["2024"] "05/01 Vacation"`,
+		catsDir: `[] "Cats"`, vacationDir: `["2024"] "05/01 Vacation"`, laterDir: `["2023"] "05/01 Holidays"`,
 	}
 	pair := func(album domain.AlbumID, remote string, root domain.LibraryKind, dir string, by domain.PairOrigin) domain.AlbumPair {
 		return domain.AlbumPair{AlbumID: album, Remote: remote, Root: root, DirPath: dir, CreatedBy: by, NamedAfter: named[dir]}
@@ -305,6 +306,8 @@ func TestBuild(t *testing.T) {
 	vacationFile := file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled)
 	holidaysFolder := domain.RemoteEntry{Root: personal, Path: holidaysDir, IsDir: true, MTime: settled}
 	renaming := domain.Op{Kind: domain.OpAlbumRename, AlbumID: holidays, Dst: "05/01 Vacation", Rule: "R-LAYOUT-12"}
+	laterFile := file(personal, laterDir+"/IMG_0001.HEIC", 100, "a1", settled)
+	refiling := domain.Op{Kind: domain.OpAlbumMove, AlbumID: holidays, ParentID: folder2023, Rule: "R-LAYOUT-13"}
 	new9, new10 := asset(9, "IMG_0009.HEIC", 900, may1, "run-2", holidays), asset(10, "IMG_0010.HEIC", 1000, may2, "run-2", trip)
 	new9.Library, new9.TargetLibrary, new10.Key.CloudAssetGUID = shared, shared, ""
 	sharedHolidays := domain.AlbumPair{AlbumID: holidays, Remote: "alpha", Root: shared, DirPath: holidaysDir, CreatedBy: domain.OriginRemote}
@@ -349,8 +352,8 @@ func TestBuild(t *testing.T) {
 	show := func(pl domain.Plan, d domain.SnapshotDelta, err error) string {
 		var out []string
 		for _, o := range pl.Ops {
-			line := fmt.Sprintf("%s %s %s:%s -> %s:%s asset %d album %d %s irreversible=%t",
-				o.Kind, o.Remote, o.Root, o.Src, o.DstRoot, o.Dst, o.Asset, o.AlbumID, o.Rule, o.Irreversible)
+			line := fmt.Sprintf("%s %s %s:%s -> %s:%s asset %d album %d parent %d %s irreversible=%t",
+				o.Kind, o.Remote, o.Root, o.Src, o.DstRoot, o.Dst, o.Asset, o.AlbumID, o.ParentID, o.Rule, o.Irreversible)
 			for _, l := range o.Links {
 				line += fmt.Sprintf(" %+v", l)
 			}
@@ -807,6 +810,18 @@ func TestBuild(t *testing.T) {
 				Ops:   ops{renaming, moved(other, personal, vacationDir+"/IMG_0001.HEIC", holidays, "R-LAYOUT-11")},
 				Pairs: pairs{vacationPair, pair(holidays, "beta", personal, vacationDir, domain.OriginICloud)},
 				Links: []domain.Link{took(photo, vacationFile, holidays)},
+			},
+			delta(a7), nil},
+		{"a folder of an album that the user moved to another year in the cloud moves the album into a year folder that iCloud adds, takes its pair along, and the folder of another remote follows in the same run",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {laterFile}, "beta": {e1}}, specs{alpha, beta}, "", p, event,
+			domain.Plan{
+				Ops: ops{
+					{Kind: domain.OpAlbumCreate, AlbumID: folder2023, Rule: "R-LAYOUT-06"}, refiling,
+					moved(other, personal, laterDir+"/IMG_0001.HEIC", holidays, "R-LAYOUT-11"),
+				},
+				Albums: []domain.Album{{ID: folder2023, Kind: domain.KindFolder, Title: "2023", FolderTitles: []string{}}},
+				Pairs:  pairs{pair(holidays, "alpha", personal, laterDir, domain.OriginICloud), pair(holidays, "beta", personal, laterDir, domain.OriginICloud)},
+				Links:  []domain.Link{took(photo, laterFile, holidays)},
 			},
 			delta(a7), nil},
 	} {

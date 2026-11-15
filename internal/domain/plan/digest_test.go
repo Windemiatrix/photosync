@@ -12,7 +12,7 @@ import (
 )
 
 // The digest of a small plan is the SHA-256 of its JSON as written out here.
-// Each row then changes a plan of ten operations on three assets, two albums
+// Each row then changes a plan of eleven operations on three assets, two albums
 // of the snapshot with one title and an album that the run adds, in one way:
 // a run must take the plan for the same when only the IDs that it gives
 // assets, albums and links, a cloud GUID, the times of files, the order of the
@@ -62,12 +62,12 @@ func TestDigest(t *testing.T) {
 	}}
 	smallDelta := domain.SnapshotDelta{Assets: []domain.Asset{asset(7, "IMG_0001.HEIC")}, Albums: []domain.Album{holidaysAlbum(10, "u-hol")}}
 	canonical := `[{"Op":{"Kind":"put","Remote":"alpha","Root":"","Src":"","DstRoot":"personal",` +
-		`"Dst":"2024/05-01 - Holidays/IMG_0001.HEIC","Asset":0,"AlbumID":0,"Rule":"R-LINK-01","Irreversible":false,` +
+		`"Dst":"2024/05-01 - Holidays/IMG_0001.HEIC","Asset":0,"AlbumID":0,"ParentID":0,"Rule":"R-LINK-01","Irreversible":false,` +
 		`"Links":[{"ID":0,"AssetID":0,"Remote":"alpha","Root":"personal","Path":"2024/05-01 - Holidays/IMG_0001.HEIC",` +
 		`"Role":"original","AlbumID":0,"Size":100,"SHA256":"","MD5":"","ETag":"","MTime":"0001-01-01T00:00:00Z",` +
-		`"Level":"uploaded","Status":"active","QuarantinePath":""}]},"Asset":"uuid-7","Album":""},` +
-		`{"Op":{"Kind":"album_add","Remote":"","Root":"","Src":"","DstRoot":"","Dst":"","Asset":0,"AlbumID":0,` +
-		`"Rule":"R-LINK-05","Irreversible":false,"Links":null},"Asset":"uuid-7","Album":"u-hol"}]` + "\n"
+		`"Level":"uploaded","Status":"active","QuarantinePath":""}]},"Asset":"uuid-7","Album":"","Parent":""},` +
+		`{"Op":{"Kind":"album_add","Remote":"","Root":"","Src":"","DstRoot":"","Dst":"","Asset":0,"AlbumID":0,"ParentID":0,` +
+		`"Rule":"R-LINK-05","Irreversible":false,"Links":null},"Asset":"uuid-7","Album":"u-hol","Parent":""}]` + "\n"
 	if got, want := digest("the small plan", small, smallDelta), fmt.Sprintf("sha256:%x", sha256.Sum256([]byte(canonical))); got != want {
 		t.Errorf("the small plan: Digest = %q, want %q, the SHA-256 of\n%s", got, want, canonical)
 	}
@@ -116,6 +116,7 @@ func TestDigest(t *testing.T) {
 				join(7, 10), join(7, 13), join(8, 10),
 				{Kind: domain.OpAssetDelete, Asset: 9, Rule: "R-LINK-09"},
 				{Kind: domain.OpAlbumRename, AlbumID: 13, Dst: "05/01 Vacation", Rule: "R-LAYOUT-12"},
+				{Kind: domain.OpAlbumMove, AlbumID: 10, ParentID: 23, Rule: "R-LAYOUT-13"},
 			},
 			Albums: []domain.Album{{ID: 23, Kind: domain.KindEvent, Title: "05/02 Trip", FolderTitles: []string{"2024"}}},
 			Pairs:  []domain.AlbumPair{{AlbumID: 23, Remote: "alpha", Root: personal, DirPath: "2024/05-02 - Trip", CreatedBy: domain.OriginICloud}},
@@ -183,7 +184,7 @@ func TestDigest(t *testing.T) {
 				return id
 			}
 			for i := range p.Ops {
-				p.Ops[i].AlbumID = renumber(p.Ops[i].AlbumID)
+				p.Ops[i].AlbumID, p.Ops[i].ParentID = renumber(p.Ops[i].AlbumID), renumber(p.Ops[i].ParentID)
 				for j := range p.Ops[i].Links {
 					p.Ops[i].Links[j].AlbumID = renumber(p.Ops[i].Links[j].AlbumID)
 				}
@@ -238,6 +239,7 @@ func TestDigest(t *testing.T) {
 		}},
 		{"another title of the album that the run adds", false, func(p *domain.Plan, _ *domain.SnapshotDelta) { p.Albums[0].Title = "05/03 Trip" }},
 		{"another title of a renamed album", false, func(p *domain.Plan, _ *domain.SnapshotDelta) { p.Ops[9].Dst = "05/01 Beach" }},
+		{"another folder of a moved album", false, func(p *domain.Plan, _ *domain.SnapshotDelta) { p.Ops[10].ParentID = 13 }},
 		{"one operation less", false, func(p *domain.Plan, _ *domain.SnapshotDelta) { p.Ops = slices.Delete(p.Ops, 6, 7) }},
 	} {
 		p, d := world()
