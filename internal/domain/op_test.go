@@ -15,9 +15,9 @@ func TestOpKinds(t *testing.T) {
 	t.Parallel()
 	checkStored(t, []domain.OpKind{
 		domain.OpDelete, domain.OpCopy, domain.OpMove, domain.OpQuarantine, domain.OpPut,
-		domain.OpAlbumCreate, domain.OpAlbumRename, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumRemove, domain.OpAssetDelete, domain.OpExpire,
+		domain.OpAlbumCreate, domain.OpAlbumMove, domain.OpAlbumRename, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumRemove, domain.OpAssetDelete, domain.OpExpire,
 	},
-		"delete", "copy", "move", "quarantine", "put", "album_create", "album_rename", "import", "album_add", "album_remove", "asset_delete", "expire")
+		"delete", "copy", "move", "quarantine", "put", "album_create", "album_move", "album_rename", "import", "album_add", "album_remove", "asset_delete", "expire")
 }
 
 // The phases are the order in which a run makes its changes: a wrong phase
@@ -25,7 +25,7 @@ func TestOpKinds(t *testing.T) {
 func TestOpKindPhase(t *testing.T) {
 	t.Parallel()
 	for k, want := range map[domain.OpKind]int{
-		domain.OpDelete: 1, domain.OpCopy: 1, domain.OpMove: 1, domain.OpQuarantine: 1, domain.OpAlbumCreate: 1, domain.OpAlbumRename: 1, domain.OpPut: 2,
+		domain.OpDelete: 1, domain.OpCopy: 1, domain.OpMove: 1, domain.OpQuarantine: 1, domain.OpAlbumCreate: 1, domain.OpAlbumMove: 1, domain.OpAlbumRename: 1, domain.OpPut: 2,
 		domain.OpImport: 3, domain.OpAlbumAdd: 4, domain.OpAlbumRemove: 4, domain.OpAssetDelete: 5, domain.OpExpire: 6,
 	} {
 		if got := k.Phase(); got != want {
