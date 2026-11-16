@@ -16,8 +16,12 @@ import (
 func Syncs(a domain.Asset, p domain.Policies) bool {
 	skipped := a.Hidden && p.Hidden == domain.HiddenSkip ||
 		a.BurstUnselected && p.Burst == domain.BurstSelectedOnly ||
-		a.Missing && (a.InCloud == nil || !*a.InCloud)
+		unavailable(a)
 	return !skipped
+}
+
+func unavailable(a domain.Asset) bool {
+	return a.Missing && (a.InCloud == nil || !*a.InCloud)
 }
 
 // IsNew reports whether asset a, which has no link in a remote, is new

@@ -192,7 +192,7 @@ func TestSummarize(t *testing.T) {
 			},
 			"beta": {domain.OpDelete: {Count: 2}, domain.OpPut: {Count: 1, Bytes: 100}, domain.OpExpire: {Count: 1}},
 		},
-		Assets: 14, Irreversible: 3, NoUndo: 8, Mass: 9, Shared: 1, Captions: 1, Unavailable: 2, Unsettled: 4,
+		Assets: 14, Deletes: 3, NoUndo: 8, Mass: 9, Shared: 1, Captions: 1, Unavailable: 2, Unsettled: 4,
 		Copies: 2, Detached: 2, Returned: 2, Closed: 1,
 		Rules: map[string]int{
 			"R-COMPONENT-03": 1, "R-LAYOUT-04": 1, "R-LAYOUT-06": 1, "R-LINK-01": 3, "R-LINK-02": 2, "R-LINK-03": 1, "R-LINK-05": 1,
