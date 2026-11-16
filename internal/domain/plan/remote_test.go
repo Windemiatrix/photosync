@@ -269,7 +269,8 @@ func TestDecideRemoteLinksDecidable(t *testing.T) {
 // run makes them. The expected decisions, album changes and conflicts are
 // written from the rules on the reduction by asset, the modes, the albums of
 // the personal root and the conflict policies, not from the code, and must
-// not depend on the order of the current links and albums.
+// not depend on the order of the current links; the albums are in the order
+// of ID, as a run holds them.
 func TestDecideRemoteObject(t *testing.T) {
 	t.Parallel()
 	const (
@@ -285,9 +286,9 @@ func TestDecideRemoteObject(t *testing.T) {
 	)
 	albums := []domain.Album{
 		{ID: 1, UUID: "album-1", Kind: domain.KindFolder, Title: "2024"},
-		{ID: holidays, UUID: "album-10", Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: trip, UUID: "album-11", Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: party, UUID: "album-12", Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: holidays, UUID: "album-10", Kind: domain.KindEvent, Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: trip, UUID: "album-11", Kind: domain.KindEvent, Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: party, UUID: "album-12", Kind: domain.KindEvent, Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
 	}
 	asset := func(library, target domain.LibraryKind, ids ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{
@@ -448,13 +449,11 @@ func TestDecideRemoteObject(t *testing.T) {
 					t.Errorf("%s is not in domain.Rules", id)
 				}
 			}
-			all := slices.Clone(albums)
-			slices.Reverse(all)
 			slices.Reverse(input)
-			again, settled, still := plan.DecideRemoteObject(c.now, c.found, c.decisions, input, r, all, c.stored, c.p)
+			again, settled, still := plan.DecideRemoteObject(c.now, c.found, c.decisions, input, r, albums, c.stored, c.p)
 			if !slices.Equal(again.Links, o.Links) || !slices.Equal(again.Join, o.Join) || !slices.Equal(again.Leave, o.Leave) ||
 				settled != conflict || still != ok {
-				t.Errorf("with the current links and albums reversed: %q, %+v, in %v; want %q, %+v, in %v",
+				t.Errorf("with the current links reversed: %q, %+v, in %v; want %q, %+v, in %v",
 					show(again), settled, still, show(o), conflict, ok)
 			}
 		})

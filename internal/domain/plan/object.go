@@ -17,7 +17,8 @@ import (
 // leaves it: Memberships are the albums it is in, its first placement
 // applied, and TargetLibrary is the library whose root holds its files; it
 // syncs and is not in Recently Deleted. albums are as layout.Primary takes
-// them. links are the links of asset in every remote, each where its file
+// them, in the order of ID, each with the Kind that layout.Classify gives
+// it. links are the links of asset in every remote, each where its file
 // lies now, with none for a file gone from the cloud; only the active links
 // with the original or the source role count. A file of remote elsewhere
 // moves to a directory without a file, else goes to quarantine; a directory
@@ -62,12 +63,12 @@ func DecidePlacement(asset domain.Asset, links []domain.Link, remote string, alb
 // asset is in no event album.
 func objectAlbums(asset domain.Asset, links []domain.Link, albums []domain.Album) (want []domain.AlbumID, noEvent bool) {
 	var thematic []domain.AlbumID
-	for _, a := range albums {
-		member := !a.InTrash && slices.ContainsFunc(asset.Memberships, func(m domain.Membership) bool { return m.AlbumID == a.ID })
-		switch kind := layout.Classify(a); {
-		case member && kind == domain.KindEvent:
+	for _, m := range asset.Memberships {
+		switch a, ok := albumByID(albums, m.AlbumID); {
+		case !ok || a.InTrash:
+		case a.Kind == domain.KindEvent:
 			want = append(want, a.ID)
-		case member && kind == domain.KindThematic && objectLinked(links, a.ID):
+		case a.Kind == domain.KindThematic && objectLinked(links, a.ID):
 			thematic = append(thematic, a.ID)
 		}
 	}
@@ -83,6 +84,16 @@ func objectAlbums(asset domain.Asset, links []domain.Link, albums []domain.Album
 	}
 	slices.Sort(want)
 	return slices.Compact(want), noEvent
+}
+
+// Build looks albums up for each asset in each remote, so a scan of all of
+// them would grow as assets times albums; the albums of a run are in the
+// order of ID.
+func albumByID(albums []domain.Album, id domain.AlbumID) (domain.Album, bool) {
+	if i, ok := slices.BinarySearchFunc(albums, id, func(a domain.Album, x domain.AlbumID) int { return cmp.Compare(a.ID, x) }); ok {
+		return albums[i], true
+	}
+	return domain.Album{}, false
 }
 
 func objectLinked(links []domain.Link, album domain.AlbumID) bool {

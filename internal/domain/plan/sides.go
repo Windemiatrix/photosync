@@ -35,13 +35,13 @@ func IsNew(a domain.Asset, p domain.Policies) bool {
 // the snapshot reconciled with the state, found by the AssetID of l, with
 // the albums it is in now as Memberships; found reports that the snapshot
 // holds it, and albums are the albums of the library with the IDs of the
-// state. The asset is deleted when it is gone or in Recently Deleted;
-// otherwise it moved when it left baseLibrary for a library other than the
-// root of l, or when l lies in the directory of an album that it is no
-// longer in: an album missing from now.Memberships or from albums, or in
-// Recently Deleted. A library that differs only from the root of l is no
-// move: the asset waits to be moved there in Photos. The policies do not
-// matter here: see Syncs.
+// state, in the order of ID. The asset is deleted when it is gone or in
+// Recently Deleted; otherwise it moved when it left baseLibrary for a
+// library other than the root of l, or when l lies in the directory of an
+// album that it is no longer in: an album missing from now.Memberships or
+// from albums, or in Recently Deleted. A library that differs only from the
+// root of l is no move: the asset waits to be moved there in Photos. The
+// policies do not matter here: see Syncs.
 func ICloudSide(l domain.Link, baseLibrary domain.LibraryKind, now domain.Asset, found bool, albums []domain.Album) domain.ChangeKind {
 	switch {
 	case !found || now.InTrash:
@@ -54,8 +54,8 @@ func ICloudSide(l domain.Link, baseLibrary domain.LibraryKind, now domain.Asset,
 }
 
 func stillInAlbum(a domain.Asset, id domain.AlbumID, albums []domain.Album) bool {
-	return slices.ContainsFunc(a.Memberships, func(m domain.Membership) bool { return m.AlbumID == id }) &&
-		slices.ContainsFunc(albums, func(b domain.Album) bool { return b.ID == id && !b.InTrash })
+	b, ok := albumByID(albums, id)
+	return ok && !b.InTrash && slices.ContainsFunc(a.Memberships, func(m domain.Membership) bool { return m.AlbumID == id })
 }
 
 // RemoteSide returns how the file of active link l changed in the cloud

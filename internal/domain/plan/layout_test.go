@@ -16,9 +16,10 @@ import (
 // in the run. The expected decisions, statuses, albums and placements are
 // written from the rules on deletions, the deletes policy, the first
 // placement, the priority of remotes, the modes and the layout of files, not
-// from the code, and must not depend on the order of the links, the albums or
-// the memberships. The remotes keep the order of the configuration, which is
-// the priority while the policies name none.
+// from the code, and must not depend on the order of the links or the
+// memberships; the albums are in the order of ID, as a run holds them. The
+// remotes keep the order of the configuration, which is the priority while
+// the policies name none.
 func TestDecideLayout(t *testing.T) {
 	t.Parallel()
 	const (
@@ -42,10 +43,10 @@ func TestDecideLayout(t *testing.T) {
 	)
 	albums := []domain.Album{
 		{ID: 1, UUID: "album-1", Kind: domain.KindFolder, Title: "2024"},
-		{ID: holidays, UUID: "album-10", Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: trip, UUID: "album-11", Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: party, UUID: "album-12", Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: old, UUID: "album-13", Title: "05/04 Old", ParentID: 1, FolderTitles: []string{"2024"}, InTrash: true},
+		{ID: holidays, UUID: "album-10", Kind: domain.KindEvent, Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: trip, UUID: "album-11", Kind: domain.KindEvent, Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: party, UUID: "album-12", Kind: domain.KindEvent, Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: old, UUID: "album-13", Kind: domain.KindEvent, Title: "05/04 Old", ParentID: 1, FolderTitles: []string{"2024"}, InTrash: true},
 	}
 	asset := func(ids ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{
@@ -374,16 +375,15 @@ func TestDecideLayout(t *testing.T) {
 					t.Errorf("%s is not in domain.Rules", id)
 				}
 			}
-			now, rl, ra := c.now, slices.Clone(c.links), slices.Clone(albums)
+			now, rl := c.now, slices.Clone(c.links)
 			now.Memberships = slices.Clone(c.now.Memberships)
 			slices.Reverse(now.Memberships)
 			slices.Reverse(rl)
-			slices.Reverse(ra)
 			var again result
 			again.decisions, again.status, again.target, again.join, again.leave, again.placements =
-				plan.DecideLayout(now, c.found, c.linked, c.objects, rl, c.remotes, ra, nil, c.p, "run-2")
+				plan.DecideLayout(now, c.found, c.linked, c.objects, rl, c.remotes, albums, nil, c.p, "run-2")
 			if !equal(again, got) {
-				t.Errorf("with the links, albums and memberships reversed: %q; want %q", show(again), show(got))
+				t.Errorf("with the links and memberships reversed: %q; want %q", show(again), show(got))
 			}
 			for i := range got.target.Memberships {
 				got.target.Memberships[i].FirstSeenRun = "changed"

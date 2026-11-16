@@ -87,9 +87,10 @@ func DecideRemoteLinks(now domain.Asset, found bool, baseLibrary domain.LibraryK
 // winner; conflict, the conflict of the asset in r as the run leaves it; and
 // whether o takes part in the plan, o being zero when it does not. now and
 // found are as DecideRemoteLinks takes them, decisions are what it gives for r,
-// and links are its current for every remote. DecideObject reduces decisions
-// unless the asset is gone, in Recently Deleted or r is upload-only, where they
-// stand. While p.AlbumsForPersonal is false, the asset joins and leaves no
+// links are its current for every remote, and albums are as DecidePlacement
+// takes them. DecideObject reduces decisions unless the asset is gone, in
+// Recently Deleted or r is upload-only, where they stand. While
+// p.AlbumsForPersonal is false, the asset joins and leaves no
 // album unless links hold an active link of it in r with the original or the
 // source role outside the personal root. c is the conflict that the state
 // keeps for the asset in r, else one with only AssetID and Remote, and
