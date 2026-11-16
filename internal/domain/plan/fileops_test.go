@@ -62,6 +62,8 @@ func TestFileOps(t *testing.T) {
 		{ID: 11, Kind: domain.KindEvent, Title: "05/02 Trip", FolderTitles: []string{"2024"}},
 		{ID: 12, Kind: domain.KindEvent, Title: "05/03 Party", FolderTitles: []string{"2024"}},
 		{ID: 13, Kind: domain.KindThematic, Title: "Cats"},
+		{ID: 15, Kind: domain.KindEvent, Title: "Party time", FolderTitles: []string{"2024"}},
+		{ID: 16, Kind: domain.KindEvent, Title: "05/01 Holidays", FolderTitles: []string{"2024"}},
 	}
 	pairs := []domain.AlbumPair{
 		{AlbumID: 11, Remote: "beta", Root: personal, DirPath: "Elsewhere/Trip", CreatedBy: domain.OriginRemote},
@@ -109,6 +111,7 @@ func TestFileOps(t *testing.T) {
 		{Root: personal, Path: zoo + "/IMG_0001.dng", Size: 40, MD5: "c23"},
 		{Root: personal, Path: "Misc/IMG_0001.jpg", Size: 40, MD5: "c21"},
 		{Root: personal, Path: "Misc/IMG_0001.mov", Size: 40, MD5: "c22"},
+		{Root: personal, Path: "Misc/IMG_0001.jpeg", Size: 40, MD5: "c21"},
 		{Root: shared, Path: "Misc/IMG_0001.HEIC", Size: 100, MD5: "m1"},
 		{Root: shared, Path: "Moved/IMG_0001.HEIC", Size: 100, MD5: "m1"},
 	}
@@ -129,6 +132,7 @@ func TestFileOps(t *testing.T) {
 		l.ID, l.Root, l.Path, l.AlbumID = id, root, at, album
 		return l
 	}
+	kept, twin := relinked(copied, 3, personal, copied.Path, 0), relinked(copied, 26, personal, "Misc/IMG_0001.jpeg", 0)
 	held := func(l domain.Link, status domain.LinkStatus, at string) domain.Link {
 		l.Status, l.QuarantinePath = status, at
 		return l
@@ -147,6 +151,9 @@ func TestFileOps(t *testing.T) {
 	}
 	replacing := func(l domain.Link) domain.LinkDecision {
 		return dec(l, domain.ChangeNew, domain.ChangeNew, domain.ActionReplaceFile, "R-OBJECT-10")
+	}
+	linking := func(l domain.Link) domain.LinkDecision {
+		return dec(l, domain.ChangeNew, domain.ChangeNew, domain.ActionLink, "R-LINK-03")
 	}
 	parked := func(l domain.Link, status domain.LinkStatus, rule string) domain.Op {
 		return op(domain.OpQuarantine, l.Root, l.Path, l.Root, inQuarantine+l.Path, rule, held(l, status, inQuarantine+l.Path))
@@ -343,6 +350,51 @@ func TestFileOps(t *testing.T) {
 				dec(video, domain.ChangeNew, domain.ChangeNew, domain.ActionLink, "R-LINK-03"),
 			},
 			nil, nil, nil, nil, "", nil},
+		{"a file that matching links moves with the Live Photo video and the RAW file beside it, under the number that it takes, and a copy that matching links goes to quarantine with its video",
+			twoWay, event, group,
+			[]domain.LinkDecision{linking(copiedVideo), linking(raw), linking(lesser), linking(copied), linking(video)},
+			[]domain.Placement{place(domain.ActionMoveFile, lesser, 10, "R-OBJECT-05"), place(quarantine, copied, 0, "R-OBJECT-04")}, nil,
+			[]domain.Op{
+				op(domain.OpMove, personal, raw.Path, personal, holidays+"/IMG_0001 (1).DNG", "R-COMPONENT-04", relinked(raw, 23, personal, holidays+"/IMG_0001 (1).DNG", 10)),
+				op(domain.OpMove, personal, lesser.Path, personal, holidays+"/IMG_0001 (1).jpg", "R-OBJECT-05", relinked(lesser, 21, personal, holidays+"/IMG_0001 (1).jpg", 10)),
+				op(domain.OpMove, personal, video.Path, personal, holidays+"/IMG_0001 (1).mov", "R-COMPONENT-04", relinked(video, 22, personal, holidays+"/IMG_0001 (1).mov", 10)),
+				parked(copied, "", "R-OBJECT-04"),
+				parked(copiedVideo, "", "R-COMPONENT-04"),
+			},
+			[]domain.AlbumPair{paired(10, personal, holidays)}, "", nil},
+		{"a copy of a file that matching links into a pair of the other root takes a copy of the Live Photo video beside it there",
+			twoWay, event, groupShared,
+			[]domain.LinkDecision{linking(copiedVideo), linking(copied)},
+			[]domain.Placement{place(domain.ActionCopyFile, copied, 11, "R-OBJECT-03")}, nil,
+			[]domain.Op{
+				op(domain.OpCopy, personal, copied.Path, shared, "Shared/Trip/IMG_0001.jpg", "R-OBJECT-03", relinked(copied, 0, shared, "Shared/Trip/IMG_0001.jpg", 11)),
+				op(domain.OpCopy, personal, copiedVideo.Path, shared, "Shared/Trip/IMG_0001.mov", "R-OBJECT-03", relinked(copiedVideo, 0, shared, "Shared/Trip/IMG_0001.mov", 11)),
+			},
+			nil, "", nil},
+		{"an album whose directory the pair of another album holds puts the file there and makes no pair of its own", twoWay, event, asset, nil,
+			[]domain.Placement{place(domain.ActionMoveFile, stray, 15, "R-OBJECT-05")}, nil,
+			[]domain.Op{op(domain.OpMove, personal, "Misc/IMG_0002.HEIC", personal, party+"/IMG_0002 (1).HEIC", "R-OBJECT-05",
+				relinked(stray, 2, personal, party+"/IMG_0002 (1).HEIC", 15))},
+			nil, "", nil},
+		{"two albums of one directory without a pair make one pair, for the first of them, and the files of both go there", twoWay, event, asset, nil,
+			[]domain.Placement{place(domain.ActionMoveFile, stray, 10, "R-OBJECT-05"), place(domain.ActionCopyFile, stray, 16, "R-OBJECT-03")}, nil,
+			[]domain.Op{
+				op(domain.OpCopy, personal, "Misc/IMG_0002.HEIC", personal, holidays+"/IMG_0002 (1).HEIC", "R-OBJECT-03",
+					relinked(stray, 0, personal, holidays+"/IMG_0002 (1).HEIC", 16)),
+				op(domain.OpMove, personal, "Misc/IMG_0002.HEIC", personal, holidays+"/IMG_0002.HEIC", "R-OBJECT-05",
+					relinked(stray, 2, personal, holidays+"/IMG_0002.HEIC", 10)),
+			},
+			[]domain.AlbumPair{paired(10, personal, holidays)}, "", nil},
+		{"a Live Photo video that matching links beside both a moved file and a copy going to quarantine moves with the file, and only once",
+			twoWay, event, group,
+			[]domain.LinkDecision{linking(twin), linking(copiedVideo)},
+			[]domain.Placement{place(domain.ActionMoveFile, kept, 10, "R-OBJECT-05"), place(quarantine, twin, 0, "R-OBJECT-04")}, nil,
+			[]domain.Op{
+				op(domain.OpMove, personal, kept.Path, personal, holidays+"/IMG_0001 (1).jpg", "R-OBJECT-05", relinked(kept, 3, personal, holidays+"/IMG_0001 (1).jpg", 10)),
+				op(domain.OpMove, personal, copiedVideo.Path, personal, holidays+"/IMG_0001 (1).mov", "R-COMPONENT-04", relinked(copiedVideo, 25, personal, holidays+"/IMG_0001 (1).mov", 10)),
+				parked(twin, "", "R-OBJECT-04"),
+			},
+			[]domain.AlbumPair{paired(10, personal, holidays)}, "", nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

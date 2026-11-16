@@ -38,8 +38,10 @@ type RemoteScan struct {
 // ReadScan, and Settling holds its asset, as it holds the asset of a link of
 // the remote whose content such an entry has, by the hash of kind
 // Capabilities.ContentHash of the remote. ReadScan reads the rest with
-// p.EditedDirs, and MatchFresh matches its fresh with delta.Assets, new link
-// IDs running on from the highest link ID of state. For the personal root,
+// p.EditedDirs. Its fresh lose those that share the root, the directory and
+// the export.StemKey of the name with such an entry, which wait with it, and
+// MatchFresh matches the fresh left with delta.Assets, new link IDs running
+// on from the highest link ID of state. For the personal root,
 // then the shared one, RenamedDirs runs with the albums of delta, each as the
 // last RenamedDirs gave it or, inside a folder that it renamed, under the
 // new title of that folder, and those added before, the pairs of state and
@@ -54,8 +56,8 @@ type RemoteScan struct {
 // for its album and root, which a moved pair left behind, and in dirs alone
 // the main files of the new files; a file goes in files under each album of
 // the Memberships of its asset. JoinFresh runs with the pairs of state and
-// those made, and DecideDerived with fresh and p.DerivedCopy. files is the
-// union of what ReadScan gives, added and made are what RenamedDirs and
+// those made, and DecideDerived with the fresh left and p.DerivedCopy. files
+// is the union of what ReadScan gives, added and made are what RenamedDirs and
 // PairDirs add and make, in the order of the calls, the Renamed and the
 // Refiled of a remote hold what RenamedDirs renames and refiles there, and
 // notices hold, for each remote in turn, those of settling, ReadScan,
@@ -85,7 +87,7 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 	since := now.Add(-time.Duration(p.SettleMinutes) * time.Minute)
 	for _, r := range slices.SortedFunc(slices.Values(remotes), func(x, y domain.RemoteSpec) int { return cmp.Compare(x.Name, y.Name) }) {
 		hash := r.Capabilities.ContentHash
-		young, held := map[[2]string]bool{}, map[string]bool{}
+		young, held, shots := map[[2]string]bool{}, map[string]bool{}, map[[3]string]bool{}
 		var scan []domain.RemoteEntry
 		for _, e := range slices.SortedFunc(slices.Values(scans[r.Name]), func(x, y domain.RemoteEntry) int {
 			return cmp.Or(cmp.Compare(x.Root, y.Root), cmp.Compare(x.Path, y.Path))
@@ -96,7 +98,7 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 				scan = append(scan, e)
 				continue
 			}
-			young[[2]string{string(e.Root), e.Path}] = true
+			young[[2]string{string(e.Root), e.Path}], shots[sidecarKey(e.Root, e.Path)] = true, true
 			if k := moveKey(e.MD5, e.SHA256, hash); k != "" {
 				held[k] = true
 			}
@@ -114,6 +116,9 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 			}
 		}
 		fs, fresh, edited, ns := ReadScan(links, r, scan, p.EditedDirs)
+		// A photo matched or imported without the Live Photo video or RAW file
+		// that is still being written beside it would never take that file later.
+		fresh = slices.DeleteFunc(fresh, func(e domain.RemoteEntry) bool { return shots[sidecarKey(e.Root, e.Path)] })
 		maps.Copy(files, fs)
 		matched, left, ms := MatchFresh(delta.Assets, state.Links, fs, r, fresh, lastLink, p)
 		dirs, paths := map[domain.LibraryKind]map[string]bool{}, map[domain.LibraryKind]map[domain.AlbumID][]string{}
