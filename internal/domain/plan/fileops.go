@@ -16,16 +16,17 @@ import (
 // source role of an asset in remote r, and made, the album pairs that they
 // make. decisions and placements are what DecideLayout gives for r, target is
 // its target, files gives by link ID the entry of the scan where the file of
-// a link lies now, as ReadScan gives it, albums are the albums of the run and
-// pairs its album pairs in every remote and root; names are the names of r in
-// the run, which the operations take, and t, fields and now are as
-// Names.Render takes them, with the mode of r. A decision with
+// a link lies now, as ReadScan gives it, albums are the albums of the run in
+// the order of ID and pairs its album pairs of r in the root of
+// target.TargetLibrary; names are the names of r in the run, which the
+// operations take, and t, fields and now are as Names.Render takes them,
+// with the mode of r. A decision with
 // ActionQuarantineFile, in the order of link ID, moves the file from where it
 // lies to quarantine on day now (OpQuarantine), and its link, taking that
 // place, stays quarantined_remote. A placement, in its order, goes to the
 // directory that pathtemplate.EventPath gives the album AlbumID, zero for the
-// day folder, with the pairs of r for the root of target.TargetLibrary, and
-// made pairs an album that has none there with that directory by
+// day folder, with pairs, and made pairs an album that has none there with
+// that directory by
 // domain.OriginICloud, unless a pair of r there, among pairs or made before,
 // holds that directory: the files go there all the same. ActionMoveFile and
 // ActionCopyFile take the file from where it lies to that directory and root,
@@ -141,12 +142,6 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 			replace(d, d.Link, path.Dir(d.Link.Path))
 		}
 	}
-	// Build calls FileOps for each asset in each remote, most with nothing to
-	// place, so a copy of every pair on each call would grow as assets times pairs.
-	var own []domain.AlbumPair
-	if len(placements) > 0 {
-		own = slices.DeleteFunc(slices.Clone(pairs), func(x domain.AlbumPair) bool { return x.Remote != r.Name || x.Root != root })
-	}
 	for _, pl := range placements {
 		if pl.Action == domain.ActionQuarantineFile {
 			quarantine(pl.Link, "", pl.Rule)
@@ -158,13 +153,10 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 			follow(pl, domain.OpQuarantine, pl.Link)
 			continue
 		}
-		var album domain.Album
-		if i := slices.IndexFunc(albums, func(a domain.Album) bool { return a.ID == pl.AlbumID }); i >= 0 {
-			album = albums[i]
-		}
-		dir := pathtemplate.EventPath(target, album, own, p)
+		album, _ := albumByID(albums, pl.AlbumID)
+		dir := pathtemplate.EventPath(target, album, pairs, p)
 		taken := func(x domain.AlbumPair) bool { return x.AlbumID == album.ID || x.DirPath == dir }
-		if album.ID != 0 && !slices.ContainsFunc(own, taken) && !slices.ContainsFunc(made, taken) {
+		if album.ID != 0 && !slices.ContainsFunc(pairs, taken) && !slices.ContainsFunc(made, taken) {
 			made = append(made, domain.AlbumPair{AlbumID: album.ID, Remote: r.Name, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud})
 		}
 		if pl.Action != domain.ActionUpload {

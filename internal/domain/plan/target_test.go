@@ -370,9 +370,9 @@ func TestDecideTargetLayout(t *testing.T) {
 	)
 	albums := []domain.Album{
 		{ID: 1, UUID: "album-1", Kind: domain.KindFolder, Title: "2024"},
-		{ID: holidays, UUID: "album-10", Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: trip, UUID: "album-11", Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: party, UUID: "album-12", Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: holidays, UUID: "album-10", Kind: domain.KindEvent, Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: trip, UUID: "album-11", Kind: domain.KindEvent, Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: party, UUID: "album-12", Kind: domain.KindEvent, Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
 	}
 	in := func(ids ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{

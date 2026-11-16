@@ -68,7 +68,8 @@ type Input struct {
 // name, where the asset takes part in the plan, give its operations: FileOps
 // with the decisions of matching there, each replacement turned into
 // ActionLink when a decision of DecideLayout deletes the asset, and with the
-// pairs of the state and those that the run made before. A remote takes its
+// pairs of that remote in the root of the target of the asset, those of the
+// state and those that the run made before. A remote takes its
 // names from its whole listing and its links in the state, and its sidecars
 // by those links. ReplaceOps then gives the replacement of the asset from its
 // links as they lie now and its operations so far. ExpireOps, with
@@ -179,6 +180,11 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 			}
 		}
 	}
+	rootPairs := map[domain.AlbumPair][]domain.AlbumPair{}
+	for _, x := range pairs {
+		k := domain.AlbumPair{Remote: x.Remote, Root: x.Root}
+		rootPairs[k] = append(rootPairs[k], x)
+	}
 	slices.Sort(ids)
 	for _, id := range slices.Compact(ids) {
 		asset, found := assets[id]
@@ -233,14 +239,15 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 		}
 		fields := in.Fields(target.Key)
 		for _, r := range byName {
-			main, mk, more, err := FileOps(names[r.Name], r, target, slices.Concat(decisions[r.Name], matched[r.Name]), placements[r.Name], files, albums, pairs, in.Template, fields, in.Policies, in.Now)
+			k := domain.AlbumPair{Remote: r.Name, Root: target.TargetLibrary}
+			main, mk, more, err := FileOps(names[r.Name], r, target, slices.Concat(decisions[r.Name], matched[r.Name]), placements[r.Name], files, albums, rootPairs[k], in.Template, fields, in.Policies, in.Now)
 			if err != nil {
 				return domain.Plan{}, domain.SnapshotDelta{}, err
 			}
 			comp, most := ComponentOps(names[r.Name], target, main, components, copies, after, files, in.Now)
 			side, last := SidecarOps(names[r.Name], id, main, fates, sides[r.Name], files, r.Mode, in.Policies.Deletes, in.Now)
 			out.Ops, notices = append(out.Ops, slices.Concat(main, comp, side)...), append(notices, slices.Concat(more, most, last)...)
-			pairs, out.Pairs = append(pairs, mk...), append(out.Pairs, mk...)
+			pairs, rootPairs[k], out.Pairs = append(pairs, mk...), append(rootPairs[k], mk...), append(out.Pairs, mk...)
 		}
 		replacing, told := ReplaceOps(target, decisions, components, current, out.Ops[start:], files, albums)
 		out.Ops, notices = append(out.Ops, replacing...), append(notices, told...)
@@ -400,7 +407,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 		}
 	}
 	for i, x := range out.Pairs {
-		if a := albums[slices.IndexFunc(albums, func(y domain.Album) bool { return y.ID == x.AlbumID })]; layout.DirFor(a, in.Policies) == x.DirPath {
+		if a, _ := albumByID(albums, x.AlbumID); layout.DirFor(a, in.Policies) == x.DirPath {
 			out.Pairs[i].NamedAfter = pathKey(a)
 		}
 	}

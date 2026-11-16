@@ -12,7 +12,8 @@ import (
 // Each row starts from files that lie where the albums of the asset want
 // them and changes its albums, its library or a file. The expected changes
 // are written from the rules on albums and directories, not from the code,
-// and must not depend on the order of the input.
+// and must not depend on the order of the links and memberships; the albums
+// are in the order of ID, as a run holds them.
 func TestDecidePlacement(t *testing.T) {
 	t.Parallel()
 	const (
@@ -24,11 +25,11 @@ func TestDecidePlacement(t *testing.T) {
 	)
 	albums := []domain.Album{
 		{ID: 1, UUID: "album-1", Kind: domain.KindFolder, Title: "2024"},
-		{ID: holidays, UUID: "album-10", Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: trip, UUID: "album-11", Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: old, UUID: "album-13", Title: "05/03 Old", ParentID: 1, FolderTitles: []string{"2024"}, InTrash: true},
-		{ID: pets, UUID: "album-20", Title: "Pets"},
-		{ID: recipes, UUID: "album-21", Title: "Recipes"},
+		{ID: holidays, UUID: "album-10", Kind: domain.KindEvent, Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: trip, UUID: "album-11", Kind: domain.KindEvent, Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: old, UUID: "album-13", Kind: domain.KindEvent, Title: "05/03 Old", ParentID: 1, FolderTitles: []string{"2024"}, InTrash: true},
+		{ID: pets, UUID: "album-20", Kind: domain.KindThematic, Title: "Pets"},
+		{ID: recipes, UUID: "album-21", Kind: domain.KindThematic, Title: "Recipes"},
 	}
 	asset := func(library, target domain.LibraryKind, ids ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{
@@ -175,13 +176,12 @@ func TestDecidePlacement(t *testing.T) {
 					t.Errorf("%s is not in domain.Rules", w.rule)
 				}
 			}
-			reversed, reordered, all := c.asset, slices.Clone(c.links), slices.Clone(albums)
+			reversed, reordered := c.asset, slices.Clone(c.links)
 			reversed.Memberships = slices.Clone(c.asset.Memberships)
 			slices.Reverse(reversed.Memberships)
 			slices.Reverse(reordered)
-			slices.Reverse(all)
-			if again := plan.DecidePlacement(reversed, reordered, "disk", all); !slices.Equal(again, got) {
-				t.Errorf("with the input reversed: %+v; want %+v", again, got)
+			if again := plan.DecidePlacement(reversed, reordered, "disk", albums); !slices.Equal(again, got) {
+				t.Errorf("with the links and memberships reversed: %+v; want %+v", again, got)
 			}
 		})
 	}
@@ -191,7 +191,8 @@ func TestDecidePlacement(t *testing.T) {
 // asset in iCloud, since the last applied run. The decisions come from
 // DecideLink as a run makes them; the expected decisions and albums are
 // written from the rules on links and albums, not from the code, and must
-// not depend on the order of the input.
+// not depend on the order of the decisions, the links and the memberships;
+// the albums are in the order of ID, as a run holds them.
 func TestDecideObject(t *testing.T) {
 	t.Parallel()
 	const (
@@ -207,9 +208,9 @@ func TestDecideObject(t *testing.T) {
 	)
 	albums := []domain.Album{
 		{ID: 1, UUID: "album-1", Kind: domain.KindFolder, Title: "2024"},
-		{ID: holidays, UUID: "album-10", Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: trip, UUID: "album-11", Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: party, UUID: "album-12", Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: holidays, UUID: "album-10", Kind: domain.KindEvent, Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: trip, UUID: "album-11", Kind: domain.KindEvent, Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: party, UUID: "album-12", Kind: domain.KindEvent, Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
 	}
 	asset := func(library, target domain.LibraryKind, ids ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{
@@ -409,15 +410,14 @@ func TestDecideObject(t *testing.T) {
 					t.Errorf("link %d is %s while DecidePlacement keeps its file: %v; a conflict is the same change exactly when DecidePlacement keeps its file", d.Link.ID, d.Action, keeps)
 				}
 			}
-			reversed, ds, now, all := c.asset, slices.Clone(c.decisions), slices.Clone(c.now), slices.Clone(albums)
+			reversed, ds, now := c.asset, slices.Clone(c.decisions), slices.Clone(c.now)
 			reversed.Memberships = slices.Clone(c.asset.Memberships)
 			slices.Reverse(reversed.Memberships)
 			slices.Reverse(ds)
 			slices.Reverse(now)
-			slices.Reverse(all)
-			again := plan.DecideObject(reversed, ds, now, "disk", all)
+			again := plan.DecideObject(reversed, ds, now, "disk", albums)
 			if !slices.Equal(again.Links, got.Links) || !slices.Equal(again.Join, got.Join) || !slices.Equal(again.Leave, got.Leave) {
-				t.Errorf("with the input reversed: %+v; want %+v", again, got)
+				t.Errorf("with the decisions, links and memberships reversed: %+v; want %+v", again, got)
 			}
 		})
 	}

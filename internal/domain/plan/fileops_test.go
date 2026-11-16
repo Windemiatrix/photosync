@@ -20,9 +20,11 @@ import (
 // directories of its albums under names that no file of the cloud or of the
 // run takes, and replaces a lesser copy with the original. The expected
 // operations follow the rules of the layout and of the names, not the code,
-// and must not depend on the order of the decisions, the scan, the links,
-// the albums and the pairs, nor on the deletes policy: a replacement keeps
-// the old file in quarantine under every policy.
+// and must not depend on the order of the decisions, the scan, the links and
+// the pairs, nor on the deletes policy: a replacement keeps the old file in
+// quarantine under every policy. The albums are in the order of ID and the
+// pairs are those of the remote in the root of the target, as a run gives
+// them.
 func TestFileOps(t *testing.T) {
 	t.Parallel()
 	const (
@@ -205,7 +207,7 @@ func TestFileOps(t *testing.T) {
 			[]domain.Op{op(domain.OpMove, personal, "Misc/IMG_0002.HEIC", personal, holidays+"/IMG_0002.HEIC", "R-OBJECT-05",
 				relinked(stray, 2, personal, holidays+"/IMG_0002.HEIC", 10))},
 			[]domain.AlbumPair{paired(10, personal, holidays)}, "", nil},
-		{"a stem that a file of the user takes gives the next number, and the pairs of another remote and another root do not count",
+		{"a stem that a file of the user takes gives the next number",
 			twoWay, event, asset, nil,
 			[]domain.Placement{place(domain.ActionMoveFile, stray, 11, "R-OBJECT-05")}, nil,
 			[]domain.Op{op(domain.OpMove, personal, "Misc/IMG_0002.HEIC", personal, trip+"/IMG_0002 (1).HEIC", "R-OBJECT-05",
@@ -403,9 +405,10 @@ func TestFileOps(t *testing.T) {
 				t.Fatalf("template.Parse(%q): %v", c.tmpl, err)
 			}
 			r := domain.RemoteSpec{Name: "alpha", Mode: c.mode}
-			input := fmt.Sprintf("%+v %+v %+v %+v %+v %+v %+v", c.decisions, c.placements, c.files, albums, pairs, scan, links)
+			own := slices.DeleteFunc(slices.Clone(pairs), func(x domain.AlbumPair) bool { return x.Remote != "alpha" || x.Root != c.target.TargetLibrary })
+			input := fmt.Sprintf("%+v %+v %+v %+v %+v %+v %+v", c.decisions, c.placements, c.files, albums, own, scan, links)
 			got, made, notices, err := plan.FileOps(plan.NewNames("alpha", scan, links), r, c.target, c.decisions, c.placements,
-				c.files, albums, pairs, tmpl, fields, p, now)
+				c.files, albums, own, tmpl, fields, p, now)
 			noticed := len(notices) == 0
 			if c.notice != "" {
 				noticed = len(notices) == 1 && notices[0].Code == "plan.no_path" && len(notices[0].Params) == 3 &&
@@ -424,20 +427,19 @@ func TestFileOps(t *testing.T) {
 				q := p
 				q.Deletes = deletes
 				other, also, more, failed := plan.FileOps(plan.NewNames("alpha", scan, links), r, c.target, c.decisions, c.placements,
-					c.files, albums, pairs, tmpl, fields, q, now)
+					c.files, albums, own, tmpl, fields, q, now)
 				if !reflect.DeepEqual(other, got) || show(nil, also, more, failed) != show(nil, made, notices, err) {
 					t.Errorf("under deletes %s: %s; want %s", deletes, show(other, also, more, failed), show(got, made, notices, err))
 				}
 			}
-			rd, ra, rp, rs, rl := slices.Clone(c.decisions), slices.Clone(albums), slices.Clone(pairs), slices.Clone(scan), slices.Clone(links)
+			rd, rp, rs, rl := slices.Clone(c.decisions), slices.Clone(own), slices.Clone(scan), slices.Clone(links)
 			slices.Reverse(rd)
-			slices.Reverse(ra)
 			slices.Reverse(rp)
 			slices.Reverse(rs)
 			slices.Reverse(rl)
-			again, also, more, failed := plan.FileOps(plan.NewNames("alpha", rs, rl), r, c.target, rd, c.placements, c.files, ra, rp, tmpl, fields, p, now)
+			again, also, more, failed := plan.FileOps(plan.NewNames("alpha", rs, rl), r, c.target, rd, c.placements, c.files, albums, rp, tmpl, fields, p, now)
 			if !reflect.DeepEqual(again, got) || show(nil, also, more, failed) != show(nil, made, notices, err) {
-				t.Errorf("with the decisions, the scan, the links, the albums and the pairs reversed: %s; want %s",
+				t.Errorf("with the decisions, the scan, the links and the pairs reversed: %s; want %s",
 					show(again, also, more, failed), show(got, made, notices, err))
 			}
 			for _, o := range got {
@@ -448,7 +450,7 @@ func TestFileOps(t *testing.T) {
 			for i := range made {
 				made[i].DirPath = "changed"
 			}
-			if after := fmt.Sprintf("%+v %+v %+v %+v %+v %+v %+v", c.decisions, c.placements, c.files, albums, pairs, scan, links); after != input {
+			if after := fmt.Sprintf("%+v %+v %+v %+v %+v %+v %+v", c.decisions, c.placements, c.files, albums, own, scan, links); after != input {
 				t.Errorf("FileOps changed its input or shares a slice with it:\n%s\nwant\n%s", after, input)
 			}
 		})

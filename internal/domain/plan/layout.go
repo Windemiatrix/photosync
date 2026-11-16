@@ -44,7 +44,8 @@ func DecideLayout(now domain.Asset, found, linked bool, objects map[string]domai
 		priority = names
 	}
 	dead := func(c domain.AlbumChange) bool {
-		return !slices.ContainsFunc(albums, func(a domain.Album) bool { return a.ID == c.AlbumID && !a.InTrash })
+		a, ok := albumByID(albums, c.AlbumID)
+		return !ok || a.InTrash
 	}
 	fate, deleting, frozen := DecideFate(objects, modes, priority, p.Deletes), false, map[string]bool{}
 	decisions, status = map[string][]domain.LinkDecision{}, map[domain.LinkID]domain.LinkStatus{}
