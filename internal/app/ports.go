@@ -47,11 +47,6 @@ type PhotoLibrary interface {
 	// changes nothing and asks nothing.
 	DeleteAssets(ctx context.Context, uuids []string) error
 
-	// UpdateAsset changes the asset as p says; a zero p changes nothing.
-	// Hiding asks the user. A hidden asset stays in snapshots, but the other
-	// methods no longer find it, so it cannot be shown again.
-	UpdateAsset(ctx context.Context, uuid string, p domain.AssetPatch) error
-
 	// CreateFolder makes a folder titled title in the folder parentUUID, or at
 	// the top level when parentUUID is empty, and returns its UUID. A
 	// parentUUID that is not a folder is domain.ErrNotFound. A title that is

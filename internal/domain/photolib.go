@@ -21,9 +21,3 @@ type ImportRequest struct {
 	Taken                            time.Time
 	AlbumUUIDs                       []string
 }
-
-// AssetPatch is a change of an asset in the photo library; a nil field is left
-// as it is.
-type AssetPatch struct {
-	Hidden *bool
-}
