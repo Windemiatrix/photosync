@@ -28,13 +28,6 @@ var photoLibDialogs = []struct {
 		edit: func(s *domain.LibrarySnapshot) { s.Assets[0].InTrash = true },
 	},
 	{
-		op: "UpdateAsset",
-		call: func(ctx context.Context, l *testkit.FakePhotoLibrary) error {
-			return l.UpdateAsset(ctx, "uuid-1", domain.AssetPatch{Hidden: new(true)})
-		},
-		edit: func(s *domain.LibrarySnapshot) { s.Assets[0].Hidden = true },
-	},
-	{
 		op: "DeleteCollections",
 		call: func(ctx context.Context, l *testkit.FakePhotoLibrary) error {
 			return l.DeleteCollections(ctx, []string{"folder-2"})
@@ -122,36 +115,6 @@ func TestFakePhotoLibraryDeleteCollections(t *testing.T) {
 	}
 }
 
-func TestFakePhotoLibraryHide(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	lib := testkit.NewFakePhotoLibrary(photoLibSeed())
-
-	if err := lib.UpdateAsset(ctx, "uuid-1", domain.AssetPatch{Hidden: new(true)}); err != nil {
-		t.Fatalf("UpdateAsset() hiding error = %v, want nil", err)
-	}
-	if err := lib.UpdateAsset(ctx, "uuid-1", domain.AssetPatch{Hidden: new(false)}); !errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("UpdateAsset() showing a hidden asset error = %v, want %v: a hidden asset cannot be shown again", err, domain.ErrNotFound)
-	}
-	if _, err := lib.Download(ctx, "uuid-1", t.TempDir(), nil); !errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("Download() of a hidden asset error = %v, want %v", err, domain.ErrNotFound)
-	}
-
-	cnt := lib.Counters()
-	if cnt.Dialogs != 1 {
-		t.Errorf("Counters().Dialogs = %d, want 1", cnt.Dialogs)
-	}
-	if got, want := cnt.Calls, map[string]int{"UpdateAsset": 2, "Download": 1}; !maps.Equal(got, want) {
-		t.Errorf("Counters().Calls = %v, want %v", got, want)
-	}
-	want := photoLibWant()
-	want.Assets[0].Hidden = true
-	if got := photoLibSnapshot(t, lib); !reflect.DeepEqual(got, want) {
-		t.Errorf("Snapshot() after hiding = %+v, want %+v", got, want)
-	}
-}
-
 func TestFakePhotoLibraryDialogRejects(t *testing.T) {
 	t.Parallel()
 
@@ -171,21 +134,6 @@ func TestFakePhotoLibraryDialogRejects(t *testing.T) {
 		}, err: domain.ErrNotFound},
 		{name: "delete_assets_none", op: "DeleteAssets", call: func(ctx context.Context, l *testkit.FakePhotoLibrary) error {
 			return l.DeleteAssets(ctx, nil)
-		}, err: nil},
-		{name: "update_hidden", op: "UpdateAsset", call: func(ctx context.Context, l *testkit.FakePhotoLibrary) error {
-			return l.UpdateAsset(ctx, "uuid-2", domain.AssetPatch{Hidden: new(true)})
-		}, err: domain.ErrNotFound},
-		{name: "update_trashed", op: "UpdateAsset", call: func(ctx context.Context, l *testkit.FakePhotoLibrary) error {
-			return l.UpdateAsset(ctx, "uuid-3", domain.AssetPatch{Hidden: new(true)})
-		}, err: domain.ErrNotFound},
-		{name: "update_unknown", op: "UpdateAsset", call: func(ctx context.Context, l *testkit.FakePhotoLibrary) error {
-			return l.UpdateAsset(ctx, "uuid-9", domain.AssetPatch{})
-		}, err: domain.ErrNotFound},
-		{name: "update_zero", op: "UpdateAsset", call: func(ctx context.Context, l *testkit.FakePhotoLibrary) error {
-			return l.UpdateAsset(ctx, "uuid-1", domain.AssetPatch{})
-		}, err: nil},
-		{name: "update_show", op: "UpdateAsset", call: func(ctx context.Context, l *testkit.FakePhotoLibrary) error {
-			return l.UpdateAsset(ctx, "uuid-1", domain.AssetPatch{Hidden: new(false)})
 		}, err: nil},
 		{name: "delete_trashed_collection", op: "DeleteCollections", call: func(ctx context.Context, l *testkit.FakePhotoLibrary) error {
 			return l.DeleteCollections(ctx, []string{"folder-1", "album-2"})
@@ -395,10 +343,6 @@ func TestFakePhotoLibraryDialogConcurrent(t *testing.T) {
 				t.Errorf("DeleteCollections(%q) error = %v, want nil", album, err)
 				return
 			}
-			if err := lib.UpdateAsset(ctx, "uuid-1", domain.AssetPatch{Hidden: new(false)}); err != nil {
-				t.Errorf("UpdateAsset() error = %v, want nil", err)
-				return
-			}
 			if err := lib.DeleteAssets(ctx, nil); err != nil {
 				t.Errorf("DeleteAssets(nil) error = %v, want nil", err)
 				return
@@ -424,7 +368,7 @@ func TestFakePhotoLibraryDialogConcurrent(t *testing.T) {
 	if cnt.Dialogs != 8 {
 		t.Errorf("Counters().Dialogs = %d, want 8", cnt.Dialogs)
 	}
-	if got, want := cnt.Calls, map[string]int{"CreateAlbum": 8, "DeleteCollections": 8, "UpdateAsset": 8, "DeleteAssets": 8, "Snapshot": 1}; !maps.Equal(got, want) {
+	if got, want := cnt.Calls, map[string]int{"CreateAlbum": 8, "DeleteCollections": 8, "DeleteAssets": 8, "Snapshot": 1}; !maps.Equal(got, want) {
 		t.Errorf("Counters().Calls = %v, want %v", got, want)
 	}
 }

@@ -36,7 +36,6 @@ func Run(t *testing.T, open func(t *testing.T) Library) {
 	t.Run("import", func(t *testing.T) { testImport(t, open(t)) })
 	t.Run("cloud", func(t *testing.T) { testCloud(t, open(t)) })
 	t.Run("delete", func(t *testing.T) { testDelete(t, open(t)) })
-	t.Run("hide", func(t *testing.T) { testHide(t, open(t)) })
 }
 
 func testImport(t *testing.T, l Library) {
@@ -101,24 +100,6 @@ func testDelete(t *testing.T, l Library) {
 	l.Restore(uuid)
 	if assetOf(t, l, uuid).InTrash {
 		t.Error("the asset stays in Recently Deleted after Restore")
-	}
-}
-
-func testHide(t *testing.T, l Library) {
-	ctx := t.Context()
-	uuid := importPhoto(t, l)
-	l.Answer("UpdateAsset", true)
-	if err := l.UpdateAsset(ctx, uuid, domain.AssetPatch{Hidden: new(true)}); err != nil {
-		t.Fatalf("UpdateAsset() hiding error = %v, want nil", err)
-	}
-	if !assetOf(t, l, uuid).Hidden {
-		t.Error("the snapshot does not show the asset as Hidden")
-	}
-	if _, err := l.Download(ctx, uuid, t.TempDir(), nil); !errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("Download() of a hidden asset error = %v, want %v", err, domain.ErrNotFound)
-	}
-	if err := l.UpdateAsset(ctx, uuid, domain.AssetPatch{Hidden: new(false)}); !errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("UpdateAsset() showing a hidden asset error = %v, want %v", err, domain.ErrNotFound)
 	}
 }
 

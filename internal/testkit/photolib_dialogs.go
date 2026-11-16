@@ -30,25 +30,6 @@ func (f *FakePhotoLibrary) DeleteAssets(ctx context.Context, uuids []string) err
 	})
 }
 
-// UpdateAsset asks the user only to hide the asset: a p that hides nothing
-// succeeds with nothing changed and nothing asked. An asset that is hidden,
-// trashed or unknown fails the call with domain.ErrNotFound whatever p is.
-func (f *FakePhotoLibrary) UpdateAsset(ctx context.Context, uuid string, p domain.AssetPatch) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if err := f.begin(ctx, "UpdateAsset"); err != nil {
-		return err
-	}
-	i, err := f.findAsset(uuid)
-	if err != nil || p.Hidden == nil || !*p.Hidden {
-		return err
-	}
-	if err := f.ask("UpdateAsset"); err != nil {
-		return err
-	}
-	return f.commit(ctx, "UpdateAsset", func() { f.assets[i].Hidden = true })
-}
-
 // DeleteCollections asks the user once, for the library may ask, and then
 // puts each folder and album of uuids and every one under them in the trash,
 // where snapshots keep them. An empty uuids asks nothing, and a uuid that is
