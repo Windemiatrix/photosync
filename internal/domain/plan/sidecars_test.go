@@ -68,7 +68,7 @@ func TestSidecars(t *testing.T) {
 		{"the photo moved away by the user", []domain.Link{photo}, []domain.RemoteEntry{file(trip + "IMG_0001.HEIC"), xmp}, []string{itsXMP}},
 		{"the directory in another case", []domain.Link{photo}, []domain.RemoteEntry{heic, file("2024/05-01 - holidays/IMG_0001.xmp")}, nil},
 		{"a directory with a sidecar extension", []domain.Link{photo},
-			[]domain.RemoteEntry{heic, {Root: domain.LibraryPersonal, Path: dir + "IMG_0001.zip", IsDir: true}}, nil},
+			[]domain.RemoteEntry{heic, {Root: domain.LibraryPersonal, Path: dir + "IMG_0001.xmp", IsDir: true}}, nil},
 		{"the photo in the root of the remote", []domain.Link{other(1, func(l *domain.Link) { l.Path = "IMG_0001.HEIC" })},
 			[]domain.RemoteEntry{file("IMG_0001.HEIC"), file("IMG_0001.xmp")}, []string{"1 IMG_0001.xmp"}},
 		{"the same path in both roots", []domain.Link{photo, other(2, func(l *domain.Link) { l.AssetID, l.Root = 8, domain.LibraryShared })},
@@ -86,6 +86,7 @@ func TestSidecars(t *testing.T) {
 		})}, []domain.RemoteEntry{xmp}, nil},
 		{"two photos of one stem", []domain.Link{photo, other(2, func(l *domain.Link) { l.AssetID, l.Path = 8, dir+"IMG_0001.JPG" })},
 			[]domain.RemoteEntry{heic, file(dir + "IMG_0001.JPG"), xmp}, nil},
+		{"a ZIP beside its photo", []domain.Link{photo}, []domain.RemoteEntry{heic, file(dir + "IMG_0001.zip")}, nil},
 	} {
 		links, scan := slices.Clone(c.links), slices.Clone(c.scan)
 		got := listed(plan.Sidecars(links, "disk", scan))

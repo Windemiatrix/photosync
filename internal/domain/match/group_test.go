@@ -198,7 +198,7 @@ func TestGroup(t *testing.T) {
 		},
 		{
 			name: "sidecars without media",
-			in:   files("a/IMG_0002.xmp", "a/archive.zip"),
+			in:   files("a/IMG_0002.xmp", "a/MVI_0002.THM"),
 		},
 		{
 			name: "sidecars of an ambiguous stem",
@@ -234,6 +234,12 @@ func TestGroup(t *testing.T) {
 			want:    []string{"a.v2/IMG_0001.HEIC"},
 			unknown: []string{"a.v2/README"},
 		},
+		{
+			name:    "a ZIP beside a photo is not a sidecar",
+			in:      files("a/IMG_0001.zip", "a/IMG_0001.HEIC"),
+			want:    []string{"a/IMG_0001.HEIC"},
+			unknown: []string{"a/IMG_0001.zip"},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -256,8 +262,8 @@ var groupExts = []struct{ ext, class string }{
 	{".MOV", "mov"}, {".mov", "mov"},
 	{".MP4", "video"},
 	{".AVI", "source"}, {".mpg", "source"},
-	{".xmp", "sidecar"}, {".AAE", "sidecar"}, {".THM", "sidecar"}, {".zip", "sidecar"},
-	{".psd", "unknown"}, {"", "unknown"}, {".", "unknown"},
+	{".xmp", "sidecar"}, {".AAE", "sidecar"}, {".THM", "sidecar"},
+	{".psd", "unknown"}, {".zip", "unknown"}, {"", "unknown"}, {".", "unknown"},
 }
 
 func groupEntry() *rapid.Generator[domain.RemoteEntry] {
