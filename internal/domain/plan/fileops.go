@@ -141,7 +141,12 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 			replace(d, d.Link, path.Dir(d.Link.Path))
 		}
 	}
-	own := slices.DeleteFunc(slices.Clone(pairs), func(x domain.AlbumPair) bool { return x.Remote != r.Name || x.Root != root })
+	// Build calls FileOps for each asset in each remote, most with nothing to
+	// place, so a copy of every pair on each call would grow as assets times pairs.
+	var own []domain.AlbumPair
+	if len(placements) > 0 {
+		own = slices.DeleteFunc(slices.Clone(pairs), func(x domain.AlbumPair) bool { return x.Remote != r.Name || x.Root != root })
+	}
 	for _, pl := range placements {
 		if pl.Action == domain.ActionQuarantineFile {
 			quarantine(pl.Link, "", pl.Rule)
@@ -158,7 +163,8 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 			album = albums[i]
 		}
 		dir := pathtemplate.EventPath(target, album, own, p)
-		if album.ID != 0 && !slices.ContainsFunc(slices.Concat(own, made), func(x domain.AlbumPair) bool { return x.AlbumID == album.ID || x.DirPath == dir }) {
+		taken := func(x domain.AlbumPair) bool { return x.AlbumID == album.ID || x.DirPath == dir }
+		if album.ID != 0 && !slices.ContainsFunc(own, taken) && !slices.ContainsFunc(made, taken) {
 			made = append(made, domain.AlbumPair{AlbumID: album.ID, Remote: r.Name, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud})
 		}
 		if pl.Action != domain.ActionUpload {
