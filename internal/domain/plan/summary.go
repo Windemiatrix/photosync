@@ -27,11 +27,11 @@ type Summary struct {
 	// them: each that an operation names, and a new one for each import that
 	// names none.
 	Assets int
-	// Irreversible is the number of OpDelete, each of which deletes a file of
+	// Deletes is the number of OpDelete, each of which deletes a file of
 	// the cloud for good. It is not that of the operations with Irreversible:
 	// an OpExpire deletes only what quarantine has kept as long as the policy
 	// says, and an OpAssetDelete leaves its asset in Recently Deleted.
-	Irreversible int
+	Deletes int
 	// NoUndo is the number of operations that undo cannot take back by
 	// itself: those with Irreversible, and each OpAssetDelete, whose asset
 	// only the user can bring back from Recently Deleted.
@@ -94,7 +94,7 @@ func Summarize(p domain.Plan, delta domain.SnapshotDelta, state domain.State) Su
 	assets := map[domain.AssetID]domain.Asset{}
 	for _, a := range delta.Assets {
 		assets[a.ID] = a
-		if a.Missing && (a.InCloud == nil || !*a.InCloud) {
+		if unavailable(a) {
 			s.Unavailable++
 		}
 	}
@@ -132,7 +132,7 @@ func Summarize(p domain.Plan, delta domain.SnapshotDelta, state domain.State) Su
 			mass[o.Asset] = true
 		}
 		if o.Kind == domain.OpDelete {
-			s.Irreversible++
+			s.Deletes++
 		}
 		if o.Irreversible || o.Kind == domain.OpAssetDelete {
 			s.NoUndo++
