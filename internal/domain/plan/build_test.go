@@ -232,6 +232,9 @@ func TestBuild(t *testing.T) {
 	paired.AssetID, matched3.Level = 8, domain.LevelSameShot
 	a7both, m8trip, moving := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", holidays, trip), asset(8, "IMG_0002.HEIC", 200, may1, "run-2", trip), a7
 	moving.TargetLibrary = shared
+	live8trip, e2v := withVideo(m8trip), file(personal, holidaysDir+"/IMG_0002.MOV", 30, "v8", settled)
+	pairedVideo := took(link(3, "alpha", e2v, live), file(personal, tripDir+"/IMG_0002.mov", 30, "v8", settled), trip)
+	pairedVideo.AssetID, pairedVideo.Level = 8, domain.LevelPairComponent
 	reup := put(7, tripDir+"/IMG_0001.HEIC", original, trip, 100)
 	reup.Rule = "R-LINK-10"
 	alphaUp := spec("alpha", domain.ModeUploadOnly)
@@ -836,6 +839,15 @@ func TestBuild(t *testing.T) {
 				Links: []domain.Link{took(photo, laterFile, holidays)},
 			},
 			delta(a7), nil},
+		{"upload-only: a new file that matching links in the folder of another album moves to the album of its asset with its Live Photo video, and both links go with the moves",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7, live8trip), scans{"alpha": {e2v, e2, e1}}, specs{alphaUp}, "", p, event,
+			domain.Plan{Ops: ops{
+				{Kind: domain.OpMove, Remote: "alpha", Root: personal, Src: e2.Path, DstRoot: personal, Dst: tripDir + "/IMG_0002.HEIC",
+					Asset: 8, Rule: "R-OBJECT-05", Links: []domain.Link{took(paired, file(personal, tripDir+"/IMG_0002.HEIC", 200, "b2", settled), trip)}},
+				{Kind: domain.OpMove, Remote: "alpha", Root: personal, Src: e2v.Path, DstRoot: personal, Dst: tripDir + "/IMG_0002.mov",
+					Asset: 8, Rule: "R-COMPONENT-04", Links: []domain.Link{pairedVideo}},
+			}},
+			delta(a7, live8trip), nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

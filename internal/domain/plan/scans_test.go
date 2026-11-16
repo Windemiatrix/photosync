@@ -235,6 +235,12 @@ func TestReadScans(t *testing.T) {
 	filedHolidays, filedTrip := scanned(nil, nil, nil, nil), scanned(nil, nil, nil, nil)
 	filedHolidays.Refiled = []domain.Album{{ID: holidays, Kind: event, Title: "05/01 Holidays", ParentID: next, FolderTitles: []string{"2025"}}}
 	filedTrip.Refiled = []domain.Album{{ID: trip, Kind: event, Title: "05/02 Trip", ParentID: next, FolderTitles: []string{"2025"}}}
+	h4, h5 := file(personal, holidaysDir+"/img_0004.heic", 440, "w4", settled), file(personal, holidaysDir+"/IMG_0005.HEIC", 450, "w5", settled)
+	y4v, t4, s4 := file(personal, holidaysDir+"/IMG_0004.MOV", 460, "w6", young), file(personal, tripDir+"/IMG_0004.HEIC", 470, "w7", settled), file(shared, holidaysDir+"/IMG_0004.HEIC", 480, "w8", settled)
+	shotHeld := domain.State{Albums: stateAlbums, AlbumPairs: []domain.AlbumPair{
+		pair(holidays, "alpha", personal, holidaysDir, domain.OriginICloud), pair(holidays, "alpha", shared, holidaysDir, domain.OriginICloud),
+		pair(trip, "alpha", personal, tripDir, domain.OriginICloud),
+	}}
 
 	same := func(x, y result) bool {
 		sameScan := func(a, b plan.RemoteScan) bool {
@@ -399,6 +405,10 @@ func TestReadScans(t *testing.T) {
 			movedTwo, delta(a7, a8), scans{"alpha": {later, yearDir}, "beta": {trip25}}, specs{beta, alpha}, p,
 			result{found{1: later, 7: trip25}, reads{"alpha": filedHolidays, "beta": filedTrip}, []domain.Album{album(next, folder, "2025")},
 				[]domain.AlbumPair{pair(holidays, "alpha", personal, "2025/05-01 - Holidays", domain.OriginICloud), pair(trip, "beta", personal, "2025/05-02 - Trip", domain.OriginICloud)}, nil}},
+		{"a new photo waits whole while its Live Photo video is still being written, unlike a file of another name, directory or root",
+			shotHeld, delta(), scans{"alpha": {s4, t4, h5, h4, y4v}}, specs{alpha}, p,
+			result{nil, reads{"alpha": scanned(nil, nil, news{imported(h5, holidays), imported(t4, trip), imported(s4, holidays)}, nil)}, nil, nil,
+				[]domain.Notice{settling(personal, holidaysDir+"/IMG_0004.MOV")}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

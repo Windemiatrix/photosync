@@ -713,6 +713,7 @@ func TestSimulateConverges(t *testing.T) {
 	holidaysFolder := domain.RemoteEntry{Root: personal, Path: holidaysDir, IsDir: true, MTime: settled}
 	laterFile := file(personal, "2023/05-01 - Holidays/IMG_0001.HEIC", 100, "a1", settled)
 	yearFolder := domain.RemoteEntry{Root: personal, Path: "2024", IsDir: true, MTime: settled}
+	live8trip, e2v := withVideo(asset(8, "IMG_0002.HEIC", 200, may1, "run-2", trip)), file(personal, holidaysDir+"/IMG_0002.MOV", 30, "v8", settled)
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -817,6 +818,9 @@ func TestSimulateConverges(t *testing.T) {
 		{"a year folder that the user renamed in one remote takes the new title in iCloud with all its albums, and the folder of another remote follows",
 			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo, other), snapshot(a7), scans{"alpha": {laterFile}, "beta": {e1}}, specs{alpha, beta}, "", p,
 			kinds{domain.OpAlbumRename, domain.OpMove}, nil},
+		{"upload-only: a new file that matching links in the folder of another album moves to the album of its asset with its Live Photo video, which stays beside it",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7, live8trip), scans{"alpha": {e2v, e2, e1}}, specs{alphaUp}, "", p,
+			kinds{domain.OpMove, domain.OpMove}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

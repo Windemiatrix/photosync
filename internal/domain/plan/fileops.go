@@ -26,16 +26,25 @@ import (
 // directory that pathtemplate.EventPath gives the album AlbumID, zero for the
 // day folder, with the pairs of r for the root of target.TargetLibrary, and
 // made pairs an album that has none there with that directory by
-// domain.OriginICloud. ActionMoveFile and ActionCopyFile take the file from
-// where it lies to that directory and root, named by Names.Free (OpMove,
-// OpCopy); ActionUpload puts the original of target at each path of
+// domain.OriginICloud, unless a pair of r there, among pairs or made before,
+// holds that directory: the files go there all the same. ActionMoveFile and
+// ActionCopyFile take the file from where it lies to that directory and root,
+// named by Names.Free (OpMove, OpCopy); ActionUpload puts the original of
+// target at each path of
 // Names.Render (OpPut), its notices going to notices and its error returned
 // as it is; ActionQuarantineFile moves the file to quarantine, and its link
 // leaves the state. A moved link takes the new place and album, a copy is a
 // new link like its source, and a put makes one of the original role at the
 // level uploaded with the size and hashes of the original. An operation takes
-// the rule of its decision or placement and the asset of its link. The
-// operations are in the order of domain.Op.Compare, made in the order of
+// the rule of its decision or placement and the asset of its link. A file that
+// a placement moves or copies without a replacement, or takes to quarantine,
+// takes along each Live Photo video and RAW file of a decision with
+// ActionLink, as matching gives, that ComponentBeside finds beside it as both
+// lie now, by the same kind of operation under the rule that ComponentAction
+// gives an unchanged component instead: to ComponentPath from where the file
+// goes, in its root and album, with a new link for a copy and the link
+// taking that place for a move, or to quarantine, the link leaving the state.
+// The operations are in the order of domain.Op.Compare, made in the order of
 // placements, and the inputs but names are not changed.
 //
 // decisions also hold what DecideDerived gives for the links of the asset in
@@ -103,6 +112,25 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 	stays := func(id domain.LinkID) bool {
 		return !slices.ContainsFunc(placements, func(pl domain.Placement) bool { return pl.Link.ID == id && pl.Action != domain.ActionCopyFile })
 	}
+	followed := map[domain.LinkID]bool{}
+	follow := func(pl domain.Placement, kind domain.OpKind, end domain.Link) {
+		_, rule, _ := ComponentAction(domain.ChangeUnchanged, pl.Action, false)
+		for _, d := range decided {
+			switch to := d.Link; {
+			case d.Action != domain.ActionLink || !ComponentBeside(pl.Link, to) || followed[to.ID]:
+			case kind == domain.OpQuarantine:
+				quarantine(to, "", rule)
+				followed[to.ID] = true
+			default:
+				to.Root, to.Path, to.AlbumID = end.Root, ComponentPath(end.Path, to.Role, target), end.AlbumID
+				if kind == domain.OpCopy {
+					to.ID = 0
+				}
+				add(kind, d.Link, to, to.Path, rule)
+				followed[d.Link.ID] = kind == domain.OpMove
+			}
+		}
+	}
 	for _, d := range decided {
 		switch {
 		case d.Action == domain.ActionQuarantineFile:
@@ -122,6 +150,7 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 					quarantine(d.Link, "", pl.Rule)
 				}
 			}
+			follow(pl, domain.OpQuarantine, pl.Link)
 			continue
 		}
 		var album domain.Album
@@ -129,7 +158,7 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 			album = albums[i]
 		}
 		dir := pathtemplate.EventPath(target, album, own, p)
-		if album.ID != 0 && !slices.ContainsFunc(own, func(x domain.AlbumPair) bool { return x.AlbumID == album.ID }) {
+		if album.ID != 0 && !slices.ContainsFunc(slices.Concat(own, made), func(x domain.AlbumPair) bool { return x.AlbumID == album.ID || x.DirPath == dir }) {
 			made = append(made, domain.AlbumPair{AlbumID: album.ID, Remote: r.Name, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud})
 		}
 		if pl.Action != domain.ActionUpload {
@@ -146,6 +175,7 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 			default:
 				to.Path = names.Free(root, dir, path.Base(pl.Link.Path))
 				add(kind, pl.Link, to, to.Path, pl.Rule)
+				follow(pl, kind, to)
 			}
 			continue
 		}
