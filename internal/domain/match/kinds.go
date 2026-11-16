@@ -32,8 +32,7 @@ var kinds = map[string]kind{
 	".mov": mov, ".mp4": video, ".m4v": video,
 	".mpg": source, ".mpeg": source, ".vob": source, ".3gp": source, ".avi": source,
 	".mts": source, ".m2ts": source, ".wmv": source, ".mkv": source,
-	".xmp": sidecar, ".thm": sidecar, ".aae": sidecar,
-	".ifo": sidecar, ".bup": sidecar, ".zip": sidecar, ".exe": sidecar, ".rar": sidecar,
+	".xmp": sidecar, ".thm": sidecar, ".aae": sidecar, ".ifo": sidecar, ".bup": sidecar,
 }
 
 func kindOf(name string) kind {
