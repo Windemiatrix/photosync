@@ -40,8 +40,8 @@ func TestPlanScale(t *testing.T) {
 		build, simulate, rebuild time.Duration
 		bytes                    uint64
 	}{
-		{1, 0, 0, 0, 0},
-		{3, 0, 0, 0, 0},
+		{1, 51100 * time.Millisecond, 7600 * time.Millisecond, 40600 * time.Millisecond, 1_361_000_000},
+		{3, 90100 * time.Millisecond, 15100 * time.Millisecond, 114000 * time.Millisecond, 4_539_000_000},
 	} {
 		t.Run(fmt.Sprintf("remotes=%d", c.remotes), func(t *testing.T) {
 			in := plan.Input{
