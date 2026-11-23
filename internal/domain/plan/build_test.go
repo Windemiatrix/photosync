@@ -12,6 +12,7 @@ import (
 	"github.com/Windemiatrix/go-libs/osxphotos/template"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
+	"github.com/Windemiatrix/photosync/internal/domain/eventtpl"
 	"github.com/Windemiatrix/photosync/internal/domain/pathtemplate"
 	"github.com/Windemiatrix/photosync/internal/domain/plan"
 )
@@ -131,6 +132,7 @@ func TestBuild(t *testing.T) {
 	removed, removedVideo, detached := photo, video, photo
 	removed.Status, removedVideo.Status, detached.Status = "", "", domain.StatusDetached
 	a7, in7Trip := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", holidays), asset(7, "IMG_0001.HEIC", 100, may1, "run-2", trip)
+	left7 := asset(7, "IMG_0001.HEIC", 100, may1, "run-1")
 	trashed := asset(8, "IMG_0002.HEIC", 200, may1, "run-2")
 	trashed.InTrash = true
 	n8 := withVideo(asset(8, "IMG_0001.HEIC", 200, may1.Add(time.Hour), "run-2", holidays))
@@ -158,8 +160,6 @@ func TestBuild(t *testing.T) {
 	inTrip.Path, inTrip.AlbumID = tripDir+"/IMG_0001.HEIC", trip
 	inCats.Path, inCats.AlbumID = catsFile.Path, cats
 	binned.Status = domain.StatusQuarantinedICloud
-	copied := inCats
-	copied.ID, copied.Path, copied.AlbumID = 0, e1.Path, holidays
 	catsHolidays := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", cats, holidays)
 	catsAll := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", cats, holidays, trip)
 	alphaCats := pair(cats, "alpha", personal, catsDir, domain.OriginICloud)
@@ -176,8 +176,9 @@ func TestBuild(t *testing.T) {
 	edit2 := file(personal, holidaysDir+"/IMG_0002_edited.jpg", 10, "g2", settled)
 	edit2x := file(personal, holidaysDir+"/img_0002_edited.jpg", 10, "g3", settled)
 	edit3 := file(personal, holidaysDir+"/IMG_0003_edited.jpg", 10, "g4", settled)
-	edits := p
+	edits, slashed := p, p
 	edits.EditedFiles = domain.EditedQuarantine
+	slashed.Templates.Cloud = []string{"{YYYY}", "{MM}/{DD} - {Description}"}
 	doubles := func(paths ...string) domain.Notice {
 		return domain.Notice{Code: "plan.doubles", Params: append([]string{"alpha", string(personal)}, paths...)}
 	}
@@ -240,7 +241,6 @@ func TestBuild(t *testing.T) {
 	alphaUp := spec("alpha", domain.ModeUploadOnly)
 	lowHolidays, lowTrip := "2024/05-01 - holidays", "2024/05-02 - trip"
 	youngH, youngT := file(personal, lowHolidays+"/IMG_0009.HEIC", 50, "y5", young), file(personal, lowTrip+"/IMG_0009.HEIC", 50, "y6", young)
-	youngA := file(personal, "albums/IMG_0009.HEIC", 50, "y7", young)
 	oldQ := file(personal, quarantined+holidaysDir+"/IMG_0003_EDITED.jpg", 10, "g5", settled)
 	cat1, betaTrip := asset(1, "IMG_0001.HEIC", 100, may1, "run-2", cats), pair(trip, "beta", personal, tripDir, domain.OriginICloud)
 	inBeta := func(n domain.Notice) domain.Notice {
@@ -405,6 +405,10 @@ func TestBuild(t *testing.T) {
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n8), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{put(8, holidaysDir+"/IMG_0001 (1).HEIC", original, holidays, 200), put(8, holidaysDir+"/IMG_0001 (1).mov", live, holidays, 30)}},
 			delta(a7, n8), nil},
+		{"an asset that left its only event keeps its file and its link as they are, while a new asset goes up into that event",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(left7, n8), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{put(8, holidaysDir+"/IMG_0001 (1).HEIC", original, holidays, 200), put(8, holidaysDir+"/IMG_0001 (1).mov", live, holidays, 30)}},
+			delta(left7, n8), nil},
 		{"the first placement takes a new asset into the only event of its day, and two new assets make one pair for an album without a folder",
 			state(nil, pairs{alphaHolidays}), snapshot(n2, n1), nil, specs{alpha}, "", p, event,
 			domain.Plan{
@@ -457,6 +461,10 @@ func TestBuild(t *testing.T) {
 			domain.Plan{}, domain.SnapshotDelta{}, pathtemplate.ErrUnknownField},
 		{"two assets with one cloud GUID stop the run", state(nil, nil), snapshot(h1, twin), nil, specs{alpha}, "", p, event,
 			domain.Plan{}, domain.SnapshotDelta{}, plan.ErrBadSnapshot},
+		{"templates that Validate refuses stop the run", state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {e1}}, specs{alpha}, "", slashed, event,
+			domain.Plan{}, domain.SnapshotDelta{}, eventtpl.ErrSlash},
+		{"templates that Validate refuses stop the run before the snapshot is read", state(nil, nil), snapshot(h1, twin), nil, specs{alpha}, "", slashed, event,
+			domain.Plan{}, domain.SnapshotDelta{}, eventtpl.ErrSlash},
 		{"a photo that the plan moves to its new event takes its Live Photo video and its sidecar along",
 			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(in7Trip)),
 			scans{"alpha": {xmp, ev, e1}}, specs{alpha}, "", p, event,
@@ -527,11 +535,10 @@ func TestBuild(t *testing.T) {
 			state(assets{catsAll}, pairs{alphaHolidays, alphaTrip, alphaCats, betaHolidays}, inTrip, other), snapshot(catsHolidays),
 			scans{"alpha": {catsFile, dayFile}, "beta": {e1}}, specs{alpha, beta}, "", ask, event,
 			domain.Plan{Conflicts: []domain.Conflict{conflict("alpha", domain.ConflictStatusOpen, "")}}, delta(catsHolidays), nil},
-		{"one remote alone syncs: the other is neither read nor changed, while its files still count for the layout",
+		{"one remote alone syncs: the other is neither read nor changed, and a thematic copy moves to the event of the asset",
 			state(assets{catsHolidays}, pairs{alphaHolidays, alphaCats, betaHolidays}, inCats, other), snapshot(catsHolidays),
 			scans{"alpha": {catsFile}, "beta": {youngBeta, e1}}, specs{alpha, beta}, "alpha", p, event,
-			domain.Plan{Ops: ops{{Kind: domain.OpCopy, Remote: "alpha", Root: personal, Src: catsFile.Path, DstRoot: personal, Dst: e1.Path,
-				Asset: 7, Rule: "R-OBJECT-03", Links: []domain.Link{copied}}}},
+			domain.Plan{Ops: ops{moved(inCats, personal, e1.Path, holidays, "R-OBJECT-05")}},
 			delta(catsHolidays), nil},
 		{"a remote that the configuration lacks leaves nothing to sync",
 			state(assets{catsHolidays}, pairs{alphaHolidays, alphaCats, betaHolidays}, inCats, other), snapshot(catsHolidays),
@@ -622,10 +629,9 @@ func TestBuild(t *testing.T) {
 				Notices: []domain.Notice{doubles(holidaysDir, lowHolidays), settling(youngH.Path)},
 			},
 			delta(in7Trip, n8), nil},
-		{"a new asset of a thematic album does not go up while the folder of albums at the root differs from another folder in case alone",
-			state(nil, pairs{alphaCats}), snapshot(cat1), scans{"alpha": {youngA}}, specs{alpha}, "", p, event,
-			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles("Albums", "albums"), settling(youngA.Path)}},
-			delta(cat1), nil},
+		{"an asset only in a thematic album is not uploaded",
+			state(nil, pairs{alphaCats}), snapshot(cat1), nil, specs{alpha}, "", p, event,
+			domain.Plan{}, delta(cat1), nil},
 		{"an edit does not go to a quarantine path that differs from a file in quarantine in case alone",
 			state(nil, nil), snapshot(), scans{"alpha": {edit3, oldQ}}, specs{alpha}, "", edits, event,
 			domain.Plan{Ops: ops{}, Notices: []domain.Notice{doubles(oldQ.Path, quarantined+edit3.Path), counted("plan.edits_left", "alpha", "1")}},

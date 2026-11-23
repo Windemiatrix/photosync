@@ -10,6 +10,7 @@ import (
 	"github.com/Windemiatrix/go-libs/osxphotos/template"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
+	"github.com/Windemiatrix/photosync/internal/domain/eventtpl"
 	"github.com/Windemiatrix/photosync/internal/domain/layout"
 )
 
@@ -39,7 +40,8 @@ type Input struct {
 
 // Build returns the plan of a run and the delta that Reconcile gives, which
 // the run writes to the state before the operations; the error, with a zero
-// plan and delta, is that of Reconcile or of FileOps. The run syncs the
+// plan and delta, is that of eventtpl.Validate for Policies.Templates,
+// checked before all else, of Reconcile or of FileOps. The run syncs the
 // remotes of Remotes, or the one that OnlyRemote names: ReadScans reads their
 // scans, and RunOps gives the operations that come from them before any asset
 // takes a name. The albums of the run are those of the delta, each as the
@@ -118,6 +120,9 @@ type Input struct {
 // stay as they are. A content counts once among the new files of a remote.
 // The inputs are not changed.
 func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
+	if err := eventtpl.Validate(in.Policies.Templates); err != nil {
+		return domain.Plan{}, domain.SnapshotDelta{}, err
+	}
 	delta, notices, err := Reconcile(in.State, in.Snapshot, in.RunID)
 	if err != nil {
 		return domain.Plan{}, domain.SnapshotDelta{}, err
@@ -139,6 +144,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 			}
 		}
 	}
+	events := layout.ReadEvents(albums, in.Policies)
 	notices = append(notices, ns...)
 	names, sides := map[string]*Names{}, map[string]map[domain.LinkID][]domain.RemoteEntry{}
 	fresh := map[domain.AssetID][]domain.LinkDecision{}
@@ -223,7 +229,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 				matched[d.Link.Remote], current, linked = append(matched[d.Link.Remote], d), append(current, d.Link), true
 			}
 		}
-		decisions, status, target, join, leave, placements := DecideLayout(asset, found, linked, objects, current, in.Remotes, albums, moved, in.Policies, in.RunID)
+		decisions, status, target, join, leave, placements := DecideLayout(asset, found, linked, objects, current, in.Remotes, albums, events, moved, in.Policies, in.RunID)
 		fates, components, copies, after := DecideComponents(decisions, status, placements, owned[id], files, in.Remotes, in.Policies.Deletes)
 		start := len(out.Ops)
 		out.Ops = append(out.Ops, AssetOps(id, decisions, status, join, leave, components, files)...)

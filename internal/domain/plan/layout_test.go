@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
+	"github.com/Windemiatrix/photosync/internal/domain/layout"
 	"github.com/Windemiatrix/photosync/internal/domain/plan"
 )
 
@@ -315,8 +316,7 @@ func TestDecideLayout(t *testing.T) {
 				"alpha": decs(dec(a1, unchanged, moved, moveAsset, "R-LINK-05")),
 				"beta":  decs(dec(b1, unchanged, moved, moveAsset, "R-LINK-05")),
 			},
-			statuses{1: active, 3: active}, nil, personal, nil, ch(holidays, "R-LINK-05"),
-			placed{"alpha": pls(pl(moveFile, a1Old, 0, "R-OBJECT-06")), "beta": pls(pl(moveFile, b1Gone, 0, "R-OBJECT-06"))}},
+			statuses{1: active, 3: active}, nil, personal, nil, ch(holidays, "R-LINK-05"), nil},
 		{"a Leave of an album in Recently Deleted is dropped", asset(holidays, old), true, true,
 			byRemote{"alpha": od(nil, ch(old, "R-OBJECT-02"), kept(a1), dec(inOld, moved, deleted, forget, "R-OBJECT-02"))},
 			links(a1), config(alpha), quarantine,
@@ -325,10 +325,9 @@ func TestDecideLayout(t *testing.T) {
 		{"a remote where the asset is frozen is not laid out", asset(holidays), true, true,
 			byRemote{"alpha": od(nil, nil, kept(a1))}, links(a1, stuck), config(alpha, beta), quarantine,
 			decided{"alpha": decs(kept(a1))}, statuses{1: active}, ms(m(holidays, "run-1")), personal, nil, nil, nil},
-		{"a new asset that only an upload-only remote decides gets no first placement and goes up to its day folder", asset(), true, false,
+		{"a new asset that only an upload-only remote decides gets no first placement and, in no event, goes up nowhere", asset(), true, false,
 			byRemote{"beta": od(nil, nil)}, nil, config(alpha, betaUp), quarantine,
-			decided{"beta": nil}, nil, nil, personal, nil, nil,
-			placed{"beta": pls(up(0, "R-LINK-01"))}},
+			decided{"beta": nil}, nil, nil, personal, nil, nil, nil},
 		{"a new asset in two events that only upload-only remotes decide keeps both and goes up to each", asset(holidays, trip), true, false,
 			byRemote{"beta": od(nil, nil)}, nil, config(betaUp), quarantine,
 			decided{"beta": nil}, nil, ms(m(holidays, "run-1"), m(trip, "run-1")), personal, nil, nil,
@@ -350,7 +349,7 @@ func TestDecideLayout(t *testing.T) {
 			priority := slices.Clone(c.p.RemotePriority)
 			var got result
 			got.decisions, got.status, got.target, got.join, got.leave, got.placements =
-				plan.DecideLayout(c.now, c.found, c.linked, c.objects, c.links, c.remotes, albums, nil, c.p, "run-2")
+				plan.DecideLayout(c.now, c.found, c.linked, c.objects, c.links, c.remotes, albums, layout.ReadEvents(albums, c.p), nil, c.p, "run-2")
 			want := result{c.decisions, c.status, c.now, c.join, c.leave, c.placements}
 			want.target.Memberships, want.target.TargetLibrary = c.albums, c.library
 			if !equal(got, want) {
@@ -381,7 +380,7 @@ func TestDecideLayout(t *testing.T) {
 			slices.Reverse(rl)
 			var again result
 			again.decisions, again.status, again.target, again.join, again.leave, again.placements =
-				plan.DecideLayout(now, c.found, c.linked, c.objects, rl, c.remotes, albums, nil, c.p, "run-2")
+				plan.DecideLayout(now, c.found, c.linked, c.objects, rl, c.remotes, albums, layout.ReadEvents(albums, c.p), nil, c.p, "run-2")
 			if !equal(again, got) {
 				t.Errorf("with the links and memberships reversed: %q; want %q", show(again), show(got))
 			}

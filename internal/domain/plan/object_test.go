@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
+	"github.com/Windemiatrix/photosync/internal/domain/layout"
 	"github.com/Windemiatrix/photosync/internal/domain/plan"
 )
 
@@ -105,33 +106,27 @@ func TestDecidePlacement(t *testing.T) {
 			[]row{{move, 1, trip, "R-OBJECT-05"}}},
 		{"from the day folder to an event: a move, not a copy", in(holidays), links(day),
 			[]row{{move, 3, holidays, "R-OBJECT-05"}}},
-		{"from a thematic album to an event: a move, not a copy", in(pets, holidays), links(pet),
+		{"a thematic album gets no file", in(pets, holidays), links(pet),
 			[]row{{move, 4, holidays, "R-OBJECT-05"}}},
 		{"from the day folder to two events: a move and a copy", in(holidays, trip), links(day),
 			[]row{{move, 3, holidays, "R-OBJECT-05"}, {copyFile, 3, trip, "R-OBJECT-03"}}},
-		{"removed from every event: the thematic album", in(pets), links(e1), // covers: R-OBJECT-06
-			[]row{{move, 1, pets, "R-OBJECT-06"}}},
-		{"removed from every album: the day folder", in(), links(e1),
-			[]row{{move, 1, 0, "R-OBJECT-06"}}},
-		{"removed from two events at once: one move, one quarantine", in(), links(e2, e1),
-			[]row{{move, 1, 0, "R-OBJECT-06"}, {toQuarantine, 2, 0, "R-OBJECT-04"}}},
-		{"of two thematic albums the one joined first", joined(in(recipes), pets, "run-2"), links(day),
-			[]row{{move, 3, recipes, "R-OBJECT-06"}}},
-		{"a thematic copy beside an event file stays", in(holidays, pets), links(e1, pet), nil},
-		{"a thematic copy beside the file of the primary thematic album stays", joined(in(pets), recipes, "run-2"), links(pet, recipe), nil},
+		{"removed from every event, in a thematic album: the file stays", in(pets), links(e1), nil}, // covers: R-OBJECT-06
+		{"removed from every album: the file stays", in(), links(e1), nil},
+		{"an asset in no event keeps its files", in(), links(e2, e1), nil},
+		{"in two thematic albums only: the file stays", joined(in(recipes), pets, "run-2"), links(day), nil},
+		{"a thematic copy beside an event file goes to quarantine", in(holidays, pets), links(e1, pet),
+			[]row{{toQuarantine, 4, 0, "R-OBJECT-04"}}},
+		{"in thematic albums only: their files stay", joined(in(pets), recipes, "run-2"), links(pet, recipe), nil},
 		{"removed from the thematic album of a copy: the copy to quarantine", in(holidays), links(e1, pet),
 			[]row{{toQuarantine, 4, 0, "R-OBJECT-04"}}},
-		{"removed from every event with a thematic copy: the event file to quarantine", in(pets), links(e1, pet),
-			[]row{{toQuarantine, 1, 0, "R-OBJECT-04"}}},
+		{"removed from every event with a thematic copy: both files stay", in(pets), links(e1, pet), nil},
 		{"a thematic album without a file stays in iCloud only", in(holidays, pets), links(e1), nil},
-		{"the thematic copy of another remote: a copy here too", in(holidays, pets), links(e1, boxE1, boxPet),
-			[]row{{copyFile, 1, pets, "R-OBJECT-03"}}},
+		{"a thematic file of another remote asks no copy here", in(holidays, pets), links(e1, boxE1, boxPet), nil},
+		{"a folder asks no file", in(1, holidays), links(e1), nil},
 		{"new to this remote: an upload for each event", in(holidays, trip), links(boxE1),
 			[]row{{upload, 0, holidays, "R-LINK-01"}, {upload, 0, trip, "R-LINK-01"}}},
-		{"new to this remote, the primary placement copied in another: one upload", in(pets), links(boxPet),
-			[]row{{upload, 0, pets, "R-LINK-01"}}},
-		{"no link and no album: the day folder, the first placement being done before", in(), nil,
-			[]row{{upload, 0, 0, "R-LINK-01"}}},
+		{"new to this remote, in a thematic album only: no upload", in(pets), links(boxPet), nil},
+		{"no link and no album: no upload", in(), nil, nil},
 		{"shared in Photos: every file to the shared root", asset(shared, shared, holidays, trip), links(e1, e2), // covers: R-OBJECT-07
 			[]row{{move, 1, holidays, "R-OBJECT-07"}, {move, 2, trip, "R-OBJECT-07"}}},
 		{"unshared in Photos", in(holidays), links(sharedE1),
@@ -142,10 +137,9 @@ func TestDecidePlacement(t *testing.T) {
 			[]row{{move, 1, holidays, "R-OBJECT-07"}}},
 		{"shared in Photos and removed from an event", asset(shared, shared, holidays), links(e1, e2),
 			[]row{{move, 1, holidays, "R-OBJECT-07"}, {toQuarantine, 2, 0, "R-OBJECT-04"}}},
-		{"shared in Photos and removed from every album", asset(shared, shared), links(e1),
-			[]row{{move, 1, 0, "R-OBJECT-07"}}},
-		{"one path in both roots: the file in the root of the asset moves", in(), links(sharedE1, e1),
-			[]row{{move, 1, 0, "R-OBJECT-06"}, {toQuarantine, 9, 0, "R-OBJECT-04"}}},
+		{"shared in Photos and removed from every album: the file stays", asset(shared, shared), links(e1), nil},
+		{"one path in both roots: the file in the root of the asset moves", in(trip), links(sharedE1, e1),
+			[]row{{move, 1, trip, "R-OBJECT-05"}, {toQuarantine, 9, 0, "R-OBJECT-04"}}},
 		{"an album in Recently Deleted or gone from the library holds no file", in(holidays, old, gone), links(e1, oldE),
 			[]row{{toQuarantine, 8, 0, "R-OBJECT-04"}}},
 		{"a component away from its file and a link out of sync stay as they are", in(holidays), links(e1, live, outE2), nil},
@@ -432,10 +426,11 @@ func TestDecideFirstPlacement(t *testing.T) {
 	const holidays, trip, party domain.AlbumID = 10, 11, 12
 	albums := []domain.Album{
 		{ID: 1, UUID: "album-1", Kind: domain.KindFolder, Title: "2024"},
-		{ID: holidays, UUID: "album-10", Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: trip, UUID: "album-11", Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
-		{ID: party, UUID: "album-12", Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: holidays, UUID: "album-10", Kind: domain.KindEvent, Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: trip, UUID: "album-11", Kind: domain.KindEvent, Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: party, UUID: "album-12", Kind: domain.KindEvent, Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
 	}
+	p := domain.DefaultPolicies()
 	remove, keep := domain.MultiAlbumRemoveOthers, domain.MultiAlbumKeepOthers
 	type change struct {
 		album domain.AlbumID
@@ -456,7 +451,7 @@ func TestDecideFirstPlacement(t *testing.T) {
 		join, leave []change
 	}{
 		{"in no album: the only event of its day", 1, nil, remove, []change{{holidays, "R-LAYOUT-05"}}, nil}, // covers: R-LAYOUT-05
-		{"in no album, with no event of its day: the day folder", 4, nil, remove, nil, nil},
+		{"in no album, with no event of its day: none", 4, nil, remove, nil, nil},
 		{"in two events: it leaves the farther one", 1, []domain.AlbumID{holidays, trip}, remove, nil, []change{{trip, "R-LAYOUT-04"}}}, // covers: R-LAYOUT-04
 		{"in two events, keeping the others", 1, []domain.AlbumID{holidays, trip}, keep, nil, nil},
 		{"in three events: it leaves the others, closest first", 3, []domain.AlbumID{holidays, trip, party}, remove, nil,
@@ -472,7 +467,7 @@ func TestDecideFirstPlacement(t *testing.T) {
 			for _, id := range c.in {
 				a.Memberships = append(a.Memberships, domain.Membership{AlbumID: id, FirstSeenRun: "run-1"})
 			}
-			join, leave := plan.DecideFirstPlacement(a, albums, c.multi)
+			join, leave := plan.DecideFirstPlacement(a, layout.ReadEvents(albums, p), c.multi)
 			if !slices.Equal(project(join), c.join) || !slices.Equal(project(leave), c.leave) {
 				t.Errorf("DecideFirstPlacement = %+v, %+v; want %+v, %+v", join, leave, c.join, c.leave)
 			}
@@ -485,7 +480,7 @@ func TestDecideFirstPlacement(t *testing.T) {
 			reversed.Memberships = slices.Clone(a.Memberships)
 			slices.Reverse(reversed.Memberships)
 			slices.Reverse(all)
-			if j, l := plan.DecideFirstPlacement(reversed, all, c.multi); !slices.Equal(j, join) || !slices.Equal(l, leave) {
+			if j, l := plan.DecideFirstPlacement(reversed, layout.ReadEvents(all, p), c.multi); !slices.Equal(j, join) || !slices.Equal(l, leave) {
 				t.Errorf("with the input reversed: %+v, %+v; want %+v, %+v", j, l, join, leave)
 			}
 		})

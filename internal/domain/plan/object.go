@@ -9,23 +9,24 @@ import (
 )
 
 // DecidePlacement returns the changes that make the files of asset in remote
-// lie under the root of asset.TargetLibrary in the directories of its
-// albums: one file in each event album, else one in its primary placement as
-// layout.Primary gives it outside a first placement, and, while one of those
-// directories holds a file of asset in any remote, one in each thematic
-// album that holds a file of asset in any remote. asset is as the sync
-// leaves it: Memberships are the albums it is in, its first placement
-// applied, and TargetLibrary is the library whose root holds its files; it
-// syncs and is not in Recently Deleted. albums are as layout.Primary takes
-// them, in the order of ID, each with the Kind that layout.Classify gives
-// it. links are the links of asset in every remote, each where its file
-// lies now, with none for a file gone from the cloud; only the active links
-// with the original or the source role count. A file of remote elsewhere
-// moves to a directory without a file, else goes to quarantine; a directory
-// still without one gets a copy of a file of remote, or an upload when remote
-// has none. The changes are in the order of AlbumID, quarantines last.
+// lie under the root of asset.TargetLibrary in the directories of its event
+// albums, one file in each; an asset in no event album gets none, and its
+// files stay as they are. asset is as the sync leaves it: Memberships are the
+// albums it is in, its first placement applied, and TargetLibrary is the
+// library whose root holds its files; it syncs and is not in Recently
+// Deleted. albums are the albums of the run in the order of ID, each with the
+// Kind that layout.Classify gives it. links are the links of asset in every
+// remote, each where its file lies now, with none for a file gone from the
+// cloud; only the active links with the original or the source role count. A
+// file of remote elsewhere moves to a directory without a file, else goes to
+// quarantine; a directory still without one gets a copy of a file of remote,
+// or an upload when remote has none. The changes are in the order of AlbumID,
+// quarantines last.
 func DecidePlacement(asset domain.Asset, links []domain.Link, remote string, albums []domain.Album) []domain.Placement {
-	want, noEvent := objectAlbums(asset, links, albums)
+	want := objectAlbums(asset, albums)
+	if len(want) == 0 {
+		return nil
+	}
 	root := asset.TargetLibrary
 	var files []domain.Link
 	for _, l := range links {
@@ -43,7 +44,7 @@ func DecidePlacement(asset domain.Asset, links []domain.Link, remote string, alb
 		switch {
 		case slices.ContainsFunc(files, func(l domain.Link) bool { return placed(l) && l.AlbumID == id }):
 		case len(orphans) > 0:
-			rule := objectMoveRule(orphans[0], root, noEvent)
+			rule := objectMoveRule(orphans[0], root)
 			out = append(out, domain.Placement{Action: domain.ActionMoveFile, Link: orphans[0], AlbumID: id, Rule: rule})
 			orphans = orphans[1:]
 		case len(files) > 0:
@@ -58,32 +59,15 @@ func DecidePlacement(asset domain.Asset, links []domain.Link, remote string, alb
 	return out
 }
 
-// objectAlbums returns, sorted, the albums whose directories hold a file of
-// asset once the sync is done, zero standing for the day folder, and whether
-// asset is in no event album.
-func objectAlbums(asset domain.Asset, links []domain.Link, albums []domain.Album) (want []domain.AlbumID, noEvent bool) {
-	var thematic []domain.AlbumID
+func objectAlbums(asset domain.Asset, albums []domain.Album) []domain.AlbumID {
+	var want []domain.AlbumID
 	for _, m := range asset.Memberships {
-		switch a, ok := albumByID(albums, m.AlbumID); {
-		case !ok || a.InTrash:
-		case a.Kind == domain.KindEvent:
+		if a, ok := albumByID(albums, m.AlbumID); ok && !a.InTrash && a.Kind == domain.KindEvent {
 			want = append(want, a.ID)
-		case a.Kind == domain.KindThematic && objectLinked(links, a.ID):
-			thematic = append(thematic, a.ID)
 		}
 	}
-	if noEvent = len(want) == 0; noEvent {
-		primary, _ := layout.Primary(asset, albums, false)
-		want = []domain.AlbumID{primary}
-	}
-	// A file in a thematic album is a copy beside the file of an event or of
-	// the primary placement; alone, it stood for the primary placement and
-	// moves when that changes.
-	if slices.ContainsFunc(want, func(id domain.AlbumID) bool { return objectLinked(links, id) }) {
-		want = append(want, thematic...)
-	}
 	slices.Sort(want)
-	return slices.Compact(want), noEvent
+	return slices.Compact(want)
 }
 
 // Build looks albums up for each asset in each remote, so a scan of all of
@@ -96,10 +80,6 @@ func albumByID(albums []domain.Album, id domain.AlbumID) (domain.Album, bool) {
 	return domain.Album{}, false
 }
 
-func objectLinked(links []domain.Link, album domain.AlbumID) bool {
-	return slices.ContainsFunc(links, func(l domain.Link) bool { return objectFile(l) && l.AlbumID == album })
-}
-
 // The source that a converted asset came from stands for it in its remote;
 // files of the other roles follow the file that stands for the asset, and a
 // link out of sync waits for its status to change.
@@ -107,12 +87,9 @@ func objectFile(l domain.Link) bool {
 	return (l.Role == domain.RoleOriginal || l.Role == domain.RoleSource) && l.Status == domain.StatusActive
 }
 
-func objectMoveRule(l domain.Link, root domain.LibraryKind, noEvent bool) string {
-	switch {
-	case l.Root != root:
+func objectMoveRule(l domain.Link, root domain.LibraryKind) string {
+	if l.Root != root {
 		return "R-OBJECT-07"
-	case noEvent:
-		return "R-OBJECT-06"
 	}
 	return "R-OBJECT-05"
 }
@@ -130,12 +107,12 @@ func objectMoveRule(l domain.Link, root domain.LibraryKind, noEvent bool) string
 // that of its new one, under the rule of its decision; a conflict whose file
 // lies where DecidePlacement keeps a file of asset is the same move on both
 // sides, the file having moved to the place the asset moved to. asset leaves
-// no album that still holds a file of it in remote, and the day folder is no
+// no album that still holds a file of it in remote, and AlbumID 0 is no
 // album. Join and Leave may name albums that asset is already in or out of;
 // they are in the order of album ID and then rule, without repeats, and
 // Links in the order of link ID. Other decisions are as given.
 func DecideObject(asset domain.Asset, decisions []domain.LinkDecision, links []domain.Link, remote string, albums []domain.Album) domain.ObjectDecision {
-	want, _ := objectAlbums(asset, links, albums)
+	want := objectAlbums(asset, albums)
 	files := slices.DeleteFunc(slices.Clone(links), func(l domain.Link) bool { return l.Remote != remote || !objectFile(l) })
 	var out domain.ObjectDecision
 	for _, d := range decisions {
@@ -179,9 +156,10 @@ func objectChanges(changes []domain.AlbumChange) []domain.AlbumChange {
 // status in any of them, and IsNew holds for it. An asset in no album joins
 // the only event of its day (R-LAYOUT-05); under closest_date_remove_others
 // an asset leaves every event but the one closest to its date, closest first
-// (R-LAYOUT-04). albums are as layout.Primary takes them.
-func DecideFirstPlacement(asset domain.Asset, albums []domain.Album, multi domain.MultiAlbumPolicy) (join, leave []domain.AlbumChange) {
-	primary, others := layout.Primary(asset, albums, true)
+// (R-LAYOUT-04). events are those of the albums of the run, as
+// layout.ReadEvents gives them.
+func DecideFirstPlacement(asset domain.Asset, events layout.Events, multi domain.MultiAlbumPolicy) (join, leave []domain.AlbumChange) {
+	primary, others := layout.Primary(asset, events, true)
 	if primary != 0 && !slices.ContainsFunc(asset.Memberships, func(m domain.Membership) bool { return m.AlbumID == primary }) {
 		join = []domain.AlbumChange{{AlbumID: primary, Rule: "R-LAYOUT-05"}}
 	}

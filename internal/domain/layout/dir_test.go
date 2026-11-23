@@ -174,42 +174,6 @@ func TestAlbumFor(t *testing.T) {
 	}
 }
 
-// covers: R-LAYOUT-05
-func TestDayDir(t *testing.T) {
-	t.Parallel()
-
-	const rule = "R-LAYOUT-05"
-	east := func(seconds int) *int { return &seconds }
-
-	cases := []struct {
-		name   string
-		taken  time.Time
-		offset *int
-		want   string
-	}{
-		{"the local date, not the UTC one", time.Date(2024, 1, 1, 4, 50, 0, 0, time.UTC), east(-5 * 3600), "2023/12-31"},
-		{"a wall clock without a zone", time.Date(2024, 5, 1, 23, 30, 0, 0, time.UTC), nil, "2024/05-01"},
-		{"a zone of 5:45", time.Date(2024, 5, 1, 20, 0, 0, 0, time.UTC), east(5*3600 + 45*60), "2024/05-02"},
-		{"months and days have two digits", time.Date(2024, 1, 2, 12, 0, 0, 0, time.UTC), nil, "2024/01-02"},
-	}
-	for _, c := range cases {
-		t.Run(rule+" "+c.name, func(t *testing.T) {
-			t.Parallel()
-
-			if _, ok := domain.Rules[rule]; !ok {
-				t.Errorf("%s is not in domain.Rules", rule)
-			}
-			got := layout.DayDir(domain.Asset{Taken: c.taken, TZOffset: c.offset})
-			if got != c.want {
-				t.Errorf("DayDir(%v) = %q, want %q", c.taken, got, c.want)
-			}
-			if a, ok := layout.AlbumFor(got, map[string]bool{got: true}, dirPolicies()); ok {
-				t.Errorf("the day folder %q stands for album %+v, want none", got, a)
-			}
-		})
-	}
-}
-
 // covers: R-LAYOUT-06
 func TestDirProperties(t *testing.T) {
 	t.Parallel()
