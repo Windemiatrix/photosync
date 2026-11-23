@@ -79,7 +79,7 @@ func TestParse(t *testing.T) {
 		{name: "an unknown field before any rule", side: photos, levels: []string{"", "{MMM}"},
 			err: fail(photos, 2, "{MMM}", unknown)},
 	} {
-		got, err := eventtpl.Parse(c.levels, c.side)
+		got, err := eventtpl.Parse(c.levels, c.side, "")
 		checkErr(t, c.name, got, err, c.err)
 		if c.err == nil && !slices.EqualFunc(got.Levels, c.want, slices.Equal[[]eventtpl.Part]) {
 			t.Errorf("%s: Parse = %q; want %q", c.name, got.Levels, c.want)
@@ -139,7 +139,7 @@ func FuzzParse(f *testing.F) {
 			side = eventtpl.Cloud
 		}
 		levels := strings.Split(s, "\n")
-		got, err := eventtpl.Parse(levels, side)
+		got, err := eventtpl.Parse(levels, side, "")
 		var e *eventtpl.Error
 		switch {
 		case err != nil && (!errors.As(err, &e) || e.Side != side || e.Level < 0 || e.Level > len(levels) || e.Err == nil || !errors.Is(err, e.Err)):

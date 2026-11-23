@@ -43,10 +43,10 @@ var words = []string{"month", "mon", "Month", "dow"}
 // or "en", or is "" while a template that Parse takes spells a month or a day
 // of the week by name.
 func Validate(ts domain.Templates) error {
-	photos, perr := Parse(ts.Photos, Photos)
-	cloud, cerr := Parse(ts.Cloud, Cloud)
+	photos, perr := Parse(ts.Photos, Photos, ts.Names)
+	cloud, cerr := Parse(ts.Cloud, Cloud, ts.Names)
 	var nerr error
-	if !slices.Contains([]string{"", "ru", "en"}, ts.Names) || ts.Names == "" && (worded(photos) || worded(cloud)) {
+	if _, known := languages[ts.Names]; !known && (ts.Names != "" || worded(photos) || worded(cloud)) {
 		nerr = &domain.PolicyError{Key: "templates.names", Value: ts.Names}
 	}
 	return errors.Join(perr, cerr, nerr)
@@ -103,10 +103,5 @@ func dated(p Part) bool {
 }
 
 func worded(t Template) bool {
-	for _, parts := range t.Levels {
-		if slices.ContainsFunc(parts, func(p Part) bool { return slices.Contains(words, p.Field) }) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(slices.Concat(t.Levels...), func(p Part) bool { return slices.Contains(words, p.Field) })
 }

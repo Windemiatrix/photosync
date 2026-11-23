@@ -76,7 +76,7 @@ func TestParseRules(t *testing.T) {
 		{name: "text alone: the year is missing first", side: cloud, levels: []string{"Photos"}, err: fail(cloud, 0, "{YYYY}", missing)},
 		{name: "a rule before a missing field", side: photos, levels: []string{"", "{YYYY}"}, err: fail(photos, 1, "", empty)},
 	} {
-		got, err := eventtpl.Parse(c.levels, c.side)
+		got, err := eventtpl.Parse(c.levels, c.side, "")
 		checkErr(t, c.name, got, err, c.err)
 	}
 }

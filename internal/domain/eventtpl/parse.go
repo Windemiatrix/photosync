@@ -20,6 +20,7 @@ const (
 // with no two parts of text next to each other.
 type Template struct {
 	Levels [][]Part
+	lang   language
 }
 
 // Part is a piece of a level: the text Literal, never empty, when Field is
@@ -66,8 +67,10 @@ var fields = map[string]string{
 // the zero Template: for the first unknown field by level and part, else for
 // the first level or part that breaks a rule of the errors of this package,
 // else for the first of the year, month, day and description that it lacks.
-func Parse(levels []string, side Side) (Template, error) {
-	t := Template{Levels: make([][]Part, len(levels))}
+// names is the language of the names of months and days, as Templates.Names
+// holds it; Parse takes any, and Validate checks it.
+func Parse(levels []string, side Side, names string) (Template, error) {
+	t := Template{Levels: make([][]Part, len(levels)), lang: languages[names]}
 	for i, s := range levels {
 		fail := func(part string) (Template, error) {
 			return Template{}, &Error{Side: side, Level: i + 1, Part: part, Err: ErrUnknownField}
