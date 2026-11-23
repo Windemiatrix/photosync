@@ -104,16 +104,22 @@ func plainName(f *template.Field) string {
 	return f.Name
 }
 
-// Compatible returns nil when t fits a remote in mode, else ErrMode. A
-// two-way or download-only remote maps its directories back to albums, so
-// its template starts with {event_path}/; Render checks the rest for each
-// asset. An upload-only remote takes any template.
+// Compatible returns nil when t fits a remote in mode, else ErrMode. One
+// rule serves every mode: t starts with {event_path}/, so that a file lies
+// in the directory of its event, and none of its own text after that holds
+// "/". Render checks the text inside a field and the values of fields for
+// each asset, and outside upload-only refuses a path below the event path.
 func Compatible(t *template.Template, mode domain.Mode) error {
-	if mode == domain.ModeUploadOnly || len(t.Segments) > 0 && t.Segments[0].Pre == "" &&
-		plainName(t.Segments[0].Field) == "event_path" && strings.HasPrefix(t.Segments[0].Post, "/") {
-		return nil
+	if len(t.Segments) > 0 && t.Segments[0].Pre == "" && plainName(t.Segments[0].Field) == "event_path" {
+		after, ok := strings.CutPrefix(t.Segments[0].Post, "/")
+		for _, s := range t.Segments[1:] {
+			after += s.Post
+		}
+		if ok && !strings.Contains(after, "/") {
+			return nil
+		}
 	}
-	return fmt.Errorf("%w: a %s remote needs a template that starts with {event_path}/", ErrMode, mode)
+	return fmt.Errorf("%w %s: it must start with {event_path}/ and hold no other /", ErrMode, mode)
 }
 
 // Photos takes names that the cloud refuses, and a "/" in a value would

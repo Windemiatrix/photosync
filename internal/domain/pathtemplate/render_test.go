@@ -235,29 +235,31 @@ func TestRenderValues(t *testing.T) {
 
 func TestCompatible(t *testing.T) {
 	t.Parallel()
-	all := []domain.Mode{domain.ModeTwoWay, domain.ModeDownloadOnly, domain.ModeUploadOnly}
-	upload := all[2:]
 	for _, c := range []struct {
-		tmpl string
-		fits []domain.Mode
+		name, tmpl string
+		err        error
 	}{
-		{"{event_path}/{original_name}", all},
-		{"{event_path}/photo {original_name}", all},
-		// Render rejects this file below the event directory for each asset.
-		{"{event_path}/{created.year}/{original_name}", all},
-		{"{album}/{original_name}", upload},
-		{"{event}/{original_name}", upload},
-		{"{event_path}{original_name}", upload},
-		{"x{event_path}/{original_name}", upload},
-		{"{event_path|lower}/{original_name}", upload},
-		{"photo", upload},
-		{"", upload},
+		{"a file directly in the event path", "{event_path}/{original_name}", nil},
+		{"fields and text in the name", "{event_path}/{created.year}-{original_name}", nil},
+		{"a field of several values", "{event_path}/{album}", nil},
+		{"a template without the event path", "{original_name}", pathtemplate.ErrMode},
+		{"text before the event path", "x{event_path}/{original_name}", pathtemplate.ErrMode},
+		{"another field first", "{album}/{original_name}", pathtemplate.ErrMode},
+		{"the event path with more than its name", "{event_path|lower}/{original_name}", pathtemplate.ErrMode},
+		{"no slash after the event path", "{event_path}{original_name}", pathtemplate.ErrMode},
+		{"a slash after a later field", "{event_path}/{album}/{original_name}", pathtemplate.ErrMode},
+		{"a slash in the text right after the event path", "{event_path}/sub/{original_name}", pathtemplate.ErrMode},
+		{"a doubled slash after the event path", "{event_path}//{original_name}", pathtemplate.ErrMode},
+		{"a slash in the text after the last field", "{event_path}/{original_name}/x", pathtemplate.ErrMode},
+		{"an empty template", "", pathtemplate.ErrMode},
 	} {
-		for _, mode := range all {
-			err := pathtemplate.Compatible(parse(t, c.tmpl), mode)
-			if fits := slices.Contains(c.fits, mode); fits && err != nil || !fits && !errors.Is(err, pathtemplate.ErrMode) {
-				t.Errorf("Compatible(%q, %s) = %v; want fits %v", c.tmpl, mode, err, fits)
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			for _, mode := range []domain.Mode{domain.ModeTwoWay, domain.ModeDownloadOnly, domain.ModeUploadOnly} {
+				if err := pathtemplate.Compatible(parse(t, c.tmpl), mode); !errors.Is(err, c.err) {
+					t.Errorf("Compatible(%q, %s) = %v; want %v", c.tmpl, mode, err, c.err)
+				}
 			}
-		}
+		})
 	}
 }

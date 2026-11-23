@@ -332,7 +332,7 @@ func TestRenamedDirs(t *testing.T) {
 	trashed := tripAlbum
 	trashed.InTrash = true
 	underDay, underTrip := file(personal, "2024/05-03/05-01 - Holidays/IMG_0001.HEIC"), file(personal, tripDir+"/05-01 - Holidays/Beach/IMG_0004.HEIC")
-	lower := file(personal, "2024/05-01 - holidays/IMG_0001.HEIC")
+	lower, bare := file(personal, "2024/05-01 - holidays/IMG_0001.HEIC"), file(personal, "2024/05-01/IMG_0001.HEIC")
 	l1later, b4later := file(personal, laterDir+"/IMG_0001.HEIC"), file(personal, laterDir+"/Beach/IMG_0004.HEIC")
 	deep, catsLater := file(personal, "Albums/Pets/Home/Cats/IMG_0005.HEIC"), file(personal, "2025/Cats/IMG_0005.HEIC")
 	picsLater, elsewhere := file(personal, "2025/05-02 - Trip pics/IMG_0003.HEIC"), file(personal, "2025/05-01 - Vacation/IMG_0001.HEIC")
@@ -440,6 +440,9 @@ func TestRenamedDirs(t *testing.T) {
 		{"a directory renamed only in letter case takes its pair along and gives its album the title in the new case",
 			lib, prs(mine(holidays, holidaysDir)), lks(l1), found{1: lower}, listed(lower), twoWay, personal, p,
 			prs(unnamed(mine(holidays, "2024/05-01 - holidays"))), als(titled(holidaysAlbum, "05/01 holidays")), nil, nil},
+		{"a directory renamed to the bare day gives its album the title without a description",
+			lib, prs(mine(holidays, holidaysDir)), lks(l1), found{1: bare}, listed(bare), twoWay, personal, p,
+			prs(unnamed(mine(holidays, "2024/05-01"))), als(titled(holidaysAlbum, "05/01")), nil, nil},
 		{"a directory moved into a folder that iCloud has moves its album into that folder outside Recently Deleted, the lowest ID first",
 			slices.Concat(lib, als(folder(7, 0, "2025"), folder(6, 0, "2025"), folder(4, 0, "2025", "Old"), binnedYear, album(2, thematic, "2025"), folder(1, 0, "2023"))),
 			prs(mine(holidays, holidaysDir)), lks(l1), found{1: l1later}, listed(l1later), twoWay, personal, p,

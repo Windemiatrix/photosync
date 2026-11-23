@@ -5,11 +5,9 @@ import (
 	"maps"
 	"path"
 	"slices"
-	"strings"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
 	"github.com/Windemiatrix/photosync/internal/domain/layout"
-	"github.com/Windemiatrix/photosync/internal/domain/naming"
 )
 
 // PairDirs returns made, the album pairs that a run makes in root of remote
@@ -24,11 +22,8 @@ import (
 //
 // The albums without a pair in root pair as layout.FirstPairs pairs them with
 // the directories of dirs and those above them; folders get no pair. Then
-// each directory of dirs without a pair, parents first, stands for an album:
-// below the nearest directory paired with an album, one in its folders,
-// titled with its title and the levels below as naming.EventTitle reads
-// them, joined with p.NestedSeparator; else the album, not a folder, that
-// layout.AlbumFor gives the directory with p, if any. The album, not a
+// each directory of dirs without a pair, in the order of their paths, stands for the album,
+// not a folder, that layout.AlbumFor gives it with p, if any. The album, not a
 // folder, of albums or added with that title and those FolderTitles, outside
 // the trash and without a pair in root, the lowest AlbumID first, takes the
 // directory. Else the run adds the album and each folder above it that it
@@ -51,9 +46,9 @@ func PairDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Album
 	first := layout.FirstPairs(slices.DeleteFunc(slices.Clone(albums), func(a domain.Album) bool { return a.Kind == domain.KindFolder }), pairs, above, files, p)
 	known := slices.Clone(albums)
 	slices.SortFunc(known, func(x, y domain.Album) int { return cmp.Compare(x.ID, y.ID) })
-	byID, at, paired := map[domain.AlbumID]domain.Album{}, map[string]domain.AlbumID{}, map[domain.AlbumID]bool{}
+	at, paired := map[string]domain.AlbumID{}, map[domain.AlbumID]bool{}
 	for _, a := range known {
-		byID[a.ID], last = a, max(last, a.ID)
+		last = max(last, a.ID)
 	}
 	for _, x := range pairs {
 		at[x.DirPath], paired[x.AlbumID] = x.AlbumID, true
@@ -78,7 +73,7 @@ func PairDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Album
 	create := func(a domain.Album) domain.AlbumID {
 		last++
 		a.ID, a.Kind = last, layout.Classify(a, p)
-		added, known, byID[last] = append(added, a), append(known, a), a
+		added, known = append(added, a), append(known, a)
 		return last
 	}
 	adds := r.Mode != domain.ModeUploadOnly && (root != domain.LibraryPersonal || p.AlbumsForPersonal)
@@ -87,13 +82,6 @@ func PairDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Album
 			continue
 		}
 		a, ok := layout.AlbumFor(d, p)
-		for up := path.Dir(d); up != path.Dir(up); up = path.Dir(up) {
-			if parent, found := byID[at[up]]; found && parent.Kind != domain.KindFolder {
-				title := naming.EventTitle(strings.Split(strings.TrimPrefix(d, up+"/"), "/"), p.NestedSeparator, p.UntitledEvent)
-				a, ok = domain.Album{FolderTitles: slices.Clone(parent.FolderTitles), Title: parent.Title + p.NestedSeparator + title}, true
-				break
-			}
-		}
 		if !ok || a.Kind == domain.KindFolder {
 			continue
 		}
