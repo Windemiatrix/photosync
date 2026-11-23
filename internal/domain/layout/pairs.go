@@ -11,10 +11,10 @@ import (
 // FirstPairs returns the pairs that the albums and folders without one in
 // pairs make with the directories of dirs without one, in the same remote
 // root; albums in the trash get none. An album pairs by name with the
-// directory that DirFor gives it, and of several such albums the lowest
-// AlbumID wins. Otherwise it pairs with the directory that holds more than
-// half of its files, unless the files there join no album, as in a day
-// folder; of several such albums the one with the most files there wins,
+// directory that DirFor gives it, if any, and of several such albums the
+// lowest AlbumID wins. Otherwise it pairs with the directory that holds more
+// than half of its files, if AlbumFor reads it as an album, not a folder; of
+// several such albums the one with the most files there wins,
 // then the lowest AlbumID. files maps an album to the paths of the cloud
 // files linked to its assets, one per file, as the current scan lists them,
 // so the directory of each path is in dirs. AlbumIDs are unique. The pairs
@@ -78,9 +78,9 @@ func majority(paths []string, p domain.Policies) (dir string, files int, ok bool
 	return "", 0, false
 }
 
-// The files of the root, the albums root, a year folder and a day folder
-// join no album; pairing one of them would pull those files into an album.
+// The files of a directory that reads as no album or as a folder join no
+// album; pairing it would pull those files into an album.
 func holdsAlbum(dir string, p domain.Policies) bool {
-	a, ok := AlbumFor(dir, map[string]bool{dir: true}, p)
+	a, ok := AlbumFor(dir, p)
 	return ok && a.Kind != domain.KindFolder
 }

@@ -155,7 +155,7 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 		for _, root := range []domain.LibraryKind{domain.LibraryPersonal, domain.LibraryShared} {
 			moved, titled, filed, folders := RenamedDirs(albums, pairs, lastAlbum, state.Links, fs, scan, r, root, p)
 			for _, a := range slices.Concat(titled, filed) {
-				for _, b := range underFolder(albums, a) {
+				for _, b := range underFolder(albums, a, p) {
 					albums[slices.IndexFunc(albums, func(c domain.Album) bool { return c.ID == b.ID })] = b
 				}
 			}

@@ -82,7 +82,7 @@ func TestEventPath(t *testing.T) {
 	}{
 		{"the directory of the pair, not the one of the title", event, pairs, "2024/05-01 - Sea trip"},
 		{"an event without a pair", event, pairs[:1], "2024/05-01 - Sea"},
-		{"a thematic album without a pair", domain.Album{ID: 9, Title: "Hobby"}, pairs, "Albums/Hobby"},
+		{"a thematic album has no event path", domain.Album{ID: 9, Title: "Hobby"}, pairs, ""},
 	} {
 		if got := pathtemplate.EventPath(c.album, c.pairs, p); got != c.want {
 			t.Errorf("%s: EventPath = %q; want %q", c.name, got, c.want)

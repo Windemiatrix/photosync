@@ -36,7 +36,7 @@ func TestReadScans(t *testing.T) {
 		partyDir, beachDir   = "2024/05-04 - Party", "2024/05-05 - Beach"
 		picnicDir, copiesDir = "2024/05-07 - Picnic", "2024/05-08 - Copies"
 		movedDir, zooDir     = "2024/05-09 - Moved", "2024/05-10 - Zoo"
-		photosDir, picsDir   = "2024/Trip photos", "2024/Trip pics"
+		photosDir, picsDir   = "2024/05-16 - Trip photos", "2024/05-15 - Trip pics"
 		vacationDir          = "2024/05-01 - Vacation"
 	)
 	type (
@@ -358,7 +358,7 @@ func TestReadScans(t *testing.T) {
 				link(2, 8, "alpha", e2v, liveVideo, 0), link(1, 8, "alpha", e2, original, 0)),
 			delta(a14, a13, a8), scans{"alpha": {q14, e2v, q13, e2}}, specs{alpha}, p,
 			result{found{1: e2, 2: e2v, 3: q13, 4: q14}, reads{"alpha": scanned(nil, nil, nil, nil)},
-				[]domain.Album{album(next, event, "Trip photos")},
+				[]domain.Album{album(next, event, "05/16 Trip photos")},
 				[]domain.AlbumPair{pair(trip, "alpha", personal, picsDir, byRemote), pair(next, "alpha", personal, photosDir, byRemote)}, nil}},
 		{"a Live video matched with its photo does not count either, and the asset joins the album of their directory once",
 			state(link(2, 14, "alpha", q14, original, 0), link(1, 13, "alpha", q13, original, 0)), delta(live8, a14, a13),
@@ -366,7 +366,7 @@ func TestReadScans(t *testing.T) {
 			result{found{1: q13, 2: q14}, reads{"alpha": scanned(
 				decided{made(3, 8, "alpha", e2, original, exact, next), made(4, 8, "alpha", e2v, liveVideo, component, next)},
 				joins{8: into(next)}, nil, nil)},
-				[]domain.Album{album(next, event, "Trip photos")},
+				[]domain.Album{album(next, event, "05/16 Trip photos")},
 				[]domain.AlbumPair{pair(trip, "alpha", personal, picsDir, byRemote), pair(next, "alpha", personal, photosDir, byRemote)}, nil}},
 		{"ambiguous moves and unknown files are reported in turn, and a new file goes into the album of its directory",
 			state(link(2, 41, "alpha", e41, original, holidays), link(1, 40, "alpha", e40, original, holidays)), delta(a41, a40),
@@ -385,7 +385,7 @@ func TestReadScans(t *testing.T) {
 		{"a file in the directory of the pair of its album still counts among the files of its other albums",
 			state(link(1, 7, "alpha", e1, original, holidays), link(2, 8, "alpha", e2, original, 0)), delta(both, a8), scans{"alpha": {e2, e1}}, specs{alpha}, p,
 			result{found{1: e1, 2: e2}, reads{"alpha": scanned(nil, nil, nil, nil)},
-				[]domain.Album{album(next, event, "Trip photos")}, []domain.AlbumPair{pair(next, "alpha", personal, photosDir, byRemote)}, nil}},
+				[]domain.Album{album(next, event, "05/16 Trip photos")}, []domain.AlbumPair{pair(next, "alpha", personal, photosDir, byRemote)}, nil}},
 		{"a directory that the user renamed takes its pair along in each remote, and the album takes its new title from the first remote by name",
 			renamedAway, delta(a7), scans{"alpha": {v1}, "beta": {v1}}, specs{beta, alpha}, p,
 			result{found{1: v1, 6: v1}, reads{"alpha": retitled, "beta": scanned(nil, nil, nil, nil)}, nil,

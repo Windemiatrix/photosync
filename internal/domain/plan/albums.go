@@ -28,14 +28,14 @@ import (
 // below the nearest directory paired with an album, one in its folders,
 // titled with its title and the levels below as naming.EventTitle reads
 // them, joined with p.NestedSeparator; else the album, not a folder, that
-// layout.AlbumFor gives the directory alone, if any. The album, not a
+// layout.AlbumFor gives the directory with p, if any. The album, not a
 // folder, of albums or added with that title and those FolderTitles, outside
 // the trash and without a pair in root, the lowest AlbumID first, takes the
 // directory. Else the run adds the album and each folder above it that it
 // does not find by title and FolderTitles outside the trash, paired or not,
 // unless r is upload-only or root is the personal one while
 // p.AlbumsForPersonal is false. Added albums and folders get AlbumIDs above
-// last and those of albums, Kind from layout.Classify, and ParentID. Pairs
+// last and those of albums, Kind from layout.Classify with p, and ParentID. Pairs
 // have CreatedBy domain.OriginRemote. Both results are in the order of
 // AlbumID, and the inputs are not changed.
 func PairDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.AlbumID, r domain.RemoteSpec, root domain.LibraryKind, dirs map[string]bool, files map[domain.AlbumID][]string, p domain.Policies) (made []domain.AlbumPair, added []domain.Album) {
@@ -77,7 +77,7 @@ func PairDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Album
 	}
 	create := func(a domain.Album) domain.AlbumID {
 		last++
-		a.ID, a.Kind = last, layout.Classify(a)
+		a.ID, a.Kind = last, layout.Classify(a, p)
 		added, known, byID[last] = append(added, a), append(known, a), a
 		return last
 	}
@@ -86,7 +86,7 @@ func PairDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Album
 		if _, ok := at[d]; ok {
 			continue
 		}
-		a, ok := layout.AlbumFor(d, map[string]bool{d: true}, p)
+		a, ok := layout.AlbumFor(d, p)
 		for up := path.Dir(d); up != path.Dir(up); up = path.Dir(up) {
 			if parent, found := byID[at[up]]; found && parent.Kind != domain.KindFolder {
 				title := naming.EventTitle(strings.Split(strings.TrimPrefix(d, up+"/"), "/"), p.NestedSeparator, p.UntitledEvent)
