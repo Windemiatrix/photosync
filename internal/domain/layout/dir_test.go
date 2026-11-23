@@ -1,6 +1,7 @@
 package layout_test
 
 import (
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -14,19 +15,22 @@ import (
 	"github.com/Windemiatrix/photosync/internal/domain/naming"
 )
 
-// The policies of the tests: one place, so that a row reads as a path.
-func dirPolicies() domain.Policies {
-	return domain.Policies{NestedSeparator: " / ", UntitledEvent: "Untitled", AlbumsRoot: "Albums"}
-}
-
 // covers: R-LAYOUT-06
 func TestDirFor(t *testing.T) {
 	t.Parallel()
 
 	const rule = "R-LAYOUT-06"
-	std := dirPolicies()
-	alt := domain.Policies{NestedSeparator: " > ", UntitledEvent: "Без названия", AlbumsRoot: "Альбомы"}
-	bad := domain.Policies{NestedSeparator: " / ", UntitledEvent: "Untitled", AlbumsRoot: "a/b"}
+	std := domain.DefaultPolicies()
+	photos, cloud := std.Templates.Photos, std.Templates.Cloud
+	own := tpl(photos, []string{"{YYYY}", "{MM}-{DD} {Description}"}, "")
+	dots := tpl(photos, []string{"..", "{YYYY}", "{MM}-{DD} - {Description}"}, "")
+	events := tpl([]string{"{YYYY}", "Events", "{MM}/{DD} {Description}"}, cloud, "")
+	photosDir := tpl(photos, []string{"{YYYY}", "Photos", "{MM}-{DD} - {Description}"}, "")
+	monthly := tpl([]string{"{YYYY}-{MM}", "{DD} {Description}"}, cloud, "")
+	yy := tpl(photos, []string{"{YY}", "{MM}-{DD} {Description}"}, "")
+	byName := tpl([]string{"{YYYY}", "{DD} {Month} {Description}"}, cloud, "ru")
+	textBoth := tpl([]string{"Events", "{YYYY}", "{MM}/{DD} {Description}"}, []string{"Photos", "{YYYY}", "{MM}-{DD} - {Description}"}, "")
+	split := tpl([]string{"{YYYY}", "{MM}", "{DD} {Description}"}, cloud, "")
 	folder := domain.KindFolder
 	in := func(titles ...string) []string { return titles }
 
@@ -36,38 +40,38 @@ func TestDirFor(t *testing.T) {
 		album domain.Album
 		want  string
 	}{
-		{"an event: the day becomes MM-DD - Title", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 Holidays"}, "2024/05-01 - Holidays"},
-		{"an event without a day keeps its title", std, domain.Album{FolderTitles: in("2024"), Title: "Vacation"}, "2024/Vacation"},
-		{"an event in a folder of a year folder", std, domain.Album{FolderTitles: in("2024", "Trips"), Title: "05/01 Kazan"}, "2024/Trips/05-01 - Kazan"},
-		{"a nested part is a level", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 Holidays / raw"}, "2024/05-01 - Holidays/raw"},
-		{"a bare day gets the untitled name", std, domain.Album{FolderTitles: in("2024"), Title: "05/01"}, "2024/05-01 - Untitled"},
-		{"every nested part follows the day rule", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 Trip / 05/02 Day two"}, "2024/05-01 - Trip/05-02 - Day two"},
-		{"an irregular title is kept", std, domain.Album{FolderTitles: in("2024"), Title: "06 - Sea"}, "2024/06 - Sea"},
-		{"folder titles are sanitized, not split", std, domain.Album{FolderTitles: in("2024", "a/b"), Title: "c:d"}, "2024/a∕b/c꞉d"},
-		{"a thematic album goes under the albums root", std, domain.Album{Title: "Pets"}, "Albums/Pets"},
-		{"a thematic album in a folder", std, domain.Album{FolderTitles: in("Hobby"), Title: "3D printing"}, "Albums/Hobby/3D printing"},
-		{"a top-level album titled with a year is thematic", std, domain.Album{Title: "2024"}, "Albums/2024"},
-		{"a year folder inside another folder is no year folder", std, domain.Album{FolderTitles: in("Archive", "2024"), Title: "Camp"}, "Albums/Archive/2024/Camp"},
-		{"a thematic album follows the day rule", std, domain.Album{Title: "05/01 Notes"}, "Albums/05-01 - Notes"},
-		{"a thematic album splits into nested parts", std, domain.Album{Title: "Trips / Kazan"}, "Albums/Trips/Kazan"},
-		{"a thematic title is sanitized", std, domain.Album{Title: ".hidden"}, "Albums/．hidden"},
+		{"an event", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 Holidays"}, "2024/05-01 - Holidays"},
+		{"an event without a description", std, domain.Album{FolderTitles: in("2024"), Title: "05/01"}, "2024/05-01"},
+		{"the cloud template of the user", own, domain.Album{FolderTitles: in("2024"), Title: "05/01 Holidays"}, "2024/05-01 Holidays"},
+		{"a description with slashes and dots stays one level", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 ../a/.."}, "2024/05-01 - ..∕a∕.．"},
+		{"a cloud level that sanitizing changes gives none", dots, domain.Album{FolderTitles: in("2024"), Title: "05/01 x"}, ""},
+		{"a description of control characters gives none", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 \x00"}, ""},
+		{"the text before an empty description", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 "}, ""},
+		{"an album without a date", std, domain.Album{FolderTitles: in("2024"), Title: "Holidays"}, ""},
+		{"an album deeper than the template", std, domain.Album{FolderTitles: in("2024", "Trips"), Title: "05/01 Kazan"}, ""},
+		{"a top-level album", std, domain.Album{Title: "Pets"}, ""},
+		{"an album at the depth of a folder", std, domain.Album{Title: "2024"}, ""},
 		{"a year folder", std, domain.Album{Kind: folder, Title: "2024"}, "2024"},
-		{"a folder in a year folder", std, domain.Album{Kind: folder, FolderTitles: in("2024"), Title: "Trips"}, "2024/Trips"},
-		{"a folder outside the years", std, domain.Album{Kind: folder, Title: "Hobby"}, "Albums/Hobby"},
-		{"a folder title takes no day rule", std, domain.Album{Kind: folder, FolderTitles: in("2024"), Title: "05/01 Trips"}, "2024/05∕01 Trips"},
-		{"a folder title does not split", std, domain.Album{Kind: folder, Title: "Trips / Kazan"}, "Albums/Trips ∕ Kazan"},
-		{"a folder titled with a year inside another folder", std, domain.Album{Kind: folder, FolderTitles: in("Archive"), Title: "2024"}, "Albums/Archive/2024"},
-		{"the separator is a policy", alt, domain.Album{Title: "A > b"}, "Альбомы/A/b"},
-		{"the untitled name is a policy", alt, domain.Album{FolderTitles: in("2024"), Title: "05/01"}, "2024/05-01 - Без названия"},
-		{"another separator does not split", alt, domain.Album{FolderTitles: in("2024"), Title: "05/01 A / b"}, "2024/05-01 - A ∕ b"},
-		{"the albums root is sanitized", bad, domain.Album{Title: "Pets"}, "a∕b/Pets"},
-		{"a stored thematic kind is an album", std, domain.Album{Kind: domain.KindThematic, Title: "Pets"}, "Albums/Pets"},
-		{"the state fields are not read", std, domain.Album{
+		{"a folder at the depth of an event", std, domain.Album{Kind: folder, FolderTitles: in("2024"), Title: "05/01 Trip"}, ""},
+		{"a folder outside the template", std, domain.Album{Kind: folder, Title: "Hobby"}, ""},
+		{"a folder above a level of text", events, domain.Album{Kind: folder, FolderTitles: in("2024"), Title: "Events"}, "2024"},
+		{"a folder that a level of text follows", events, domain.Album{Kind: folder, Title: "2024"}, ""},
+		{"a level of text after the folder in the cloud", photosDir, domain.Album{Kind: folder, Title: "2024"}, "2024/Photos"},
+		{"a folder with a field that the cloud levels above an event lack", monthly, domain.Album{Kind: folder, Title: "2024-05"}, ""},
+		{"a folder level of a field that the cloud levels above an event lack", split, domain.Album{Kind: folder, FolderTitles: in("2024"), Title: "05"}, ""},
+		{"an event of that template", monthly, domain.Album{FolderTitles: in("2024-05"), Title: "01 x"}, "2024/05-01 - x"},
+		{"{YY} out of its years", yy, domain.Album{FolderTitles: in("1965"), Title: "05/01 x"}, ""},
+		{"{YY} within its years", yy, domain.Album{FolderTitles: in("1969"), Title: "05/01 x"}, "69/05-01 x"},
+		{"a month by name", byName, domain.Album{FolderTitles: in("2024"), Title: "01 Май x"}, "2024/05-01 - x"},
+		{"the state fields and a stored kind are not read", std, domain.Album{
 			ID: 7, UUID: "uuid-1", Key: "key-1", KeySource: domain.KeyCloudGUID, InTrash: true,
-			Start: time.Date(2024, 5, 2, 9, 0, 0, 0, time.UTC), ParentID: 3, ParentUUID: "uuid-0",
+			Start: time.Date(2024, 5, 2, 9, 0, 0, 0, time.UTC), ParentID: 3, ParentUUID: "uuid-0", Kind: domain.KindThematic,
 			FolderTitles: in("2024"), Title: "05/02 Old",
 		}, "2024/05-02 - Old"},
-		{"a stored event kind is an album", std, domain.Album{Kind: domain.KindEvent, FolderTitles: in("2024"), Title: "05/01 Holidays"}, "2024/05-01 - Holidays"},
+		{"templates that Parse refuses", domain.Policies{}, domain.Album{FolderTitles: in("2024"), Title: "05/01 Holidays"}, ""},
+		{"a description that sanitizing changes", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 a:b"}, "2024/05-01 - a꞉b"},
+		{"a folder of text on both sides", textBoth, domain.Album{Kind: folder, Title: "Events"}, "Photos"},
+		{"a folder of other text", textBoth, domain.Album{Kind: folder, Title: "Other"}, ""},
 	}
 	for _, c := range cases {
 		t.Run(rule+" "+c.name, func(t *testing.T) {
@@ -80,10 +84,17 @@ func TestDirFor(t *testing.T) {
 			if got != c.want {
 				t.Errorf("DirFor(%+v) = %q, want %q", c.album, got, c.want)
 			}
-			for _, level := range strings.Split(got, "/") {
-				if !naming.IsValidPart(level) {
+			if got == "" {
+				return
+			}
+			levels := strings.Split(got, "/")
+			for _, level := range levels {
+				if !naming.IsValidPart(level) || level == "." || level == ".." {
 					t.Errorf("DirFor(%+v) = %q: level %q is not a valid name", c.album, got, level)
 				}
+			}
+			if c.album.Kind != folder && len(levels) != len(c.p.Templates.Cloud) {
+				t.Errorf("DirFor(%+v) = %q: %d levels, want %d as in the cloud template", c.album, got, len(levels), len(c.p.Templates.Cloud))
 			}
 		})
 	}
@@ -95,16 +106,17 @@ func TestAlbumFor(t *testing.T) {
 	t.Parallel()
 
 	const r06, r09 = "R-LAYOUT-06", "R-LAYOUT-09"
-	std := dirPolicies()
-	alt := domain.Policies{NestedSeparator: " > ", UntitledEvent: "Без названия", AlbumsRoot: "Альбомы"}
-	bad := domain.Policies{NestedSeparator: " / ", UntitledEvent: "Untitled", AlbumsRoot: "a/b"}
-	set := func(dirs ...string) map[string]bool {
-		m := map[string]bool{}
-		for _, d := range dirs {
-			m[d] = true
-		}
-		return m
-	}
+	std := domain.DefaultPolicies()
+	photos, cloud := std.Templates.Photos, std.Templates.Cloud
+	own := tpl(photos, []string{"{YYYY}", "{MM}-{DD} {Description}"}, "")
+	dots := tpl(photos, []string{"..", "{YYYY}", "{MM}-{DD} - {Description}"}, "")
+	events := tpl([]string{"{YYYY}", "Events", "{MM}/{DD} {Description}"}, cloud, "")
+	photosDir := tpl(photos, []string{"{YYYY}", "Photos", "{MM}-{DD} - {Description}"}, "")
+	monthly := tpl([]string{"{YYYY}-{MM}", "{DD} {Description}"}, cloud, "")
+	yy := tpl(photos, []string{"{YY}", "{MM}-{DD} {Description}"}, "")
+	nameDirs := tpl(photos, []string{"{YYYY}", "{DD} {Month} {Description}"}, "ru")
+	word := tpl(photos, []string{"{YYYY} год", "{MM}-{DD} {Description}"}, "")
+	lead := tpl(photos, []string{"Photos", "{YYYY}", "{MM}-{DD} - {Description}"}, "")
 	in := func(titles ...string) []string { return titles }
 	album := func(folders []string, title string) domain.Album {
 		return domain.Album{FolderTitles: folders, Title: title}
@@ -118,42 +130,34 @@ func TestAlbumFor(t *testing.T) {
 		rule, name string
 		p          domain.Policies
 		dir        string
-		albumDirs  map[string]bool
 		want       domain.Album
 		ok         bool
 	}{
-		{r09, "the root", std, "", set(""), none, false},
-		{r09, "the root as path.Dir gives it", std, ".", set("."), none, false},
-		{r09, "a year folder is a folder, its files join no album", std, "2024", set("2024"), folder(nil, "2024"), true},
-		{r06, "the albums root", std, "Albums", set("Albums"), none, false},
-		{r09, "a day folder is no album", std, "2024/05-01", set("2024/05-01"), none, false},
-		{r09, "a subdirectory of a day folder is a part of an untitled event", std, "2024/05-01/raw", set("2024/05-01", "2024/05-01/raw"), album(in("2024"), "05/01 / raw"), true},
-		{r09, "deeper under a day folder", std, "2024/05-01/raw/best", nil, album(in("2024"), "05/01 / raw / best"), true},
-		{r09, "a day of a leap year only", std, "2023/02-29", set("2023/02-29"), album(in("2023"), "02-29"), true},
-		{r09, "a leap day is a day folder", std, "2024/02-29", set("2024/02-29"), none, false},
-		{r06, "MM-DD - Title becomes MM/DD Title", std, "2024/05-01 - Holidays", set("2024/05-01 - Holidays"), album(in("2024"), "05/01 Holidays"), true},
-		{r09, "Year/Title is an event", std, "2024/Vacation", set("2024/Vacation"), album(in("2024"), "Vacation"), true},
-		{r09, "a month folder is an event", std, "2024/05", set("2024/05"), album(in("2024"), "05"), true},
-		{r06, "the untitled name gives a bare day", std, "2024/05-01 - Untitled", set("2024/05-01 - Untitled"), album(in("2024"), "05/01"), true},
-		{r06, "an irregular name is kept", std, "2024/09-24 Flight home", set("2024/09-24 Flight home"), album(in("2024"), "09-24 Flight home"), true},
-		{r06, "a directory under an album is a nested part", std, "2024/Trips/05-01 - Kazan", set("2024/Trips", "2024/Trips/05-01 - Kazan"), album(in("2024"), "Trips / 05/01 Kazan"), true},
-		{r06, "a nested part needs no files of its own", std, "2024/05-01 - Holidays/raw", set("2024/05-01 - Holidays"), album(in("2024"), "05/01 Holidays / raw"), true},
-		{r06, "a directory without files above an album is a folder", std, "2024/Trips/05-01 - Kazan", set("2024/Trips/05-01 - Kazan"), album(in("2024", "Trips"), "05/01 Kazan"), true},
-		{r06, "a directory with no album at or above it is a folder", std, "2024/Trips", set("2024/Trips/05-01 - Kazan"), folder(in("2024"), "Trips"), true},
-		{r06, "a directory under the albums root is a thematic album", std, "Albums/Pets", set("Albums/Pets"), album(nil, "Pets"), true},
-		{r06, "a folder under the albums root", std, "Albums/Hobby", set("Albums/Hobby/3D printing"), folder(nil, "Hobby"), true},
-		{r06, "a day is decoded under the albums root too", std, "Albums/05-01 - Notes", set("Albums/05-01 - Notes"), album(nil, "05/01 Notes"), true},
-		{r06, "a thematic album in a folder", std, "Albums/Hobby/3D printing", set("Albums/Hobby/3D printing"), album(in("Hobby"), "3D printing"), true},
-		{r06, "a top-level directory is a thematic album", std, "Archive", set("Archive"), album(nil, "Archive"), true},
-		{r06, "a nested part of a top-level album", std, "Archive/2019", set("Archive", "Archive/2019"), album(nil, "Archive / 2019"), true},
-		{r06, "an album in a top-level folder", std, "Archive/2019", set("Archive/2019"), album(in("Archive"), "2019"), true},
-		{r06, "a directory without files keeps its name as a folder", std, "2024/05-01 - Holidays", nil, folder(in("2024"), "05-01 - Holidays"), true},
-		{r06, "look-alikes are not decoded", std, "Albums/a∕b", set("Albums/a∕b"), album(nil, "a∕b"), true},
-		{r06, "the separator and the root are policies", alt, "Альбомы/A/b", set("Альбомы/A"), album(nil, "A > b"), true},
-		{r09, "the untitled name is a policy", alt, "2024/05-01/x", nil, album(in("2024"), "05/01 > x"), true},
-		{r06, "the albums root compares sanitized", bad, "a∕b/Pets", set("a∕b/Pets"), album(nil, "Pets"), true},
-		{r06, "the albums root compares exactly", std, "albums/Pets", set("albums/Pets"), album(in("albums"), "Pets"), true},
-		{r06, "the untitled name of the policies gives a bare day", alt, "2024/05-01 - Без названия", set("2024/05-01 - Без названия"), album(in("2024"), "05/01"), true},
+		{r06, "an event directory", std, "2024/05-01 - Holidays", album(in("2024"), "05/01 Holidays"), true},
+		{r09, "a former day folder is an event without a description", std, "2024/05-01", album(in("2024"), "05/01"), true},
+		{r09, "the text before an empty description", std, "2024/05-01 - ", none, false},
+		{r06, "a year directory is a folder", std, "2024", folder(nil, "2024"), true},
+		{r09, "the root", std, "", none, false},
+		{r09, "the root as path.Dir gives it", std, ".", none, false},
+		{r09, "a directory below an event", std, "2024/05-01 - Holidays/raw", none, false},
+		{r09, "a directory outside the template", std, "Albums/Pets", none, false},
+		{r09, "an irregular name", std, "2024/Vacation", none, false},
+		{r06, "the description as it is, look-alikes too", std, "2024/05-01 - a∕b", album(in("2024"), "05/01 a∕b"), true},
+		{r06, "the description keeps its case", std, "2024/05-01 - HOLIDAYS", album(in("2024"), "05/01 HOLIDAYS"), true},
+		{r06, "text of the template in another case", word, "2024 ГОД", folder(nil, "2024"), true},
+		{r06, "the same folder by the text of the template", word, "2024 год", folder(nil, "2024"), true},
+		{r09, "a month name in NFD is not read", nameDirs, "2024/01 Май x", none, false},
+		{r06, "a month name in NFC", nameDirs, "2024/01 Май x", album(in("2024"), "05/01 x"), true},
+		{r06, "a level of text above an event", photosDir, "2024/Photos", folder(nil, "2024"), true},
+		{r09, "the directory that the level of text follows", photosDir, "2024", none, false},
+		{r06, "a folder that a level of text follows in Photos", events, "2024", folder(in("2024"), "Events"), true},
+		{r09, "a year that Photos cannot write alone", monthly, "2024", none, false},
+		{r06, "the cloud template of the user", own, "2024/05-01 Holidays", album(in("2024"), "05/01 Holidays"), true},
+		{r06, "text that the template lacks goes to the description", own, "2024/05-01 - Holidays", album(in("2024"), "05/01 - Holidays"), true},
+		{r06, "{YY} reads by the rule of time.Parse", yy, "70/05-01 x", album(in("1970"), "05/01 x"), true},
+		{r09, "a look-alike of the text of the template", dots, "．．/2024/05-01 - x", none, false},
+		{r09, "February 29 of another year", std, "2023/02-29 - x", none, false},
+		{r09, "a level of text without a folder in Photos", lead, "Photos", none, false},
 	}
 	for _, c := range cases {
 		t.Run(c.rule+" "+c.name, func(t *testing.T) {
@@ -162,13 +166,13 @@ func TestAlbumFor(t *testing.T) {
 			if _, ok := domain.Rules[c.rule]; !ok {
 				t.Errorf("%s is not in domain.Rules", c.rule)
 			}
-			got, ok := layout.AlbumFor(c.dir, c.albumDirs, c.p)
+			got, ok := layout.AlbumFor(c.dir, c.p)
 			// A top-level album has no folder titles, empty or nil alike.
 			if len(got.FolderTitles) == 0 {
 				got.FolderTitles = nil
 			}
 			if ok != c.ok || !reflect.DeepEqual(got, c.want) {
-				t.Errorf("AlbumFor(%q, %v) = %+v, %t; want %+v, %t", c.dir, c.albumDirs, got, ok, c.want, c.ok)
+				t.Errorf("AlbumFor(%q) = %+v, %t; want %+v, %t", c.dir, got, ok, c.want, c.ok)
 			}
 		})
 	}
@@ -178,97 +182,95 @@ func TestAlbumFor(t *testing.T) {
 func TestDirProperties(t *testing.T) {
 	t.Parallel()
 
-	p := dirPolicies()
-	bools := rapid.SampledFrom([]bool{false, true})
-	years := rapid.SampledFrom([]string{"1999", "2024"})
-	words := rapid.SampledFrom([]string{"Trips", "Отпуск", "a∕b", "Trip - 2024", "06 - Sea", "09-24 Flight home", "Albums", "_"})
-	days := rapid.SampledFrom([]string{"01/01", "02/29", "05/01", "12/31"})
-	part := rapid.Custom(func(t *rapid.T) string {
-		switch rapid.IntRange(0, 2).Draw(t, "shape") {
-		case 0:
-			return days.Draw(t, "day")
-		case 1:
-			return days.Draw(t, "day") + " " + words.Draw(t, "name")
-		}
-		return words.Draw(t, "name")
+	std := domain.DefaultPolicies()
+	photos, cloud := std.Templates.Photos, std.Templates.Cloud
+	layouts := rapid.SampledFrom([]domain.Policies{
+		std,
+		tpl(photos, []string{"{YYYY}", "{MM}-{DD} {Description}"}, ""),
+		tpl([]string{"{YYYY}", "Events", "{MM}/{DD} {Description}"}, cloud, ""),
+		tpl(photos, []string{"{YYYY}", "Photos", "{MM}-{DD} - {Description}"}, ""),
+		tpl([]string{"{YYYY}-{MM}", "{DD} {Description}"}, cloud, ""),
 	})
-	text := rapid.OneOf(
-		rapid.StringOfN(rapid.OneOf(rapid.SampledFrom([]rune("/ .:05-\x00")), rapid.Rune()), 0, 30, -1),
-		rapid.SampledFrom([]string{" / ", "05/01", "05/01 / raw", "CON", ".", ".."}),
-	)
+	text := rapid.StringOfN(rapid.OneOf(rapid.SampledFrom([]rune("/ .:05-\x00")), rapid.Rune()), 0, 30, -1)
+	folders := rapid.OneOf(rapid.SampledFrom([]string{"2024", "1999", "Events", "Trips"}), text)
+	days := rapid.SampledFrom([]string{"01/01", "02/29", "05/01", "12/31"})
+	words := rapid.SampledFrom([]string{"Holidays", "Trips", "Отпуск", "a∕b"})
+	titles := rapid.OneOf(days, rapid.Custom(func(t *rapid.T) string { return days.Draw(t, "day") + " " + words.Draw(t, "word") }), words, text)
 
-	t.Run("levels are valid, one per folder and title part", func(t *testing.T) {
+	t.Run("levels are valid, at most one per template level", func(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(t *rapid.T) {
-			inYear := bools.Draw(t, "inYear")
-			var a domain.Album
-			if inYear {
-				a.FolderTitles = []string{years.Draw(t, "year")}
-			}
-			for range rapid.IntRange(0, 2).Draw(t, "folders") {
-				a.FolderTitles = append(a.FolderTitles, text.Draw(t, "folder"))
-			}
-			if !inYear && len(a.FolderTitles) > 0 {
-				a.FolderTitles[0] = "x" + a.FolderTitles[0]
-			}
-			a.Title = text.Draw(t, "title")
-			if len(a.FolderTitles) > 0 && bools.Draw(t, "isFolder") {
+			p := layouts.Draw(t, "templates")
+			a := domain.Album{FolderTitles: rapid.SliceOfN(folders, 0, 3).Draw(t, "folders"), Title: titles.Draw(t, "title")}
+			if rapid.Bool().Draw(t, "isFolder") {
 				a.Kind = domain.KindFolder
 			}
 
 			dir := layout.DirFor(a, p)
+			if dir == "" {
+				return
+			}
 			levels := strings.Split(dir, "/")
 			for _, level := range levels {
-				if !naming.IsValidPart(level) {
-					t.Fatalf("DirFor(%+v) = %q: level %q is not a valid name", a, dir, level)
+				if !naming.IsValidPart(level) || level == "." || level == ".." {
+					t.Fatalf("DirFor(%+v, %+v) = %q: level %q is not a valid name", a, p.Templates, dir, level)
 				}
 			}
-			marker, parts, top := 1, strings.Count(a.Title, " / ")+1, "Albums"
-			if inYear {
-				marker, top = 0, a.FolderTitles[0]
-			}
-			if a.Kind == domain.KindFolder {
-				parts = 1
-			}
-			if want := marker + len(a.FolderTitles) + parts; len(levels) != want {
-				t.Fatalf("DirFor(%+v) = %q: %d levels, want %d", a, dir, len(levels), want)
-			}
-			if levels[0] != top {
-				t.Fatalf("DirFor(%+v) = %q: first level %q, want %q", a, dir, levels[0], top)
+			if n := len(p.Templates.Cloud); len(levels) > n || a.Kind != domain.KindFolder && len(levels) != n {
+				t.Fatalf("DirFor(%+v, %+v) = %q: %d levels for a cloud template of %d", a, p.Templates, dir, len(levels), n)
 			}
 		})
 	})
 
-	t.Run("a canonical album or folder comes back", func(t *testing.T) {
+	t.Run("an event comes back", func(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(t *rapid.T) {
-			var a domain.Album
-			if bools.Draw(t, "inYear") {
-				a.FolderTitles = []string{years.Draw(t, "year")}
+			y := rapid.IntRange(1, 9999).Draw(t, "year")
+			m := rapid.IntRange(1, 12).Draw(t, "month")
+			d := rapid.IntRange(1, time.Date(y, time.Month(m)+1, 0, 0, 0, 0, 0, time.UTC).Day()).Draw(t, "day")
+			desc := rapid.String().Draw(t, "description")
+			a := domain.Album{FolderTitles: []string{fmt.Sprintf("%04d", y)}, Title: fmt.Sprintf("%02d/%02d", m, d)}
+			day := fmt.Sprintf("%02d-%02d", m, d)
+			raw := []string{a.FolderTitles[0], day}
+			if desc != "" {
+				a.Title += " " + desc
+				raw[1] += " - " + desc
 			}
-			for range rapid.IntRange(0, 2).Draw(t, "folders") {
-				a.FolderTitles = append(a.FolderTitles, words.Draw(t, "folder"))
-			}
-			if bools.Draw(t, "isFolder") {
-				a.Kind = domain.KindFolder
-				a.Title = words.Draw(t, "title")
-			} else {
-				a.Title = strings.Join(rapid.SliceOfN(part, 1, 3).Draw(t, "parts"), " / ")
+			want := raw[0] + "/" + naming.SanitizePart(raw[1])
+			// Sanitizing drops control characters and cuts a long name without
+			// splitting a letter from its marks: when that takes the whole
+			// description, the text before it no longer reads, so no directory
+			// holds the album.
+			if desc != "" && !strings.HasPrefix(naming.SanitizePart(raw[1]), day+" - ") {
+				want = ""
 			}
 
-			dir := layout.DirFor(a, p)
-			albumDirs := map[string]bool{}
-			if a.Kind != domain.KindFolder {
-				levels := strings.Split(dir, "/")
-				// A wrong DirFor can give fewer levels than parts: that fails
-				// the check below instead of panicking here.
-				for j := max(len(levels)-strings.Count(a.Title, " / ")-1, 0); j < len(levels); j++ {
-					albumDirs[strings.Join(levels[:j+1], "/")] = true
-				}
+			dir := layout.DirFor(a, std)
+			if dir != want {
+				t.Fatalf("DirFor(%+v) = %q, want %q", a, dir, want)
 			}
-			got, ok := layout.AlbumFor(dir, albumDirs, p)
-			if !ok || got.Kind != a.Kind || got.Title != a.Title || !slices.Equal(got.FolderTitles, a.FolderTitles) {
-				t.Fatalf("AlbumFor(%q, %v) = %+v, %t; want %+v, true", dir, albumDirs, got, ok, a)
+			if dir == "" {
+				return
+			}
+			got, ok := layout.AlbumFor(dir, std)
+			if !ok || layout.DirFor(got, std) != dir {
+				t.Fatalf("AlbumFor(%q) = %+v, %t; want an album that DirFor gives that directory", dir, got, ok)
+			}
+			if naming.SanitizePart(raw[1]) == raw[1] && (got.Title != a.Title || !slices.Equal(got.FolderTitles, a.FolderTitles)) {
+				t.Fatalf("AlbumFor(%q) = %+v; want %+v back", dir, got, a)
+			}
+		})
+	})
+
+	t.Run("a year folder comes back", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(t *rapid.T) {
+			f := domain.Album{Kind: domain.KindFolder, Title: fmt.Sprintf("%04d", rapid.IntRange(1, 9999).Draw(t, "year"))}
+
+			dir := layout.DirFor(f, std)
+			got, ok := layout.AlbumFor(dir, std)
+			if !ok || got.Kind != domain.KindFolder || got.Title != f.Title || len(got.FolderTitles) != 0 {
+				t.Fatalf("AlbumFor(DirFor(%+v) = %q) = %+v, %t; want the folder back", f, dir, got, ok)
 			}
 		})
 	})

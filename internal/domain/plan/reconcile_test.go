@@ -57,6 +57,7 @@ func TestReconcileAlbums(t *testing.T) {
 		{ID: 4, UUID: "u-x", Key: `[] "Trips"`, KeySource: srcPath, Kind: folder, Title: "Trips"},
 		{ID: 5, UUID: "u-y", Key: `[] "Trips"`, KeySource: srcPath, Kind: thematic, Title: "Trips"},
 	}
+	p := domain.DefaultPolicies()
 
 	cases := []struct {
 		name        string
@@ -88,10 +89,10 @@ func TestReconcileAlbums(t *testing.T) {
 		{
 			name:  "a moved album keeps its ID and is classified anew",
 			state: known,
-			snap: []domain.Album{year, holidays, with(pets, func(a *domain.Album) {
-				a.ParentUUID, a.FolderTitles = "u-f24", []string{"2024"}
-			})},
-			want: append(slices.Clone(knownRows[:2]), row{"u-pets", 30, 10, event, `["2024"] "Pets"`, srcPath}),
+			snap: []domain.Album{year, with(holidays, func(a *domain.Album) {
+				a.ParentUUID, a.FolderTitles = "", nil
+			}), pets},
+			want: []row{knownRows[0], {"u-hol", 20, 0, thematic, `[] "05/01 Holidays"`, srcPath}, knownRows[2]},
 		},
 		{
 			name:  "a library made anew: path keys find the albums",
@@ -174,8 +175,8 @@ func TestReconcileAlbums(t *testing.T) {
 			},
 			want: []row{
 				{"u-f24", 10, 0, folder, `[] "2024"`, srcPath},
-				{"u-a", 41, 10, event, `["2024"] "Trips"`, srcPath},
-				{"u-b", 42, 10, event, `["2024"] "Trips"`, srcPath},
+				{"u-a", 41, 10, thematic, `["2024"] "Trips"`, srcPath},
+				{"u-b", 42, 10, thematic, `["2024"] "Trips"`, srcPath},
 			},
 		},
 		{
@@ -207,20 +208,22 @@ func TestReconcileAlbums(t *testing.T) {
 			},
 		},
 		{
-			name: "the kind comes from the year folder, and a folder may get its ID after its album",
+			name: "the kind comes from the template, and a folder may get its ID after its album",
 			snap: []domain.Album{
 				{UUID: "u-lake", Title: "05/03 Lake", ParentUUID: "u-wk", FolderTitles: []string{"2024", "Weekends"}},
 				{UUID: "u-wk", Kind: folder, Title: "Weekends", ParentUUID: "u-f24", FolderTitles: []string{"2024"}},
 				year,
 				{UUID: "u-kites", Title: "Kites", ParentUUID: "u-hob", FolderTitles: []string{"Hobby"}},
 				{UUID: "u-hob", Kind: folder, Title: "Hobby"},
+				{UUID: "u-may", Title: "05/01 May", ParentUUID: "u-f24", FolderTitles: []string{"2024"}},
 			},
 			want: []row{
 				{"u-f24", 1, 0, folder, `[] "2024"`, srcPath},
 				{"u-hob", 2, 0, folder, `[] "Hobby"`, srcPath},
 				{"u-kites", 3, 2, thematic, `["Hobby"] "Kites"`, srcPath},
-				{"u-lake", 4, 5, event, `["2024" "Weekends"] "05/03 Lake"`, srcPath},
-				{"u-wk", 5, 1, folder, `["2024"] "Weekends"`, srcPath},
+				{"u-lake", 4, 6, thematic, `["2024" "Weekends"] "05/03 Lake"`, srcPath},
+				{"u-may", 5, 1, event, `["2024"] "05/01 May"`, srcPath},
+				{"u-wk", 6, 1, folder, `["2024"] "Weekends"`, srcPath},
 			},
 		},
 		{
@@ -244,7 +247,7 @@ func TestReconcileAlbums(t *testing.T) {
 			t.Parallel()
 
 			before := slices.Clone(c.snap)
-			got, err := plan.ReconcileAlbums(c.state, c.snap)
+			got, err := plan.ReconcileAlbums(c.state, c.snap, p)
 			if c.bad {
 				if got != nil || !errors.Is(err, plan.ErrBadSnapshot) {
 					t.Fatalf("ReconcileAlbums = %+v, %v; want nil and ErrBadSnapshot", got, err)
@@ -277,10 +280,10 @@ func TestReconcileAlbums(t *testing.T) {
 			state, snap := slices.Clone(c.state), slices.Clone(c.snap)
 			slices.Reverse(state)
 			slices.Reverse(snap)
-			if again, err := plan.ReconcileAlbums(state, snap); err != nil || !reflect.DeepEqual(again, got) {
+			if again, err := plan.ReconcileAlbums(state, snap, p); err != nil || !reflect.DeepEqual(again, got) {
 				t.Errorf("with the input reversed: %+v, %v; want %+v", again, err, got)
 			}
-			if again, err := plan.ReconcileAlbums(got, c.snap); err != nil || !reflect.DeepEqual(again, got) {
+			if again, err := plan.ReconcileAlbums(got, c.snap, p); err != nil || !reflect.DeepEqual(again, got) {
 				t.Errorf("a second run on its own result: %+v, %v; want %+v", again, err, got)
 			}
 		})
@@ -313,7 +316,7 @@ func TestReconcileAlbumsRebuild(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if state, err = plan.ReconcileAlbums(state, snap.Albums); err != nil {
+		if state, err = plan.ReconcileAlbums(state, snap.Albums, domain.DefaultPolicies()); err != nil {
 			t.Fatal(err)
 		}
 		runs[n] = map[string]domain.Album{}
@@ -400,6 +403,7 @@ func TestReconcile(t *testing.T) {
 	}
 	replacement := []row{{"u-new", 7, personal, "", "s1/m1"}}
 	known := []row{{"u-7", 7, personal, "", "s1/m1"}}
+	p := domain.DefaultPolicies()
 
 	cases := []struct {
 		name    string
@@ -626,7 +630,7 @@ func TestReconcile(t *testing.T) {
 			state, snap := c.state, c.snap
 			state.Assets, state.Albums, state.History = deep(c.state.Assets), slices.Clone(c.state.Albums), slices.Clone(c.state.History)
 			snap.Assets, snap.Albums = deep(c.snap.Assets), slices.Clone(c.snap.Albums)
-			got, notices, err := plan.Reconcile(c.state, c.snap, "r-2")
+			got, notices, err := plan.Reconcile(c.state, c.snap, "r-2", p)
 			if c.bad {
 				if !reflect.DeepEqual(got, domain.SnapshotDelta{}) || notices != nil || !errors.Is(err, plan.ErrBadSnapshot) {
 					t.Fatalf("Reconcile = %+v, %+v, %v; want nothing and ErrBadSnapshot", got, notices, err)
@@ -658,7 +662,7 @@ func TestReconcile(t *testing.T) {
 			if !reflect.DeepEqual(notices, c.notices) {
 				t.Errorf("notices = %+v; want %+v", notices, c.notices)
 			}
-			if albums, _ := plan.ReconcileAlbums(c.state.Albums, c.snap.Albums); !reflect.DeepEqual(got.Albums, albums) {
+			if albums, _ := plan.ReconcileAlbums(c.state.Albums, c.snap.Albums, p); !reflect.DeepEqual(got.Albums, albums) {
 				t.Errorf("Albums = %+v; want those of ReconcileAlbums, %+v", got.Albums, albums)
 			}
 			slices.Reverse(state.Assets)
@@ -666,11 +670,11 @@ func TestReconcile(t *testing.T) {
 			slices.Reverse(state.History)
 			slices.Reverse(snap.Assets)
 			slices.Reverse(snap.Albums)
-			if again, n, err := plan.Reconcile(state, snap, "r-2"); err != nil || !reflect.DeepEqual(again, got) || !reflect.DeepEqual(n, notices) {
+			if again, n, err := plan.Reconcile(state, snap, "r-2", p); err != nil || !reflect.DeepEqual(again, got) || !reflect.DeepEqual(n, notices) {
 				t.Errorf("with the input reversed: %+v, %+v, %v; want %+v, %+v", again, n, err, got, notices)
 			}
 			next := domain.State{Assets: got.Assets, Albums: got.Albums, History: got.History}
-			if again, n, err := plan.Reconcile(next, c.snap, "r-3"); err != nil || !reflect.DeepEqual(again, got) || !reflect.DeepEqual(n, notices) {
+			if again, n, err := plan.Reconcile(next, c.snap, "r-3", p); err != nil || !reflect.DeepEqual(again, got) || !reflect.DeepEqual(n, notices) {
 				t.Errorf("a second run on its delta: %+v, %+v, %v; want %+v, %+v", again, n, err, got, notices)
 			}
 		})
@@ -702,7 +706,7 @@ func TestReconcileSyncAndRebuild(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		delta, _, err := plan.Reconcile(state, snap, []string{"r-0", "r-1", "r-2"}[n])
+		delta, _, err := plan.Reconcile(state, snap, []string{"r-0", "r-1", "r-2"}[n], domain.DefaultPolicies())
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -16,8 +16,8 @@ import (
 // are those of the run, and listing the whole listing of r. A pair moves
 // when its album in albums is no folder, is outside Recently Deleted and has
 // a path other than NamedAfter, the path that named the directory of the
-// pair, to the directory that layout.DirFor gives the album with p; one with
-// an empty NamedAfter stays, so that a directory that the user named
+// pair, to the directory, if any, that layout.DirFor gives the album with p;
+// one with an empty NamedAfter stays, so that a directory that the user named
 // otherwise keeps its name (R-LAYOUT-11). It stays too when listing holds
 // the new directory or a path below it, or when a pair of r in root, its own
 // among them, holds it or another takes it first, letter case aside: a
@@ -45,7 +45,7 @@ func MovePairs(albums []domain.Album, pairs []domain.AlbumPair, listing []domain
 	for _, x := range own {
 		a := now[x.AlbumID]
 		to := layout.DirFor(a, p)
-		if a.ID == 0 || a.InTrash || a.Kind == domain.KindFolder || x.NamedAfter == "" || x.NamedAfter == pathKey(a) || taken[strings.ToUpper(to)] {
+		if a.ID == 0 || a.InTrash || a.Kind == domain.KindFolder || x.NamedAfter == "" || x.NamedAfter == pathKey(a) || to == "" || taken[strings.ToUpper(to)] {
 			continue
 		}
 		taken[strings.ToUpper(to)], x.DirPath = true, to
@@ -85,8 +85,7 @@ func FollowPairs(links []domain.Link, moved []domain.AlbumPair, remote string, p
 
 // RenamedDirs returns moved, the pairs of remote r in root whose directory
 // the user renamed or moved in the cloud, each with its new DirPath and an
-// empty NamedAfter, in the order of their old DirPath, so that a nested part
-// reads under the new directory of its parent; renamed and refiled, in the
+// empty NamedAfter, in the order of their old DirPath; renamed and refiled, in the
 // same order, the albums of those that take the title (R-LAYOUT-12) or the
 // folders (R-LAYOUT-13) that the new directory reads as, renamed also the
 // folders of albums that take a new title instead (R-LAYOUT-14); and added,
@@ -98,8 +97,8 @@ func FollowPairs(links []domain.Link, moved []domain.AlbumPair, remote string, p
 // path below it in listing, claims d when the files of the active links of
 // the original or the source role in root that lay directly in its directory
 // lie now, one at least, directly in d of root, unless a pair of r in root
-// holds d or another claimed it first. It moves to d when layout.AlbumFor,
-// with the directories of those pairs and those claimed, reads d as an
+// holds d or another claimed it first. It moves to d when layout.AlbumFor
+// reads d with p as an
 // album, not a folder, either in the folders of its album with d at the
 // depth of its old directory or with the title that it reads the old
 // directory with. When NamedAfter is the path of the album, which iCloud has
@@ -107,13 +106,13 @@ func FollowPairs(links []domain.Link, moved []domain.AlbumPair, remote string, p
 // root is the personal one while p.AlbumsForPersonal is false, the album
 // takes the title read in its folders at that depth, stays in its folders at
 // another depth, and else takes the folders read, the kind that
-// layout.Classify gives it and, as its parent, the folder of albums at that
+// layout.Classify gives it with p and, as its parent, the folder of albums at that
 // path outside Recently Deleted, the lowest AlbumID first, or one added for
 // each level missing, with an AlbumID above last and those of albums. A level
 // missing where the folders read differ from those of the album at it alone
 // is not added when the folder at the old path to it, found the same way, has
-// neither its directory, as layout.DirFor gives it, nor a path below it in
-// listing, in any root: that folder takes the new title, and so does that
+// a directory, as layout.DirFor gives it, and neither it nor a path below
+// it is in listing, in any root: that folder takes the new title, and so does that
 // level of the folders of all inside it, at any depth, for the pairs that
 // follow. An album is refiled only when its parent changes, and a pair of a
 // folder moves nothing. The inputs are not changed.
@@ -140,7 +139,7 @@ func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Al
 		})
 	}
 	gone := func(dir string) bool {
-		return !slices.ContainsFunc(listing, func(e domain.RemoteEntry) bool { return strings.HasPrefix(e.Path+"/", dir+"/") })
+		return dir != "" && !slices.ContainsFunc(listing, func(e domain.RemoteEntry) bool { return strings.HasPrefix(e.Path+"/", dir+"/") })
 	}
 	adds := r.Mode != domain.ModeUploadOnly && (root != domain.LibraryPersonal || p.AlbumsForPersonal)
 	for _, x := range own {
@@ -159,8 +158,8 @@ func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Al
 		}
 		held[at[0]] = true
 		a := albums[i]
-		was, _ := layout.AlbumFor(x.DirPath, held, p)
-		read, ok := layout.AlbumFor(at[0], held, p)
+		was, _ := layout.AlbumFor(x.DirPath, p)
+		read, ok := layout.AlbumFor(at[0], p)
 		within := slices.Equal(read.FolderTitles, a.FolderTitles) && strings.Count(at[0], "/") == strings.Count(x.DirPath, "/")
 		if !ok || read.Kind == domain.KindFolder || !within && read.Title != was.Title {
 			continue
@@ -180,7 +179,7 @@ func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Al
 				if k < 0 && j < len(from) && slices.Equal(slices.Concat(from[:j], []string{title}, from[j+1:]), read.FolderTitles) {
 					if old := folder(from[:j], from[j]); old >= 0 && old < len(albums) && gone(layout.DirFor(known[old], p)) {
 						known[old].Title, k = title, old
-						for _, b := range underFolder(known, known[old]) {
+						for _, b := range underFolder(known, known[old], p) {
 							known[slices.IndexFunc(known, func(c domain.Album) bool { return c.ID == b.ID })] = b
 						}
 						renamed = append(renamed, known[old])
@@ -194,7 +193,7 @@ func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Al
 				f.ID, a.ParentID = last, last
 				known, added = append(known, f), append(added, f)
 			}
-			a.Kind = layout.Classify(a)
+			a.Kind = layout.Classify(a, p)
 			if a.ParentID != albums[i].ParentID {
 				refiled = append(refiled, a)
 			}
@@ -207,7 +206,7 @@ func RenamedDirs(albums []domain.Album, pairs []domain.AlbumPair, last domain.Al
 
 // Albums and folders may share a path, so only ParentID tells what lies in
 // a folder. f comes first, so that one loop puts any album in its place.
-func underFolder(albums []domain.Album, f domain.Album) []domain.Album {
+func underFolder(albums []domain.Album, f domain.Album, p domain.Policies) []domain.Album {
 	out, in := []domain.Album{f}, map[domain.AlbumID]bool{f.ID: true}
 	for grew := true; grew; {
 		grew = false
@@ -215,7 +214,7 @@ func underFolder(albums []domain.Album, f domain.Album) []domain.Album {
 			if in[a.ParentID] && !in[a.ID] && len(a.FolderTitles) > len(f.FolderTitles) {
 				a.FolderTitles = slices.Clone(a.FolderTitles)
 				a.FolderTitles[len(f.FolderTitles)], in[a.ID], grew = f.Title, true, true
-				a.Kind = layout.Classify(a)
+				a.Kind = layout.Classify(a, p)
 				out = append(out, a)
 			}
 		}

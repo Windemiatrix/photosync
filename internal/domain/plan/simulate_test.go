@@ -149,7 +149,7 @@ func TestSimulate(t *testing.T) {
 	holidaysMoved, tripMoved, catsMoved := byPath, byCloud, catsByPath
 	holidaysMoved.Key, holidaysMoved.ParentID, holidaysMoved.ParentUUID, holidaysMoved.FolderTitles = `["2023"] "05/01 Holidays"`, folder2023.ID, "u-2023", []string{"2023"}
 	tripMoved.Kind, tripMoved.FolderTitles = domain.KindThematic, nil
-	catsMoved.Key, catsMoved.Kind, catsMoved.ParentID, catsMoved.ParentUUID, catsMoved.FolderTitles = `["2023"] "Cats"`, domain.KindEvent, folder2023.ID, "u-2023", []string{"2023"}
+	catsMoved.Key, catsMoved.ParentID, catsMoved.ParentUUID, catsMoved.FolderTitles = `["2023"] "Cats"`, folder2023.ID, "u-2023", []string{"2023"}
 	trips := domain.Album{
 		ID: 13, UUID: "u-trips", Key: `["2024"] "Trips"`, KeySource: domain.KeyPath, Kind: domain.KindFolder, Title: "Trips",
 		ParentID: year.ID, ParentUUID: year.UUID, FolderTitles: []string{"2024"},
@@ -167,6 +167,9 @@ func TestSimulate(t *testing.T) {
 	tripArchived.Kind, tripArchived.FolderTitles = domain.KindThematic, []string{"Archive"}
 	tripsArchived.Key, tripsArchived.FolderTitles = `["Archive"] "Trips"`, []string{"Archive"}
 	catsArchived.Key, catsArchived.Kind, catsArchived.FolderTitles = `["Archive" "Trips"] "Cats"`, domain.KindThematic, []string{"Archive", "Trips"}
+	year2025, holidays2025 := year, holidaysIn
+	year2025.Key, year2025.Title = `[] "2025"`, "2025"
+	holidays2025.Key, holidays2025.FolderTitles = `["2025"] "05/01 Holidays"`, []string{"2025"}
 	creating := func(id domain.AlbumID) domain.Op {
 		return domain.Op{Kind: domain.OpAlbumCreate, AlbumID: id, Rule: "R-LAYOUT-06"}
 	}
@@ -513,10 +516,24 @@ func TestSimulate(t *testing.T) {
 				{UUID: "u-trips", Kind: domain.KindFolder, Title: "Trips", ParentUUID: "u-2024", FolderTitles: []string{"Archive"}},
 			}},
 			scans{}},
+		{"a folder rename keeps an event inside it an event where its new path reads as one",
+			domain.State{Albums: []domain.Album{holidaysIn, year}},
+			domain.LibrarySnapshot{Albums: []domain.Album{
+				{UUID: "u-hol", Title: "05/01 Holidays", ParentUUID: "u-2024", FolderTitles: []string{"2024"}},
+				{UUID: "u-2024", Kind: domain.KindFolder, Title: "2024"},
+			}}, nil,
+			domain.Plan{Ops: ops{{Kind: domain.OpAlbumRename, AlbumID: year.ID, Dst: "2025", Rule: "R-LAYOUT-14"}}},
+			domain.SnapshotDelta{Albums: []domain.Album{year, holidaysIn}},
+			domain.State{Albums: []domain.Album{year2025, holidays2025}},
+			domain.LibrarySnapshot{Albums: []domain.Album{
+				{UUID: "u-2024", Kind: domain.KindFolder, Title: "2025"},
+				{UUID: "u-hol", Title: "05/01 Holidays", ParentUUID: "u-2024", FolderTitles: []string{"2025"}},
+			}},
+			scans{}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
-			in := plan.Input{State: c.state, Snapshot: c.snapshot, Scans: c.scans, Now: now, RunID: "run-2"}
+			in := plan.Input{State: c.state, Snapshot: c.snapshot, Scans: c.scans, Policies: domain.DefaultPolicies(), Now: now, RunID: "run-2"}
 			show := func() string { return fmt.Sprintf("%+v\n%+v\n%+v", in, c.p, c.delta) }
 			input := show()
 			s, snap, listed := plan.Simulate(in, c.p, c.delta)
@@ -575,11 +592,11 @@ func TestSimulateConverges(t *testing.T) {
 		personal, shared     = domain.LibraryPersonal, domain.LibraryShared
 		original, live       = domain.RoleOriginal, domain.RoleLiveVideo
 		holidaysDir, tripDir = "2024/05-01 - Holidays", "2024/05-02 - Trip"
-		dayDir, catsDir      = "2024/05-01", "Albums/Cats"
+		looseDir, catsDir    = "2024", "Albums/Cats"
 		vacationDir          = "2024/05-01 - Vacation"
 		aged                 = ".photosync/quarantine/2026-08-14/"
 
-		year, cats, holidays, trip domain.AlbumID = 1, 5, 10, 11
+		year, cats, holidays, trip, slash domain.AlbumID = 1, 5, 10, 11, 12
 	)
 	type (
 		assets = []domain.Asset
@@ -611,7 +628,7 @@ func TestSimulateConverges(t *testing.T) {
 		}
 		library = append(library, a)
 	}
-	uuidOf := map[domain.AlbumID]string{cats: "u-cats", holidays: "u-hol", trip: "u-trip"}
+	uuidOf := map[domain.AlbumID]string{cats: "u-cats", holidays: "u-hol", trip: "u-trip", slash: "u-slash"}
 	asset := func(id domain.AssetID, name string, size int64, taken time.Time, run string, in ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{
 			ID: id, Key: domain.AssetKey{CloudAssetGUID: fmt.Sprintf("guid-%d", id), UUID: fmt.Sprintf("uuid-%d", id)},
@@ -628,6 +645,8 @@ func TestSimulateConverges(t *testing.T) {
 		a.Resources = append(slices.Clone(a.Resources), domain.Resource{Role: domain.ResourceLiveVideo, Filename: "IMG_0001.MOV", Size: 30})
 		return a
 	}
+	slashAlbums := append(slices.Clone(albums), inYear(slash, "u-slash", "05/01 A/B", may1.Add(-2*time.Hour)))
+	slashLibrary := append(slices.Clone(library), domain.Album{UUID: "u-slash", Title: "05/01 A/B", Start: may1.Add(-2 * time.Hour), ParentUUID: "u-2024", FolderTitles: []string{"2024"}})
 	snapshot := func(as ...domain.Asset) domain.LibrarySnapshot {
 		s := domain.LibrarySnapshot{Albums: library}
 		for _, a := range as {
@@ -658,11 +677,12 @@ func TestSimulateConverges(t *testing.T) {
 	alpha, beta, alphaUp := spec("alpha", domain.ModeTwoWay), spec("beta", domain.ModeTwoWay), spec("alpha", domain.ModeUploadOnly)
 	p := domain.DefaultPolicies()
 	p.Deletes, p.UntitledEvent, p.AlbumsRoot = domain.DeletesQuarantine, "Untitled", "Albums"
-	propagate, ask, edits := p, p, p
+	propagate, ask, edits, own := p, p, p, p
 	propagate.Deletes, ask.Conflict, edits.EditedFiles = domain.DeletesPropagate, domain.ConflictAsk, domain.EditedQuarantine
+	own.Templates.Cloud = []string{"{YYYY}", "{MM}-{DD} {Description}"}
 	e1, ev := file(personal, holidaysDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, holidaysDir+"/IMG_0001.MOV", 30, "v1", settled)
 	xmp, replaced := file(personal, holidaysDir+"/IMG_0001.xmp", 5, "x1", settled), file(personal, holidaysDir+"/IMG_0001.HEIC", 120, "b1", settled)
-	dayFile, catsFile := file(personal, dayDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, catsDir+"/IMG_0001.HEIC", 100, "a1", settled)
+	looseFile, catsFile := file(personal, looseDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, catsDir+"/IMG_0001.HEIC", 100, "a1", settled)
 	sharedFile, youngBeta := file(shared, holidaysDir+"/IMG_0001.HEIC", 100, "a1", settled), file(personal, tripDir+"/IMG_0002.HEIC", 50, "y2", young)
 	aged5 := file(personal, aged+holidaysDir+"/IMG_0005.HEIC", 10, "q5", settled)
 	kept6 := file(personal, ".photosync/quarantine/2026-08-15/"+holidaysDir+"/IMG_0006.HEIC", 10, "q6", settled)
@@ -715,6 +735,8 @@ func TestSimulateConverges(t *testing.T) {
 	laterFile := file(personal, "2023/05-01 - Holidays/IMG_0001.HEIC", 100, "a1", settled)
 	yearFolder := domain.RemoteEntry{Root: personal, Path: "2024", IsDir: true, MTime: settled}
 	live8trip, e2v := withVideo(asset(8, "IMG_0002.HEIC", 200, may1, "run-2", trip)), file(personal, holidaysDir+"/IMG_0002.MOV", 30, "v8", settled)
+	slashed := snapshot(asset(9, "IMG_0009.HEIC", 100, may1, "run-2", slash))
+	slashed.Albums = slashLibrary
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -758,7 +780,7 @@ func TestSimulateConverges(t *testing.T) {
 			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(in7Trip)),
 			scans{"alpha": {xmp, ev, e1}}, specs{alpha}, "", p, kinds{domain.OpMove, domain.OpMove, domain.OpMove}, nil},
 		{"a conflict under ask stays open, and the asset stays as the state has it",
-			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip), scans{"alpha": {dayFile}}, specs{alpha}, "", ask,
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip), scans{"alpha": {looseFile}}, specs{alpha}, "", ask,
 			nil, []domain.Conflict{conflict("alpha", domain.ConflictStatusOpen)}},
 		{"a file that the user moved to the shared root takes the asset to the shared library in the state, and the file of another remote follows",
 			state(assets{a7}, pairs{alphaHolidays, alphaShared, betaHolidays}, photo, other), snapshot(a7),
@@ -774,8 +796,8 @@ func TestSimulateConverges(t *testing.T) {
 		{"a file that the user moved takes the asset into the album of its new folder, and a new asset in Recently Deleted goes nowhere",
 			remembered(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), history), snapshot(a7, trashed), scans{"alpha": {tripFile}}, specs{alpha}, "", p,
 			kinds{domain.OpAlbumAdd, domain.OpAlbumRemove}, nil},
-		{"a file that the user moved out of its event into the day folder takes the asset out of the album",
-			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {dayFile}}, specs{alpha}, "", p, kinds{domain.OpAlbumRemove}, nil},
+		{"a file that the user moved out of its event into the year folder takes the asset out of the album",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {looseFile}}, specs{alpha}, "", p, kinds{domain.OpAlbumRemove}, nil},
 		{"matching links a new asset with a new file of a paired folder, and the asset joins its album",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, m8), scans{"alpha": {e2, e1}}, specs{alpha}, "", p, kinds{domain.OpAlbumAdd}, nil},
 		{"a file that the user moved into a new folder beside a new file: the album comes to iCloud, then the import and the asset join it",
@@ -825,6 +847,10 @@ func TestSimulateConverges(t *testing.T) {
 		{"upload-only: a new file that matching links in the folder of another album moves to the album of its asset with its Live Photo video, which stays beside it",
 			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7, live8trip), scans{"alpha": {e2v, e2, e1}}, specs{alphaUp}, "", p,
 			kinds{domain.OpMove, domain.OpMove}, nil},
+		{"a slash in a description stays in one directory",
+			domain.State{Albums: slashAlbums}, slashed, nil, specs{alpha}, "", p, kinds{domain.OpPut}, nil},
+		{"the cloud template of the user",
+			state(nil, nil), snapshot(n8), nil, specs{alpha}, "", own, kinds{domain.OpPut, domain.OpPut}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

@@ -37,14 +37,14 @@ import (
 // without ID, ParentID and key, and without Kind unless it is a folder. An
 // OpAlbumMove puts its album into the folder ParentID, at the top level for
 // zero, in the state and the snapshot alike, under the titles of that folder
-// and those above it, with the kind that layout.Classify gives it and, unless
-// the key of the album is a cloud one, the path key of its new path in the
-// state. An OpAlbumRename gives its album the title Dst in the state and the
+// and those above it, with the kind that layout.Classify gives it with
+// in.Policies and, unless the key of the album is a cloud one, the path key of
+// its new path in the state. An OpAlbumRename gives its album the title Dst in the state and the
 // snapshot alike and, unless the key of the album is a cloud one, the path key
 // of its new title in the state; for a folder, each album and folder inside it
 // at any depth, by ParentID, takes Dst at that level of its FolderTitles in
-// both and, in the state, the kind that layout.Classify gives it and, unless
-// its key is a cloud one, the path key of its new path. An OpImport adds to
+// both and, in the state, the kind that layout.Classify gives it with
+// in.Policies and, unless its key is a cloud one, the path key of its new path. An OpImport adds to
 // the snapshot an asset of the personal library named by the base of Src,
 // with the capture time, offset, fraction of a second, width and height of
 // the Meta of the entry at Src as the operations before it leave it, in the
@@ -152,7 +152,7 @@ func Simulate(in Input, p domain.Plan, delta domain.SnapshotDelta) (domain.State
 		case domain.OpAlbumRename:
 			a := albums[o.AlbumID]
 			a.Title = o.Dst
-			for _, b := range underFolder(slices.SortedFunc(maps.Values(albums), func(x, y domain.Album) int { return cmp.Compare(x.ID, y.ID) }), a) {
+			for _, b := range underFolder(slices.SortedFunc(maps.Values(albums), func(x, y domain.Album) int { return cmp.Compare(x.ID, y.ID) }), a, in.Policies) {
 				if b.KeySource == domain.KeyPath {
 					b.Key = pathKey(b)
 				}
@@ -173,7 +173,7 @@ func Simulate(in Input, p domain.Plan, delta domain.SnapshotDelta) (domain.State
 			if o.ParentID != 0 {
 				a.FolderTitles = slices.Concat(parent.FolderTitles, []string{parent.Title})
 			}
-			a.Kind = layout.Classify(a)
+			a.Kind = layout.Classify(a, in.Policies)
 			if a.KeySource == domain.KeyPath {
 				a.Key = pathKey(a)
 			}

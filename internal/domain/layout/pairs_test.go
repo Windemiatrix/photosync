@@ -18,17 +18,20 @@ import (
 func TestFirstPairs(t *testing.T) {
 	t.Parallel()
 
-	const r07, r10 = "R-LAYOUT-07", "R-LAYOUT-10"
-	std := dirPolicies()
-	alt := domain.Policies{NestedSeparator: " > ", UntitledEvent: "Untitled", AlbumsRoot: "Collections"}
+	const (
+		r07, r10              = "R-LAYOUT-07", "R-LAYOUT-10"
+		holidaysDir, otherDir = "2024/05-01 - Holidays", "2024/05-03 - Other"
+		aDir, bDir            = "2024/05-04 - A", "2024/05-05 - B"
+	)
+	std := domain.DefaultPolicies()
 
 	holidays := domain.Album{ID: 1, FolderTitles: []string{"2024"}, Title: "05/01 Holidays"}
 	trips := domain.Album{ID: 2, Kind: domain.KindFolder, FolderTitles: []string{"2024"}, Title: "Trips"}
 	year := domain.Album{ID: 3, Kind: domain.KindFolder, Title: "2024"}
 	pets := domain.Album{ID: 4, Title: "Pets"}
-	archive := domain.Album{ID: 5, Title: "Archive"}
+	party := domain.Album{ID: 5, FolderTitles: []string{"2024"}, Title: "05/03 Party"}
 	old := domain.Album{ID: 6, FolderTitles: []string{"2024"}, Title: "05/02 Old", InTrash: true}
-	pets2 := domain.Album{ID: 7, Title: "Pets"}
+	colon := domain.Album{ID: 7, FolderTitles: []string{"2024"}, Title: "05/01 a:b"}
 	bare := domain.Album{ID: 8, FolderTitles: []string{"2024"}, Title: "05/01"}
 
 	in := func(dir string, n int) []string {
@@ -54,96 +57,70 @@ func TestFirstPairs(t *testing.T) {
 
 	cases := []struct {
 		rule, name string
-		p          domain.Policies
 		albums     []domain.Album
 		pairs      []domain.AlbumPair
 		dirs       map[string]bool
 		files      map[domain.AlbumID][]string
 		want       []domain.AlbumPair
 	}{
-		{r10, "an album takes the directory of its name", std, []domain.Album{holidays}, nil, set("2024/05-01 - Holidays"), nil,
-			[]domain.AlbumPair{pair(1, "2024/05-01 - Holidays")}},
-		{r10, "folders take the directories of their names", std, []domain.Album{trips, year}, nil, set("2024", "2024/Trips"), nil,
-			[]domain.AlbumPair{pair(2, "2024/Trips"), pair(3, "2024")}},
-		{r10, "a thematic album by name under the albums root", std, []domain.Album{pets}, nil, set("Albums/Pets"), nil,
-			[]domain.AlbumPair{pair(4, "Albums/Pets")}},
-		{r10, "a bare day takes its untitled directory, not the day folder", std, []domain.Album{bare}, nil, set("2024/05-01", "2024/05-01 - Untitled"), nil,
-			[]domain.AlbumPair{pair(8, "2024/05-01 - Untitled")}},
-		{r10, "an irregular name is no name of the album", std, []domain.Album{holidays}, nil, set("2024/05-01 Holidays"), nil,
+		{r10, "an album takes the directory of its name", []domain.Album{holidays}, nil, set(holidaysDir), nil,
+			[]domain.AlbumPair{pair(1, holidaysDir)}},
+		{r10, "a year folder takes the directory of its name", []domain.Album{year}, nil, set("2024"), nil,
+			[]domain.AlbumPair{pair(3, "2024")}},
+		{r10, "an album without a description takes the bare day", []domain.Album{bare}, nil, set("2024/05-01"), nil,
+			[]domain.AlbumPair{pair(8, "2024/05-01")}},
+		{r10, "a thematic album takes no directory by name", []domain.Album{pets}, nil, set("Albums/Pets", "Pets"), nil,
 			nil},
-		{r10, "the name compares exactly", std, []domain.Album{holidays}, nil, set("2024/05-01 - holidays"), nil,
+		{r10, "a folder that the template does not cover takes none", []domain.Album{trips}, nil, set("2024/Trips"), nil,
 			nil},
-		{r10, "the name wins over the files", std, []domain.Album{holidays}, nil, set("2024/05-01 - Holidays", "2024/Holiday trip"),
-			map[domain.AlbumID][]string{1: in("2024/Holiday trip", 3)},
-			[]domain.AlbumPair{pair(1, "2024/05-01 - Holidays")}},
-		{r10, "of two albums of one name the lower ID takes the directory", std, []domain.Album{pets2, pets}, nil, set("Albums/Pets"), nil,
-			[]domain.AlbumPair{pair(4, "Albums/Pets")}},
-		{r10, "the other album of the name may pair by its files", std, []domain.Album{pets2, pets}, nil, set("Albums/Pets", "Albums/Cats"),
-			map[domain.AlbumID][]string{7: in("Albums/Cats", 2)},
-			[]domain.AlbumPair{pair(4, "Albums/Pets"), pair(7, "Albums/Cats")}},
-		{r10, "a directory taken by name is not taken by files", std, []domain.Album{holidays, pets}, nil, set("2024/05-01 - Holidays"),
-			map[domain.AlbumID][]string{4: in("2024/05-01 - Holidays", 3)},
-			[]domain.AlbumPair{pair(1, "2024/05-01 - Holidays")}},
-		{r10, "51 of 100 files are more than half", std, []domain.Album{archive}, nil, set("Archive", "Old", "New"),
-			map[domain.AlbumID][]string{5: slices.Concat(in("Archive", 51), in("Old", 25), in("New", 24))},
-			[]domain.AlbumPair{pair(5, "Archive")}},
-		{r10, "50 of 100 files are not more than half", std, []domain.Album{archive}, nil, set("Archive", "Old", "New"),
-			map[domain.AlbumID][]string{5: slices.Concat(in("Archive", 50), in("Old", 25), in("New", 25))},
+		{r10, "the name compares exactly", []domain.Album{holidays}, nil, set("2024/05-01 - holidays"), nil,
 			nil},
-		{r10, "49 of 100 files are not more than half", std, []domain.Album{archive}, nil, set("Archive", "Old", "New"),
-			map[domain.AlbumID][]string{5: slices.Concat(in("Archive", 49), in("Old", 26), in("New", 25))},
+		{r10, "the name wins over the files", []domain.Album{holidays}, nil, set(holidaysDir, aDir),
+			map[domain.AlbumID][]string{1: in(aDir, 3)},
+			[]domain.AlbumPair{pair(1, holidaysDir)}},
+		{r10, "51 of 100 files are more than half", []domain.Album{party}, nil, set(otherDir, aDir, bDir),
+			map[domain.AlbumID][]string{5: slices.Concat(in(otherDir, 51), in(aDir, 25), in(bDir, 24))},
+			[]domain.AlbumPair{pair(5, otherDir)}},
+		{r10, "50 of 100 files are not more than half", []domain.Album{party}, nil, set(otherDir, aDir, bDir),
+			map[domain.AlbumID][]string{5: slices.Concat(in(otherDir, 50), in(aDir, 25), in(bDir, 25))},
 			nil},
-		{r10, "files in paired directories and in day folders count too", std, []domain.Album{archive}, existing(9, "Albums/Pets", domain.OriginICloud), set("Archive"),
-			map[domain.AlbumID][]string{5: slices.Concat(in("Archive", 3), in("Albums/Pets", 2), in("2024/05-01", 2))},
+		{r10, "49 of 100 files are not more than half", []domain.Album{party}, nil, set(otherDir, aDir, bDir),
+			map[domain.AlbumID][]string{5: slices.Concat(in(otherDir, 49), in(aDir, 26), in(bDir, 25))},
 			nil},
-		{r10, "a day folder takes no pair", std, []domain.Album{archive}, nil, set("2024/05-01"),
-			map[domain.AlbumID][]string{5: in("2024/05-01", 3)},
+		{r10, "a directory outside the template takes no pair by files", []domain.Album{party}, nil, set("Archive"),
+			map[domain.AlbumID][]string{5: in("Archive", 3)},
 			nil},
-		{r10, "the root takes no pair", std, []domain.Album{archive}, nil, nil,
-			map[domain.AlbumID][]string{5: in("", 3)},
-			nil},
-		{r10, "a year folder takes no pair by files", std, []domain.Album{archive}, nil, set("2024"),
+		{r10, "a year folder takes no pair by files", []domain.Album{party}, nil, set("2024"),
 			map[domain.AlbumID][]string{5: in("2024", 3)},
 			nil},
-		{r10, "the albums root takes no pair", std, []domain.Album{archive}, nil, set("Albums"),
-			map[domain.AlbumID][]string{5: in("Albums", 3)},
+		{r10, "the root takes no pair", []domain.Album{party}, nil, nil,
+			map[domain.AlbumID][]string{5: in("", 3)},
 			nil},
-		{r10, "a subdirectory of a day folder can stand for an album", std, []domain.Album{archive}, nil, set("2024/05-01/raw"),
-			map[domain.AlbumID][]string{5: in("2024/05-01/raw", 3)},
-			[]domain.AlbumPair{pair(5, "2024/05-01/raw")}},
-		{r07, "an existing top-level cloud folder pairs with its album from the cloud side", std, []domain.Album{archive}, nil, set("Archive"),
-			map[domain.AlbumID][]string{5: in("Archive", 3)},
-			[]domain.AlbumPair{pair(5, "Archive")}},
-		{r10, "the most files take a directory that several albums claim", std, []domain.Album{pets, archive}, nil, set("Archive"),
-			map[domain.AlbumID][]string{4: in("Archive", 2), 5: in("Archive", 3)},
-			[]domain.AlbumPair{pair(5, "Archive")}},
-		{r10, "equal files: the lower ID", std, []domain.Album{archive, pets}, nil, set("Archive"),
-			map[domain.AlbumID][]string{4: in("Archive", 2), 5: slices.Concat(in("Archive", 2), in("Old", 1))},
-			[]domain.AlbumPair{pair(4, "Archive")}},
-		{r10, "without a name or files the album gets no pair here", std, []domain.Album{archive}, nil, set("Old"), nil,
+		{r10, "a directory below an event takes no pair by files", []domain.Album{party}, nil, set(holidaysDir + "/raw"),
+			map[domain.AlbumID][]string{5: in(holidaysDir+"/raw", 3)},
 			nil},
-		{r10, "an album in the trash gets none", std, []domain.Album{old}, nil, set("2024/05-02 - Old"),
+		{r10, "a former day folder pairs by its files", []domain.Album{party}, nil, set("2024/05-01"),
+			map[domain.AlbumID][]string{5: in("2024/05-01", 3)},
+			[]domain.AlbumPair{pair(5, "2024/05-01")}},
+		{r10, "the most files take a directory that several albums claim", []domain.Album{holidays, party}, nil, set(aDir),
+			map[domain.AlbumID][]string{1: in(aDir, 2), 5: in(aDir, 3)},
+			[]domain.AlbumPair{pair(5, aDir)}},
+		{r10, "equal files: the lower ID", []domain.Album{party, holidays}, nil, set(aDir),
+			map[domain.AlbumID][]string{1: in(aDir, 2), 5: slices.Concat(in(aDir, 2), in(bDir, 1))},
+			[]domain.AlbumPair{pair(1, aDir)}},
+		{r10, "an album in the trash gets none", []domain.Album{old}, nil, set("2024/05-02 - Old"),
 			map[domain.AlbumID][]string{6: in("2024/05-02 - Old", 3)},
 			nil},
-		{r10, "the pairs come in the order of AlbumID", std, []domain.Album{archive, pets}, nil, set("Albums/Archive", "Albums/Cats"),
-			map[domain.AlbumID][]string{4: in("Albums/Cats", 2)},
-			[]domain.AlbumPair{pair(4, "Albums/Cats"), pair(5, "Albums/Archive")}},
-		{r07, "a paired album is not paired again", std, []domain.Album{holidays}, existing(1, "2024/Holiday trip", domain.OriginICloud), set("2024/05-01 - Holidays"),
-			map[domain.AlbumID][]string{1: in("2024/05-01 - Holidays", 3)},
+		{r07, "a paired album is not paired again", []domain.Album{holidays}, existing(1, aDir, domain.OriginICloud), set(holidaysDir),
+			map[domain.AlbumID][]string{1: in(holidaysDir, 3)},
 			nil},
-		{r07, "a top-level cloud folder and its album keep their pair", std, []domain.Album{archive}, existing(5, "Archive", domain.OriginRemote), set("Archive", "Albums/Archive"),
-			map[domain.AlbumID][]string{5: in("Albums/Archive", 3)},
+		{r07, "a paired directory is not taken by name", []domain.Album{holidays}, existing(9, holidaysDir, domain.OriginICloud), set(holidaysDir), nil,
 			nil},
-		{r07, "a paired directory is not taken by name", std, []domain.Album{pets}, existing(9, "Albums/Pets", domain.OriginICloud), set("Albums/Pets"), nil,
+		{r07, "a paired directory is not taken by files", []domain.Album{party}, existing(9, aDir, domain.OriginICloud), set(aDir),
+			map[domain.AlbumID][]string{5: in(aDir, 3)},
 			nil},
-		{r07, "a paired directory is not taken by files", std, []domain.Album{archive}, existing(9, "Archive", domain.OriginICloud), set("Archive"),
-			map[domain.AlbumID][]string{5: in("Archive", 3)},
-			nil},
-		{r10, "the albums root is a policy", alt, []domain.Album{pets}, nil, set("Collections/Pets"), nil,
-			[]domain.AlbumPair{pair(4, "Collections/Pets")}},
-		{r10, "the albums root of the policies takes no pair", alt, []domain.Album{archive}, nil, set("Collections"),
-			map[domain.AlbumID][]string{5: in("Collections", 3)},
-			nil},
+		{r10, "a description that sanitizing changes pairs by the changed name", []domain.Album{colon}, nil, set("2024/05-01 - a꞉b"), nil,
+			[]domain.AlbumPair{pair(7, "2024/05-01 - a꞉b")}},
 	}
 	for _, c := range cases {
 		t.Run(c.rule+" "+c.name, func(t *testing.T) {
@@ -152,13 +129,13 @@ func TestFirstPairs(t *testing.T) {
 			if _, ok := domain.Rules[c.rule]; !ok {
 				t.Errorf("%s is not in domain.Rules", c.rule)
 			}
-			got := layout.FirstPairs(c.albums, c.pairs, c.dirs, c.files, c.p)
+			got := layout.FirstPairs(c.albums, c.pairs, c.dirs, c.files, std)
 			if !reflect.DeepEqual(got, c.want) {
 				t.Errorf("FirstPairs(%+v, %+v, %v) = %+v, want %+v", c.albums, c.pairs, c.dirs, got, c.want)
 			}
 			reversed := slices.Clone(c.albums)
 			slices.Reverse(reversed)
-			if again := layout.FirstPairs(reversed, c.pairs, c.dirs, c.files, c.p); !reflect.DeepEqual(again, got) {
+			if again := layout.FirstPairs(reversed, c.pairs, c.dirs, c.files, std); !reflect.DeepEqual(again, got) {
 				t.Errorf("FirstPairs with the albums reversed = %+v, want %+v", again, got)
 			}
 		})
@@ -176,13 +153,12 @@ func TestFirstPairsProperties(t *testing.T) {
 		dirs   map[string]bool
 		files  map[domain.AlbumID][]string
 	}
-	p := dirPolicies()
-	places := rapid.SampledFrom([][]string{nil, {"2024"}, {"2024", "Trips"}, {"Hobby"}})
-	titles := rapid.SampledFrom([]string{"05/01 Holidays", "Pets", "Trips", "2024", "05/01", "Archive"})
+	p := domain.DefaultPolicies()
+	places := rapid.SampledFrom([][]string{nil, {"2024"}, {"2024", "Trips"}})
+	titles := rapid.SampledFrom([]string{"05/01 Holidays", "05/02 Trip", "05/01", "Pets", "2024"})
 	vocab := []string{
-		"", "2024", "2024/Trips", "2024/05-01", "2024/05-01 - Holidays", "2024/05-01 - Untitled",
-		"2024/Trips/05-01 - Holidays", "2024/Pets", "2024/05-01/raw", "Albums", "Albums/Pets",
-		"Albums/Archive", "Albums/Hobby", "Albums/Hobby/Pets", "Archive",
+		"", "2024", "2024/Trips", "2024/05-01", "2024/05-01 - Holidays", "2024/05-02 - Trip",
+		"2024/Pets", "2024/05-01 - Holidays/raw", "Albums/Pets", "Archive",
 	}
 	dirOf := rapid.SampledFrom(vocab)
 	bools := rapid.SampledFrom([]bool{false, true})

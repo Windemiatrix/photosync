@@ -18,7 +18,7 @@ var ErrBadSnapshot = errors.New("plan: the snapshot breaks its contract")
 // Reconcile returns snap, the snapshot of the library as a run reads it,
 // reconciled with state, which the last applied run left: the delta that the
 // run writes to the state before its operations. Its albums are those of
-// ReconcileAlbums. An asset of snap is the asset of state, or the earlier
+// ReconcileAlbums with p. An asset of snap is the asset of state, or the earlier
 // identity that an entry of state.History names, with its cloud GUID, else
 // with its UUID, when no other asset or entry left on either side has that
 // nonempty GUID or UUID. An asset of state keeps its ID; an earlier identity
@@ -36,8 +36,8 @@ var ErrBadSnapshot = errors.New("plan: the snapshot breaks its contract")
 // notices, is that of ReconcileAlbums, or wraps ErrBadSnapshot when two
 // assets of snap have one cloud GUID or an asset is in an album that snap
 // lacks.
-func Reconcile(state domain.State, snap domain.LibrarySnapshot, runID string) (domain.SnapshotDelta, []domain.Notice, error) {
-	albums, err := ReconcileAlbums(state.Albums, snap.Albums)
+func Reconcile(state domain.State, snap domain.LibrarySnapshot, runID string, p domain.Policies) (domain.SnapshotDelta, []domain.Notice, error) {
+	albums, err := ReconcileAlbums(state.Albums, snap.Albums, p)
 	if err != nil {
 		return domain.SnapshotDelta{}, nil, err
 	}
@@ -120,16 +120,16 @@ func Reconcile(state domain.State, snap domain.LibrarySnapshot, runID string) (d
 // else of the one with its key, when no other album left on either side has
 // that key; any other album is new and gets an ID above every ID of state,
 // in the order of UUID. ParentID is the ID of the folder that ParentUUID
-// names; Kind, Key and KeySource come from layout.Classify and layout.Key,
-// so albums may share a path key; the rest is as in snap. The result is in
-// the order of ID. The error wraps ErrBadSnapshot when two albums of snap
-// have one cloud key or a ParentUUID names no album of snap.
-func ReconcileAlbums(state, snap []domain.Album) ([]domain.Album, error) {
+// names; Kind comes from layout.Classify with p, Key and KeySource from
+// layout.Key, so albums may share a path key; the rest is as in snap. The
+// result is in the order of ID. The error wraps ErrBadSnapshot when two
+// albums of snap have one cloud key or a ParentUUID names no album of snap.
+func ReconcileAlbums(state, snap []domain.Album, p domain.Policies) ([]domain.Album, error) {
 	albums := slices.Clone(snap)
 	uuids, keys, cloud := make([]string, len(albums)), make([]string, len(albums)), map[string]bool{}
 	for i := range albums {
 		a := &albums[i]
-		a.Kind = layout.Classify(*a)
+		a.Kind = layout.Classify(*a, p)
 		a.Key, a.KeySource = layout.Key(*a)
 		if a.KeySource != domain.KeyPath {
 			if cloud[a.Key] {

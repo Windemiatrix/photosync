@@ -30,7 +30,7 @@ func TestFileOps(t *testing.T) {
 	const (
 		personal, shared          = domain.LibraryPersonal, domain.LibraryShared
 		holidays, trip            = "2024/05-01 - Holidays", "2024/05-02 - Trip"
-		party, cats               = "2024/Party time", "Albums/Cats"
+		party, cats               = "2024/05-03 - Party time", "Albums/Cats"
 		zoo, partyEvent           = "2024/05-05 - Zoo", "2024/05-03 - Party"
 		inQuarantine              = ".photosync/quarantine/2026-11-13/"
 		event, everyAlbum         = "{event_path}/IMG_0001", "{album}/IMG_0001"
@@ -64,7 +64,7 @@ func TestFileOps(t *testing.T) {
 		{ID: 11, Kind: domain.KindEvent, Title: "05/02 Trip", FolderTitles: []string{"2024"}},
 		{ID: 12, Kind: domain.KindEvent, Title: "05/03 Party", FolderTitles: []string{"2024"}},
 		{ID: 13, Kind: domain.KindThematic, Title: "Cats"},
-		{ID: 15, Kind: domain.KindEvent, Title: "Party time", FolderTitles: []string{"2024"}},
+		{ID: 15, Kind: domain.KindEvent, Title: "05/03 Party time", FolderTitles: []string{"2024"}},
 		{ID: 16, Kind: domain.KindEvent, Title: "05/01 Holidays", FolderTitles: []string{"2024"}},
 	}
 	pairs := []domain.AlbumPair{

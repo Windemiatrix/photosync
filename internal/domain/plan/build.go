@@ -123,7 +123,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	if err := eventtpl.Validate(in.Policies.Templates); err != nil {
 		return domain.Plan{}, domain.SnapshotDelta{}, err
 	}
-	delta, notices, err := Reconcile(in.State, in.Snapshot, in.RunID)
+	delta, notices, err := Reconcile(in.State, in.Snapshot, in.RunID, in.Policies)
 	if err != nil {
 		return domain.Plan{}, domain.SnapshotDelta{}, err
 	}
@@ -139,7 +139,7 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	byName := slices.SortedFunc(slices.Values(remotes), func(x, y domain.RemoteSpec) int { return cmp.Compare(x.Name, y.Name) })
 	for _, r := range byName {
 		for _, a := range slices.Concat(read[r.Name].Refiled, read[r.Name].Renamed) {
-			for _, b := range underFolder(albums, a) {
+			for _, b := range underFolder(albums, a, in.Policies) {
 				albums[slices.IndexFunc(albums, func(c domain.Album) bool { return c.ID == b.ID })] = b
 			}
 		}

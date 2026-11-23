@@ -15,35 +15,35 @@ func TestClassify(t *testing.T) {
 	if _, ok := domain.Rules[rule]; !ok {
 		t.Fatalf("%s is not in domain.Rules", rule)
 	}
+	std := domain.DefaultPolicies()
+	yy := tpl(std.Templates.Photos, []string{"{YY}", "{MM}-{DD} {Description}"}, "")
+	in := func(titles ...string) []string { return titles }
 
 	cases := []struct {
 		name  string
+		p     domain.Policies
 		album domain.Album
 		want  domain.AlbumKind
 	}{
-		{"an album in a year folder", domain.Album{FolderTitles: []string{"2024"}, Title: "05/01 Holidays"}, domain.KindEvent},
-		{"an album in a folder of a year folder", domain.Album{FolderTitles: []string{"2024", "Weekends"}, Title: "05/10 City"}, domain.KindEvent},
-		{"an undated album in a year folder", domain.Album{FolderTitles: []string{"2019"}, Title: "Summer"}, domain.KindEvent},
-		{"a trashed album in a year folder", domain.Album{FolderTitles: []string{"2024"}, Title: "05/02 Old", InTrash: true}, domain.KindEvent},
-		{"a top-level album", domain.Album{Title: "Pets"}, domain.KindThematic},
-		{"a top-level album titled with a year", domain.Album{Title: "2024"}, domain.KindThematic},
-		{"an album in another folder", domain.Album{FolderTitles: []string{"Crafts"}, Title: "Painting"}, domain.KindThematic},
-		{"a year folder inside another folder", domain.Album{FolderTitles: []string{"Archive", "2024"}, Title: "Camp"}, domain.KindThematic},
-		{"a folder of four letters", domain.Album{FolderTitles: []string{"Misc"}, Title: "Camp"}, domain.KindThematic},
-		{"a folder of three digits", domain.Album{FolderTitles: []string{"202"}, Title: "Camp"}, domain.KindThematic},
-		{"a folder of five digits", domain.Album{FolderTitles: []string{"20245"}, Title: "Camp"}, domain.KindThematic},
-		{"a folder of four bytes of other digits", domain.Album{FolderTitles: []string{string([]rune{0x0661, 0x0662})}, Title: "Camp"}, domain.KindThematic},
-		{"a folder of full-width digits", domain.Album{FolderTitles: []string{string([]rune{0xFF12, 0xFF10, 0xFF12, 0xFF14})}, Title: "Camp"}, domain.KindThematic},
-		{"a year folder", domain.Album{Kind: domain.KindFolder, Title: "2024"}, domain.KindFolder},
-		{"a folder in a year folder", domain.Album{Kind: domain.KindFolder, FolderTitles: []string{"2024"}, Title: "Weekends"}, domain.KindFolder},
-		{"a stored thematic kind in a year folder", domain.Album{Kind: domain.KindThematic, FolderTitles: []string{"2024"}, Title: "05/01 Holidays"}, domain.KindEvent},
-		{"a stored event kind outside the year folders", domain.Album{Kind: domain.KindEvent, Title: "Pets"}, domain.KindThematic},
+		{"an event of the template", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 Holidays"}, domain.KindEvent},
+		{"a trashed event", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 Holidays", InTrash: true}, domain.KindEvent},
+		{"an album without a date", std, domain.Album{FolderTitles: in("2019"), Title: "Summer"}, domain.KindThematic},
+		{"an album deeper than the template", std, domain.Album{FolderTitles: in("2024", "Weekends"), Title: "05/10 City"}, domain.KindThematic},
+		{"a top-level album", std, domain.Album{Title: "Pets"}, domain.KindThematic},
+		{"a top-level album titled with a year", std, domain.Album{Title: "2024"}, domain.KindThematic},
+		{"a year folder", std, domain.Album{Kind: domain.KindFolder, Title: "2024"}, domain.KindFolder},
+		{"a folder titled like an event", std, domain.Album{Kind: domain.KindFolder, FolderTitles: in("2024"), Title: "05/01 Trip"}, domain.KindFolder},
+		{"a stored thematic kind on the path of an event", std, domain.Album{Kind: domain.KindThematic, FolderTitles: in("2024"), Title: "05/01 Holidays"}, domain.KindEvent},
+		{"a stored event kind elsewhere", std, domain.Album{Kind: domain.KindEvent, Title: "Pets"}, domain.KindThematic},
+		{"{YY} out of its years", yy, domain.Album{FolderTitles: in("1965"), Title: "05/01 x"}, domain.KindThematic},
+		{"{YY} within its years", yy, domain.Album{FolderTitles: in("1969"), Title: "05/01 x"}, domain.KindEvent},
+		{"templates that Parse refuses", domain.Policies{}, domain.Album{FolderTitles: in("2024"), Title: "05/01 Holidays"}, domain.KindThematic},
 	}
 	for _, c := range cases {
 		t.Run(rule+" "+c.name, func(t *testing.T) {
 			t.Parallel()
 
-			if got := layout.Classify(c.album); got != c.want {
+			if got := layout.Classify(c.album, c.p); got != c.want {
 				t.Errorf("Classify(%+v) = %q, want %q", c.album, got, c.want)
 			}
 		})
