@@ -111,6 +111,7 @@ type Policies struct {
 	// QuarantineKeepDays is how many days a file may stay in the quarantine of a
 	// cloud root; a sync deletes it for good once it has stayed longer.
 	QuarantineKeepDays int
+	Templates          Templates
 	// UntitledEvent stands for the missing title in the cloud directory of an
 	// event album without one: "MM-DD - " followed by it.
 	UntitledEvent string
@@ -122,11 +123,21 @@ type Policies struct {
 	AlbumsRoot string
 }
 
+// Templates lay events out: Photos names the folders and the album of an
+// event in Photos, and Cloud its directories in every remote, a level per
+// string as the configuration writes it. Names is the language of the names
+// of months and days that they spell, "ru" or "en", or "" when they spell none;
+// package eventtpl reads and checks them.
+type Templates struct {
+	Photos, Cloud []string
+	Names         string
+}
+
 // DefaultPolicies returns the policies for the keys that a configuration
 // leaves out, with new slices on each call. Deletes stays empty because the
-// user must choose it, UntitledEvent and AlbumsRoot because they are in the
-// language chosen at setup, and RemotePriority because it is the order of
-// the remotes in the configuration.
+// user must choose it; UntitledEvent, AlbumsRoot and Templates.Names because
+// setup sets them by the language that the user chooses; and RemotePriority
+// because it is the order of the remotes in the configuration.
 func DefaultPolicies() Policies {
 	return Policies{
 		Conflict:           ConflictRemoteWins,
@@ -140,7 +151,11 @@ func DefaultPolicies() Policies {
 		EditedDirs:         []string{"отредактировано", "edited"},
 		SettleMinutes:      10,
 		QuarantineKeepDays: 90,
-		NestedSeparator:    " / ",
+		Templates: Templates{
+			Photos: []string{"{YYYY}", "{MM}/{DD} {Description}"},
+			Cloud:  []string{"{YYYY}", "{MM}-{DD} - {Description}"},
+		},
+		NestedSeparator: " / ",
 	}
 }
 
@@ -151,8 +166,8 @@ func DefaultPolicies() Policies {
 // SettleMinutes must not be negative, and QuarantineKeepDays must be above
 // zero. The caller checks the rest: RemotePriority against its remotes,
 // EditedDirs, UntitledEvent and AlbumsRoot as cloud names with
-// naming.IsValidPart, and NestedSeparator against the day form of an event
-// title.
+// naming.IsValidPart, NestedSeparator against the day form of an event
+// title, and Templates with eventtpl.Validate.
 func (p Policies) Validate() error {
 	var errs []error
 	errs = checkPolicy(errs, "conflict", p.Conflict, ConflictRemoteWins, ConflictICloudWins, ConflictAsk, ConflictSkip)
