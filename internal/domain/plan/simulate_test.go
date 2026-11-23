@@ -737,6 +737,9 @@ func TestSimulateConverges(t *testing.T) {
 	live8trip, e2v := withVideo(asset(8, "IMG_0002.HEIC", 200, may1, "run-2", trip)), file(personal, holidaysDir+"/IMG_0002.MOV", 30, "v8", settled)
 	slashed := snapshot(asset(9, "IMG_0009.HEIC", 100, may1, "run-2", slash))
 	slashed.Albums = slashLibrary
+	h8, rawFile := asset(8, "IMG_0002.HEIC", 200, may1, "run-2", holidays), file(personal, holidaysDir+"/raw/IMG_0001.HEIC", 100, "a1", settled)
+	noAlbums := p
+	noAlbums.AlbumsForPersonal = false
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -780,24 +783,28 @@ func TestSimulateConverges(t *testing.T) {
 			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(in7Trip)),
 			scans{"alpha": {xmp, ev, e1}}, specs{alpha}, "", p, kinds{domain.OpMove, domain.OpMove, domain.OpMove}, nil},
 		{"a conflict under ask stays open, and the asset stays as the state has it",
-			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip), scans{"alpha": {looseFile}}, specs{alpha}, "", ask,
-			nil, []domain.Conflict{conflict("alpha", domain.ConflictStatusOpen)}},
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip), scans{"alpha": {partyFile, holidaysFolder}}, specs{alpha}, "", ask,
+			kinds{domain.OpAlbumCreate}, []domain.Conflict{conflict("alpha", domain.ConflictStatusOpen)}},
 		{"a file that the user moved to the shared root takes the asset to the shared library in the state, and the file of another remote follows",
 			state(assets{a7}, pairs{alphaHolidays, alphaShared, betaHolidays}, photo, other), snapshot(a7),
 			scans{"alpha": {sharedFile}, "beta": {e1}}, specs{alpha, beta}, "", p, kinds{domain.OpMove}, nil},
 		{"an edit goes to quarantine",
 			state(nil, nil), snapshot(), scans{"alpha": {edit3}}, specs{alpha}, "", edits, kinds{domain.OpQuarantine}, nil},
-		{"one remote alone syncs: a thematic copy moves into the folder of an event of the asset, and the listing of the other remote stays as it is",
-			state(assets{catsHolidays}, pairs{alphaHolidays, alphaCats, betaHolidays}, inCats, other), snapshot(catsHolidays),
-			scans{"alpha": {catsFile}, "beta": {youngBeta, e1}}, specs{alpha, beta}, "alpha", p, kinds{domain.OpMove}, nil},
-		{"an asset that left its only event keeps its file",
+		{"one remote alone syncs: a link in the directory of a thematic album keeps its asset as the state has it there while a new asset goes up, and the listing of the other remote stays as it is",
+			state(assets{catsHolidays}, pairs{alphaHolidays, alphaCats, betaHolidays}, inCats, other), snapshot(catsHolidays, h8),
+			scans{"alpha": {catsFile}, "beta": {youngBeta, e1}}, specs{alpha, beta}, "alpha", p, kinds{domain.OpPut}, nil},
+		{"an asset that left its only event, the only one of its day, takes its file to quarantine and stays out of that event", // covers: R-OBJECT-06
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(left7, n8), scans{"alpha": {e1}}, specs{alpha}, "", p,
-			kinds{domain.OpPut, domain.OpPut}, nil},
+			kinds{domain.OpQuarantine, domain.OpPut, domain.OpPut}, nil},
 		{"a file that the user moved takes the asset into the album of its new folder, and a new asset in Recently Deleted goes nowhere",
 			remembered(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), history), snapshot(a7, trashed), scans{"alpha": {tripFile}}, specs{alpha}, "", p,
 			kinds{domain.OpAlbumAdd, domain.OpAlbumRemove}, nil},
-		{"a file that the user moved out of its event into the year folder takes the asset out of the album",
-			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {looseFile}}, specs{alpha}, "", p, kinds{domain.OpAlbumRemove}, nil},
+		{"a file that the user moved out of its event into the year folder keeps its asset as the state has it there while a new asset goes up",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n8), scans{"alpha": {looseFile}}, specs{alpha}, "", p, kinds{domain.OpPut, domain.OpPut}, nil},
+		{"a linked file that the user moved below its event changes nothing while a new asset goes up",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n8), scans{"alpha": {rawFile}}, specs{alpha}, "", p, kinds{domain.OpPut, domain.OpPut}, nil},
+		{"a file imported into no album stays where it is",
+			state(nil, pairs{alphaHolidays}), snapshot(), scans{"alpha": {stray4}}, specs{alpha}, "", noAlbums, kinds{domain.OpImport}, nil},
 		{"matching links a new asset with a new file of a paired folder, and the asset joins its album",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, m8), scans{"alpha": {e2, e1}}, specs{alpha}, "", p, kinds{domain.OpAlbumAdd}, nil},
 		{"a file that the user moved into a new folder beside a new file: the album comes to iCloud, then the import and the asset join it",

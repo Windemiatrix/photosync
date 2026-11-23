@@ -152,6 +152,9 @@ func TestReadScans(t *testing.T) {
 	notice := func(code string, root domain.LibraryKind, at string) domain.Notice {
 		return domain.Notice{Code: code, Params: []string{string(root), at}}
 	}
+	skipped := func(remote, dir string) domain.Notice {
+		return domain.Notice{Code: "plan.skipped", Params: []string{"dir", remote, string(personal), dir}}
+	}
 
 	e1 := file(personal, holidaysDir+"/IMG_0001.HEIC", 100, "a1", settled)
 	e1z := e1
@@ -163,7 +166,7 @@ func TestReadScans(t *testing.T) {
 	e4x := file(personal, partyDir+"/IMG_0004.XMP", 10, "d7", settled)
 	e12 := shot(file(personal, holidaysDir+"/IMG_0012.jpg", 900, "g2", settled), 8064, 6048)
 	beach, sBeach := file(shared, beachDir+"/IMG_0005.HEIC", 500, "e5", settled), file(personal, beachDir+"/IMG_0005.HEIC", 500, "e5", settled)
-	edit, notes := file(personal, holidaysDir+"/edited/IMG_0001.HEIC", 90, "x1", settled), file(personal, "2024/notes.txt", 5, "n1", settled)
+	edit, notes := file(personal, holidaysDir+"/edited/IMG_0001.HEIC", 90, "x1", settled), file(personal, holidaysDir+"/notes.txt", 5, "n1", settled)
 	q13, q14 := file(personal, picsDir+"/IMG_0013.HEIC", 1300, "j3", settled), file(personal, picsDir+"/IMG_0014.HEIC", 1400, "j4", settled)
 	y4, yBeach := file(personal, partyDir+"/IMG_0004.HEIC", 400, "d4", young), file(shared, beachDir+"/IMG_0005.HEIC", 500, "e5", young)
 	yDir := domain.RemoteEntry{Root: personal, Path: "2024/05-06 - New", IsDir: true, MTime: young}
@@ -241,6 +244,14 @@ func TestReadScans(t *testing.T) {
 		pair(holidays, "alpha", personal, holidaysDir, domain.OriginICloud), pair(holidays, "alpha", shared, holidaysDir, domain.OriginICloud),
 		pair(trip, "alpha", personal, tripDir, domain.OriginICloud),
 	}}
+	atRoot, inYearDir := file(personal, "IMG_0050.HEIC", 500, "r0", settled), file(personal, "2024/IMG_0051.HEIC", 510, "r1", settled)
+	pets52, pets53 := file(personal, "Albums/Pets/IMG_0052.HEIC", 520, "r2", settled), file(personal, "Albums/Pets/IMG_0053.HEIC", 530, "r3", settled)
+	raw54, raw1 := file(personal, holidaysDir+"/raw/IMG_0054.HEIC", 540, "r4", settled), file(personal, holidaysDir+"/raw/IMG_0001.HEIC", 100, "a1", settled)
+	pets1, editedAway := file(personal, "Albums/Pets/IMG_0001.HEIC", 100, "a1", settled), file(personal, holidaysDir+"/edited/IMG_0001.HEIC", 100, "a1", settled)
+	albumsDir := domain.RemoteEntry{Root: personal, Path: "Albums", IsDir: true, MTime: settled}
+	ownSettled := file(personal, ".photosync/quarantine/2026-08-14/IMG_0055.HEIC", 550, "r5", settled)
+	rawDir := holidaysDir + "/raw"
+	petsEdit := file(personal, "Albums/Pets/IMG_0001_edited.HEIC", 100, "a1", settled)
 
 	same := func(x, y result) bool {
 		sameScan := func(a, b plan.RemoteScan) bool {
@@ -326,7 +337,7 @@ func TestReadScans(t *testing.T) {
 				[]domain.Album{album(next, event, "05/04 Party"), album(next+1, event, "05/05 Beach")},
 				[]domain.AlbumPair{pair(trip, "alpha", personal, photosDir, byRemote), pair(next, "alpha", personal, partyDir, byRemote),
 					pair(next+1, "alpha", shared, beachDir, byRemote)},
-				[]domain.Notice{notice("plan.unknown_file", personal, "2024/notes.txt"), notice("plan.cloud_better", personal, holidaysDir+"/IMG_0012.jpg")}}},
+				[]domain.Notice{notice("plan.unknown_file", personal, notes.Path), notice("plan.cloud_better", personal, holidaysDir+"/IMG_0012.jpg")}}},
 		{"new files not settled yet wait outside the run under either root, and a directory and a file without MTime never wait",
 			state(link(1, 7, "alpha", e1z, original, holidays), link(5, 7, "alpha", sBeach, original, 0), link(2, 7, "beta", y4, original, 0)),
 			delta(a7), scans{"alpha": {yBeach, yDir, e1z, sBeach, y4}}, specs{beta, plain}, p,
@@ -374,7 +385,7 @@ func TestReadScans(t *testing.T) {
 			result{nil, reads{"alpha": scanned(nil, nil, news{imported(z, trip)}, nil)}, nil,
 				[]domain.AlbumPair{pair(trip, "alpha", personal, tripDir, byRemote)},
 				[]domain.Notice{notice("plan.ambiguous_move", personal, holidaysDir+"/IMG_0040.HEIC"),
-					notice("plan.ambiguous_move", personal, holidaysDir+"/IMG_0041.HEIC"), notice("plan.unknown_file", personal, "2024/notes.txt")}}},
+					notice("plan.ambiguous_move", personal, holidaysDir+"/IMG_0041.HEIC"), notice("plan.unknown_file", personal, notes.Path)}}},
 		{"under settle_minutes of 20 a file waits until it is exactly that old, and the own files of photosync at the top of a root never wait",
 			state(link(1, 7, "alpha", e1, original, holidays)), delta(a7), scans{"alpha": {e14, own, nested, e13, e1}}, specs{alpha}, slow,
 			result{found{1: e1}, reads{"alpha": scanned(nil, nil, news{imported(e13, holidays)}, nil)}, nil, nil,
@@ -409,6 +420,35 @@ func TestReadScans(t *testing.T) {
 			shotHeld, delta(), scans{"alpha": {s4, t4, h5, h4, y4v}}, specs{alpha}, p,
 			result{nil, reads{"alpha": scanned(nil, nil, news{imported(h5, holidays), imported(t4, trip), imported(s4, holidays)}, nil)}, nil, nil,
 				[]domain.Notice{settling(personal, holidaysDir+"/IMG_0004.MOV")}}},
+		{"files that the templates do not cover leave the scan with one notice for each directory", // covers: R-LAYOUT-03
+			state(), delta(a7), scans{"alpha": {atRoot, inYearDir, pets52, pets53, raw54}}, specs{alpha}, p,
+			result{nil, reads{"alpha": scanned(nil, nil, nil, nil)}, nil, nil,
+				[]domain.Notice{skipped("alpha", rawDir), skipped("alpha", "2024"), skipped("alpha", "Albums/Pets"), skipped("alpha", ".")}}},
+		{"directories and the own files of photosync never leave the scan", // covers: R-LAYOUT-03
+			state(), delta(a7), scans{"alpha": {yearDir, albumsDir, ownSettled}}, specs{alpha}, p,
+			result{nil, reads{"alpha": scanned(nil, nil, nil, nil)}, nil, nil, nil}},
+		{"a link whose file lies outside the templates keeps its asset as the state has it, and its file is not read", // covers: R-LAYOUT-03
+			state(link(1, 7, "alpha", pets1, original, 0)), delta(a7), scans{"alpha": {pets1}}, specs{alpha}, p,
+			result{nil, reads{"alpha": scanned(nil, nil, nil, nil, 7)}, nil, nil, []domain.Notice{skipped("alpha", "Albums/Pets")}}},
+		{"a linked file moved below its event keeps its asset as the state has it, by its content", // covers: R-LAYOUT-03
+			state(link(1, 7, "alpha", e1, original, holidays)), delta(a7), scans{"alpha": {raw1}}, specs{alpha}, p,
+			result{nil, reads{"alpha": scanned(nil, nil, nil, nil, 7)}, nil, nil, []domain.Notice{skipped("alpha", rawDir)}}},
+		{"without a hash a linked file moved below its event holds nothing back", // covers: R-LAYOUT-03
+			state(link(1, 7, "alpha", e1, original, holidays)), delta(a7), scans{"alpha": {raw1}}, specs{plain}, p,
+			result{nil, reads{"alpha": scanned(nil, nil, nil, nil)}, nil, nil, []domain.Notice{skipped("alpha", rawDir)}}},
+		{"a copy below its event leaves the asset in the run while its file stays", // covers: R-LAYOUT-03
+			state(link(1, 7, "alpha", e1, original, holidays)), delta(a7), scans{"alpha": {raw1, e1}}, specs{alpha}, p,
+			result{found{1: e1}, reads{"alpha": scanned(nil, nil, nil, nil)}, nil, nil, []domain.Notice{skipped("alpha", rawDir)}}},
+		{"each remote reports a directory outside the templates", // covers: R-LAYOUT-03
+			state(), delta(a7), scans{"alpha": {pets52}, "beta": {pets52}}, specs{beta, alpha}, p,
+			result{nil, reads{"alpha": scanned(nil, nil, nil, nil), "beta": scanned(nil, nil, nil, nil)}, nil, nil,
+				[]domain.Notice{skipped("alpha", "Albums/Pets"), skipped("beta", "Albums/Pets")}}},
+		{"a linked file moved into a directory of edits keeps its asset as the state has it, by its content",
+			state(link(1, 7, "alpha", e1, original, holidays)), delta(a7), scans{"alpha": {editedAway}}, specs{alpha}, p,
+			result{found{1: editedAway}, reads{"alpha": scanned(nil, nil, nil, nil, 7)}, nil, nil, nil}},
+		{"a linked file named as an edit outside the templates keeps its asset as the state has it, and its file is not read", // covers: R-LAYOUT-03
+			state(link(1, 7, "alpha", petsEdit, original, 0)), delta(a7), scans{"alpha": {petsEdit}}, specs{alpha}, p,
+			result{nil, reads{"alpha": scanned(nil, nil, nil, nil, 7)}, nil, nil, []domain.Notice{skipped("alpha", "Albums/Pets")}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

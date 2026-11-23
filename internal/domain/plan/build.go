@@ -64,16 +64,18 @@ type Input struct {
 // the plan, the albums that matching makes the asset join there are added to
 // Join, and the new links that matching makes there are added to its links as
 // they lie now: so DecideLayout takes them, the asset counting as linked when
-// the state or those new links name it, and DecideComponents its links as the
+// the state holds the asset or a link of it, or when those new links name
+// it, and DecideComponents its links as the
 // state holds them. AssetOps, ImportOps with its links as they lie now, then
 // FileOps, ComponentOps and SidecarOps in each remote that the run syncs, by
 // name, where the asset takes part in the plan, give its operations: FileOps
 // with the decisions of matching there, each replacement turned into
 // ActionLink when a decision of DecideLayout deletes the asset, and with the
 // pairs of that remote in the root of the target of the asset, those of the
-// state and those that the run made before. A remote takes its
-// names from its whole listing and its links in the state, and its sidecars
-// by those links. ReplaceOps then gives the replacement of the asset from its
+// state and those that the run made before. A remote takes its names from
+// its whole listing, its links in the state and the path of each of those
+// links whose asset its scan holds as Settling, and its sidecars by those
+// links. ReplaceOps then gives the replacement of the asset from its
 // links as they lie now and its operations so far. ExpireOps, with
 // Policies.QuarantineKeepDays, gives the operations on the quarantine of each
 // remote that the run syncs, from its whole listing.
@@ -109,7 +111,10 @@ type Input struct {
 // and Build itself in the order of Code, then Params. Build adds
 // "plan.conflict_settled", with the remote, the original name and the UUID
 // of the asset and the conflict policy, wherever that policy settles a
-// conflict that the state does not keep for an asset in a remote. For each
+// conflict that the state does not keep for an asset in a remote. It adds
+// "plan.skipped", with "asset", the original name and the UUID, for each
+// asset that IsNew holds for, with no link in the state and none that
+// matching makes, that the run leaves in no event album. For each
 // remote that the run syncs it adds, with the remote and a decimal count
 // above zero, "plan.not_imported" for the new files that ReadScans does not
 // decide to import, "plan.waiting_import" for those that it does but that
@@ -150,6 +155,13 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	fresh := map[domain.AssetID][]domain.LinkDecision{}
 	for _, r := range remotes {
 		names[r.Name], sides[r.Name] = NewNames(r.Name, in.Scans[r.Name], in.State.Links), Sidecars(in.State.Links, r.Name, in.Scans[r.Name])
+		for _, l := range in.State.Links {
+			// A file put at the path of a frozen link would read on the next run
+			// as that link's own file, changed.
+			if l.Remote == r.Name && read[r.Name].Settling[l.AssetID] {
+				names[r.Name].take(l.Root, l.Path)
+			}
+		}
 		for _, d := range read[r.Name].Linked {
 			fresh[d.Link.AssetID] = append(fresh[d.Link.AssetID], d)
 		}
@@ -229,7 +241,11 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 				matched[d.Link.Remote], current, linked = append(matched[d.Link.Remote], d), append(current, d.Link), true
 			}
 		}
-		decisions, status, target, join, leave, placements := DecideLayout(asset, found, linked, objects, current, in.Remotes, albums, events, moved, in.Policies, in.RunID)
+		_, seen := base[id]
+		decisions, status, target, join, leave, placements := DecideLayout(asset, found, linked || seen, objects, current, in.Remotes, albums, events, moved, in.Policies, in.RunID)
+		if IsNew(asset, in.Policies) && !linked && len(objectAlbums(target, albums)) == 0 {
+			notices = append(notices, domain.Notice{Code: "plan.skipped", Params: []string{"asset", asset.OriginalName, asset.Key.UUID}})
+		}
 		fates, components, copies, after := DecideComponents(decisions, status, placements, owned[id], files, in.Remotes, in.Policies.Deletes)
 		start := len(out.Ops)
 		out.Ops = append(out.Ops, AssetOps(id, decisions, status, join, leave, components, files)...)

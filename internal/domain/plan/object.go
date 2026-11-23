@@ -10,9 +10,9 @@ import (
 
 // DecidePlacement returns the changes that make the files of asset in remote
 // lie under the root of asset.TargetLibrary in the directories of its event
-// albums, one file in each; an asset in no event album gets none, and its
-// files stay as they are. asset is as the sync leaves it: Memberships are the
-// albums it is in, its first placement applied, and TargetLibrary is the
+// albums, one file in each; an asset in no event album keeps only the files
+// whose link names no album. asset is as the sync leaves it: Memberships are
+// the albums it is in, its first placement applied, and TargetLibrary is the
 // library whose root holds its files; it syncs and is not in Recently
 // Deleted. albums are the albums of the run in the order of ID, each with the
 // Kind that layout.Classify gives it. links are the links of asset in every
@@ -24,9 +24,6 @@ import (
 // quarantines last.
 func DecidePlacement(asset domain.Asset, links []domain.Link, remote string, albums []domain.Album) []domain.Placement {
 	want := objectAlbums(asset, albums)
-	if len(want) == 0 {
-		return nil
-	}
 	root := asset.TargetLibrary
 	var files []domain.Link
 	for _, l := range links {
@@ -37,7 +34,9 @@ func DecidePlacement(asset domain.Asset, links []domain.Link, remote string, alb
 	slices.SortFunc(files, func(x, y domain.Link) int {
 		return cmp.Or(cmp.Compare(x.Root, y.Root), cmp.Compare(x.Path, y.Path))
 	})
-	placed := func(l domain.Link) bool { return l.Root == root && slices.Contains(want, l.AlbumID) }
+	placed := func(l domain.Link) bool {
+		return l.Root == root && slices.Contains(want, l.AlbumID) || len(want) == 0 && l.AlbumID == 0
+	}
 	orphans := slices.DeleteFunc(slices.Clone(files), placed)
 	var out []domain.Placement
 	for _, id := range want {
@@ -152,8 +151,8 @@ func objectChanges(changes []domain.AlbumChange) []domain.AlbumChange {
 
 // DecideFirstPlacement returns the albums that asset joins and leaves in
 // iCloud at its first placement. asset is the asset of the snapshot
-// reconciled with the state; it is new to every remote, with no link in any
-// status in any of them, and IsNew holds for it. An asset in no album joins
+// reconciled with the state, which does not hold it; it has no link in any
+// status in any remote, and IsNew holds for it. An asset in no album joins
 // the only event of its day (R-LAYOUT-05); under closest_date_remove_others
 // an asset leaves every event but the one closest to its date, closest first
 // (R-LAYOUT-04). events are those of the albums of the run, as
