@@ -671,6 +671,7 @@ func TestSimulateConverges(t *testing.T) {
 	inCats := photo
 	inCats.Path, inCats.AlbumID = catsFile.Path, cats
 	a7, in7Trip := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", holidays), asset(7, "IMG_0001.HEIC", 100, may1, "run-2", trip)
+	left7 := asset(7, "IMG_0001.HEIC", 100, may1, "run-1")
 	n8 := withVideo(asset(8, "IMG_0001.HEIC", 200, may1.Add(time.Hour), "run-2", holidays))
 	catsHolidays := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", cats, holidays)
 	alphaHolidays, alphaTrip := pair(holidays, "alpha", personal, holidaysDir), pair(trip, "alpha", personal, tripDir)
@@ -764,9 +765,12 @@ func TestSimulateConverges(t *testing.T) {
 			scans{"alpha": {sharedFile}, "beta": {e1}}, specs{alpha, beta}, "", p, kinds{domain.OpMove}, nil},
 		{"an edit goes to quarantine",
 			state(nil, nil), snapshot(), scans{"alpha": {edit3}}, specs{alpha}, "", edits, kinds{domain.OpQuarantine}, nil},
-		{"one remote alone syncs: a copy goes into the folder of an event of the asset, and the listing of the other remote stays as it is",
+		{"one remote alone syncs: a thematic copy moves into the folder of an event of the asset, and the listing of the other remote stays as it is",
 			state(assets{catsHolidays}, pairs{alphaHolidays, alphaCats, betaHolidays}, inCats, other), snapshot(catsHolidays),
-			scans{"alpha": {catsFile}, "beta": {youngBeta, e1}}, specs{alpha, beta}, "alpha", p, kinds{domain.OpCopy}, nil},
+			scans{"alpha": {catsFile}, "beta": {youngBeta, e1}}, specs{alpha, beta}, "alpha", p, kinds{domain.OpMove}, nil},
+		{"an asset that left its only event keeps its file",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(left7, n8), scans{"alpha": {e1}}, specs{alpha}, "", p,
+			kinds{domain.OpPut, domain.OpPut}, nil},
 		{"a file that the user moved takes the asset into the album of its new folder, and a new asset in Recently Deleted goes nowhere",
 			remembered(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), history), snapshot(a7, trashed), scans{"alpha": {tripFile}}, specs{alpha}, "", p,
 			kinds{domain.OpAlbumAdd, domain.OpAlbumRemove}, nil},

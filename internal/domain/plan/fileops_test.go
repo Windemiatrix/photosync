@@ -30,8 +30,8 @@ func TestFileOps(t *testing.T) {
 	const (
 		personal, shared          = domain.LibraryPersonal, domain.LibraryShared
 		holidays, trip            = "2024/05-01 - Holidays", "2024/05-02 - Trip"
-		party, cats, day          = "2024/Party time", "Albums/Cats", "2024/05-04"
-		zoo                       = "2024/05-05 - Zoo"
+		party, cats               = "2024/Party time", "Albums/Cats"
+		zoo, partyEvent           = "2024/05-05 - Zoo", "2024/05-03 - Party"
 		inQuarantine              = ".photosync/quarantine/2026-11-13/"
 		event, everyAlbum         = "{event_path}/IMG_0001", "{album}/IMG_0001"
 		twoWay                    = domain.ModeTwoWay
@@ -230,16 +230,12 @@ func TestFileOps(t *testing.T) {
 			},
 			[]domain.AlbumPair{paired(10, shared, holidays)}, "", nil},
 		{"an upload puts the original into the directory of each album, with the names of its root", twoWay, event, inShared, nil,
-			[]domain.Placement{place(domain.ActionUpload, domain.Link{}, 10, "R-LINK-10"), place(domain.ActionUpload, domain.Link{}, 13, "R-LINK-10")}, nil,
+			[]domain.Placement{place(domain.ActionUpload, domain.Link{}, 10, "R-LINK-10"), place(domain.ActionUpload, domain.Link{}, 12, "R-LINK-10")}, nil,
 			[]domain.Op{
 				op(domain.OpPut, "", "", shared, holidays+"/IMG_0001.HEIC", "R-LINK-10", uploaded(shared, holidays+"/IMG_0001.HEIC", 10)),
-				op(domain.OpPut, "", "", shared, cats+"/IMG_0001.HEIC", "R-LINK-10", uploaded(shared, cats+"/IMG_0001.HEIC", 13)),
+				op(domain.OpPut, "", "", shared, partyEvent+"/IMG_0001.HEIC", "R-LINK-10", uploaded(shared, partyEvent+"/IMG_0001.HEIC", 12)),
 			},
-			[]domain.AlbumPair{paired(10, shared, holidays), paired(13, shared, cats)}, "", nil},
-		{"an asset in no album goes up to the day folder of its date, which pairs with no album", twoWay, event, asset, nil,
-			[]domain.Placement{place(domain.ActionUpload, domain.Link{}, 0, "R-LINK-01")}, nil,
-			[]domain.Op{op(domain.OpPut, "", "", personal, day+"/IMG_0001.HEIC", "R-LINK-01", uploaded(personal, day+"/IMG_0001.HEIC", 0))},
-			nil, "", nil},
+			[]domain.AlbumPair{paired(10, shared, holidays), paired(12, shared, partyEvent)}, "", nil},
 		{"upload-only: a template of several values puts a file at each of its paths", domain.ModeUploadOnly, everyAlbum, asset, nil,
 			[]domain.Placement{place(domain.ActionUpload, domain.Link{}, 10, "R-LINK-01")}, nil,
 			[]domain.Op{

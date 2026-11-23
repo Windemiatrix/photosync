@@ -67,14 +67,10 @@ func parse(t *testing.T, s string) *template.Template {
 
 func TestEventPath(t *testing.T) {
 	t.Parallel()
-	offset := 3 * 3600
-	asset := domain.Asset{Taken: time.Date(2024, 5, 1, 22, 30, 0, 0, time.UTC), TZOffset: &offset}
 	p := domain.DefaultPolicies()
 	p.UntitledEvent, p.AlbumsRoot = "Untitled", "Albums"
 	event := domain.Album{ID: 7, FolderTitles: []string{"2024"}, Title: "05/01 Sea"}
-	// The pair of no album is a trap: the day folder never has a pair.
 	pairs := []domain.AlbumPair{
-		{AlbumID: 0, DirPath: "Unsorted"},
 		{AlbumID: 3, DirPath: "2024/05-01 - Hills"},
 		{AlbumID: 7, DirPath: "2024/05-01 - Sea trip"},
 	}
@@ -84,12 +80,11 @@ func TestEventPath(t *testing.T) {
 		pairs []domain.AlbumPair
 		want  string
 	}{
-		{"the zero album: the day folder of the local date", domain.Album{}, pairs, "2024/05-02"},
 		{"the directory of the pair, not the one of the title", event, pairs, "2024/05-01 - Sea trip"},
-		{"an event without a pair", event, pairs[:2], "2024/05-01 - Sea"},
+		{"an event without a pair", event, pairs[:1], "2024/05-01 - Sea"},
 		{"a thematic album without a pair", domain.Album{ID: 9, Title: "Hobby"}, pairs, "Albums/Hobby"},
 	} {
-		if got := pathtemplate.EventPath(asset, c.album, c.pairs, p); got != c.want {
+		if got := pathtemplate.EventPath(c.album, c.pairs, p); got != c.want {
 			t.Errorf("%s: EventPath = %q; want %q", c.name, got, c.want)
 		}
 	}

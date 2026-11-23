@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
-	"github.com/Windemiatrix/photosync/internal/domain/dates"
+	"github.com/Windemiatrix/photosync/internal/domain/eventtpl"
 	"github.com/Windemiatrix/photosync/internal/domain/naming"
 )
 
-// AlbumFor must not take the day folder that DayDir names for an album.
+// AlbumFor must not take a day folder for an album.
 const dayLayout = "2006/01-02"
 
 // DirFor returns the directory, relative to a remote root, that a new pair
@@ -98,9 +98,10 @@ func isDay(year, level string) bool {
 	return err == nil
 }
 
-// DayDir returns the day folder of asset: "YYYY/MM-DD" of the date that
-// dates.LocalDay gives. It holds the file of an asset in no album.
-func DayDir(asset domain.Asset) string {
-	year, month, day := dates.LocalDay(asset.Taken, asset.TZOffset)
-	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC).Format(dayLayout)
+// Build refuses the templates that eventtpl.Validate refuses before any
+// layout; a template that Parse refuses is the zero one, which reads nothing.
+func parse(ts domain.Templates) (photos, cloud eventtpl.Template) {
+	photos, _ = eventtpl.Parse(ts.Photos, eventtpl.Photos, ts.Names)
+	cloud, _ = eventtpl.Parse(ts.Cloud, eventtpl.Cloud, ts.Names)
+	return photos, cloud
 }

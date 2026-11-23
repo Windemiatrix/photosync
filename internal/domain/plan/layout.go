@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/Windemiatrix/photosync/internal/domain"
+	"github.com/Windemiatrix/photosync/internal/domain/layout"
 )
 
 // DecideLayout returns what a run makes of an asset in iCloud and in each
@@ -22,8 +23,9 @@ import (
 // the albums that matching makes the asset join added to Join; the decisions
 // of matching are not among them. remotes are those of the configuration in
 // its order, which is the priority of remotes while p.RemotePriority is
-// empty. albums are as DecidePlacement takes them; a Join or a Leave of an
-// album that they lack or hold in Recently Deleted is dropped.
+// empty. albums are as DecidePlacement takes them and events as
+// DecideFirstPlacement does; a Join or a Leave of an album that albums lack
+// or hold in Recently Deleted is dropped.
 //
 // An asset that is gone, that IsNew does not hold for, or that a decision
 // still deletes with ActionDeleteAsset is not laid out: target is now with
@@ -34,7 +36,7 @@ import (
 // statuses after the run gets no placements, and the uploads of a remote
 // with a decision by R-LINK-10, which holds no file of the asset, take that
 // rule. The inputs are not changed.
-func DecideLayout(now domain.Asset, found, linked bool, objects map[string]domain.ObjectDecision, links []domain.Link, remotes []domain.RemoteSpec, albums []domain.Album, moved []domain.AlbumPair, p domain.Policies, runID string) (decisions map[string][]domain.LinkDecision, status map[domain.LinkID]domain.LinkStatus, target domain.Asset, join, leave []domain.AlbumChange, placements map[string][]domain.Placement) {
+func DecideLayout(now domain.Asset, found, linked bool, objects map[string]domain.ObjectDecision, links []domain.Link, remotes []domain.RemoteSpec, albums []domain.Album, events layout.Events, moved []domain.AlbumPair, p domain.Policies, runID string) (decisions map[string][]domain.LinkDecision, status map[domain.LinkID]domain.LinkStatus, target domain.Asset, join, leave []domain.AlbumChange, placements map[string][]domain.Placement) {
 	modes, names := map[string]domain.Mode{}, []string(nil)
 	for _, r := range remotes {
 		modes[r.Name], names = r.Mode, append(names, r.Name)
@@ -69,7 +71,7 @@ func DecideLayout(now domain.Asset, found, linked bool, objects map[string]domai
 		_, in := objects[r.Name]
 		return in && r.Mode != domain.ModeUploadOnly
 	}) {
-		first.Join, first.Leave = DecideFirstPlacement(now, albums, p.MultiAlbum)
+		first.Join, first.Leave = DecideFirstPlacement(now, events, p.MultiAlbum)
 	}
 	target, join, leave = DecideTarget(now, first, fate, links, priority, runID)
 	placements = map[string][]domain.Placement{}

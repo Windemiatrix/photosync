@@ -27,16 +27,11 @@ var (
 	ErrMode = errors.New("pathtemplate: the template does not fit the mode")
 )
 
-// EventPath returns the value of {event_path} for a file of asset placed in
-// album: the directory of the pair of album among pairs, the pairs of one
-// remote root, else the directory that layout.DirFor gives album with p,
-// and for an album with a zero ID the day folder of asset that layout.DayDir
-// gives.
-// The result is relative to the remote root and never empty.
-func EventPath(asset domain.Asset, album domain.Album, pairs []domain.AlbumPair, p domain.Policies) string {
-	if album.ID == 0 {
-		return layout.DayDir(asset)
-	}
+// EventPath returns the value of {event_path} for a file placed in album: the
+// directory of the pair of album among pairs, the pairs of one remote root,
+// else the directory that layout.DirFor gives album with p, "" when it gives
+// none, which Render refuses. The result is relative to the remote root.
+func EventPath(album domain.Album, pairs []domain.AlbumPair, p domain.Policies) string {
 	if i := slices.IndexFunc(pairs, func(x domain.AlbumPair) bool { return x.AlbumID == album.ID }); i >= 0 {
 		return pairs[i].DirPath
 	}
