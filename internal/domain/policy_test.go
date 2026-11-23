@@ -47,15 +47,23 @@ func TestDefaultPolicies(t *testing.T) {
 		EditedDirs:         []string{"отредактировано", "edited"},
 		SettleMinutes:      10,
 		QuarantineKeepDays: 90,
-		NestedSeparator:    " / ",
+		Templates: domain.Templates{
+			Photos: []string{"{YYYY}", "{MM}/{DD} {Description}"},
+			Cloud:  []string{"{YYYY}", "{MM}-{DD} - {Description}"},
+		},
+		NestedSeparator: " / ",
 	}
 	got := domain.DefaultPolicies()
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("DefaultPolicies() = %+v, want %+v", got, want)
 	}
-	got.EditedDirs[0] = "changed"
-	if next := domain.DefaultPolicies(); next.EditedDirs[0] != "отредактировано" {
+	got.EditedDirs[0], got.Templates.Photos[0], got.Templates.Cloud[0] = "changed", "changed", "changed"
+	next := domain.DefaultPolicies()
+	if next.EditedDirs[0] != "отредактировано" {
 		t.Errorf("DefaultPolicies().EditedDirs[0] = %q after a change to an earlier result, want %q", next.EditedDirs[0], "отредактировано")
+	}
+	if next.Templates.Photos[0] != "{YYYY}" || next.Templates.Cloud[0] != "{YYYY}" {
+		t.Errorf("DefaultPolicies().Templates = %q after a change to an earlier result, want new slices", next.Templates)
 	}
 }
 
@@ -138,6 +146,7 @@ func TestPoliciesValidate(t *testing.T) {
 			p.AlbumsForPersonal = false
 			p.RemotePriority = []string{"", "a", "a"}
 			p.EditedDirs = []string{"", "a/b"}
+			p.Templates = domain.Templates{Photos: []string{""}, Names: "fr"}
 		}, nil},
 		{"every key wrong", func(p *domain.Policies) {
 			*p = domain.Policies{
