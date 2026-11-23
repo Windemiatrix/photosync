@@ -306,7 +306,7 @@ func TestDecideLayout(t *testing.T) {
 			byRemote{"alpha": od(nil, nil, dec(a1, moved, unchanged, moveFile, "R-LINK-04"))}, links(a1), config(alpha), noAlbums,
 			decided{"alpha": decs(dec(a1, moved, unchanged, moveFile, "R-LINK-04"))}, statuses{1: active}, ms(m(trip, "run-1")), personal, nil, nil,
 			placed{"alpha": pls(pl(moveFile, a1, trip, "R-OBJECT-05"))}},
-		{"a Join of an album in Recently Deleted or gone from the library is dropped", asset(holidays), true, true,
+		{"a Join of an album in Recently Deleted or gone from the library is dropped, and the files that it leaves in no event go to quarantine", asset(holidays), true, true,
 			byRemote{
 				"alpha": od(ch(old, "R-LINK-05"), ch(holidays, "R-LINK-05"), dec(a1, unchanged, moved, moveAsset, "R-LINK-05")),
 				"beta":  od(ch(gone, "R-LINK-05"), ch(holidays, "R-LINK-05"), dec(b1, unchanged, moved, moveAsset, "R-LINK-05")),
@@ -316,7 +316,8 @@ func TestDecideLayout(t *testing.T) {
 				"alpha": decs(dec(a1, unchanged, moved, moveAsset, "R-LINK-05")),
 				"beta":  decs(dec(b1, unchanged, moved, moveAsset, "R-LINK-05")),
 			},
-			statuses{1: active, 3: active}, nil, personal, nil, ch(holidays, "R-LINK-05"), nil},
+			statuses{1: active, 3: active}, nil, personal, nil, ch(holidays, "R-LINK-05"),
+			placed{"alpha": pls(pl(toQuarantine, a1Old, 0, "R-OBJECT-04")), "beta": pls(pl(toQuarantine, b1Gone, 0, "R-OBJECT-04"))}},
 		{"a Leave of an album in Recently Deleted is dropped", asset(holidays, old), true, true,
 			byRemote{"alpha": od(nil, ch(old, "R-OBJECT-02"), kept(a1), dec(inOld, moved, deleted, forget, "R-OBJECT-02"))},
 			links(a1), config(alpha), quarantine,

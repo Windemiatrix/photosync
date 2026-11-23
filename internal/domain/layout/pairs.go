@@ -34,7 +34,7 @@ func FirstPairs(albums []domain.Album, pairs []domain.AlbumPair, dirs map[string
 		made = append(made, domain.AlbumPair{AlbumID: id, DirPath: dir, CreatedBy: domain.OriginRemote})
 	}
 	for _, a := range open {
-		if dir := DirFor(a, p); dirs[dir] && !taken[dir] {
+		if dir := DirFor(a, p); dir != "" && dirs[dir] && !taken[dir] {
 			add(a.ID, dir)
 		}
 	}

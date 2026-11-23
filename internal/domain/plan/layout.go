@@ -16,8 +16,9 @@ import (
 // pairs that MovePairs moves as they were, that the mode of the remote runs,
 // a remote without any being absent. now and found are as DecideRemoteLinks
 // takes them, links are its current for every remote with the links that
-// matching makes in the run, and linked reports that the asset has a link in
-// some remote and status, in the state or made by matching. objects are, by
+// matching makes in the run, and linked reports that the asset is not new to
+// the sync: the state holds it or a link of it in some remote and status, or
+// matching makes one. objects are, by
 // remote, what DecideRemoteObject gives with in true for each remote where
 // the asset takes part in the plan, a remote with none of its files too, with
 // the albums that matching makes the asset join added to Join; the decisions
@@ -30,9 +31,9 @@ import (
 // An asset that is gone, that IsNew does not hold for, or that a decision
 // still deletes with ActionDeleteAsset is not laid out: target is now with
 // its albums in the order of AlbumID, and there are no join, leave or
-// placements. Otherwise an asset without a link gets the first placement
-// that DecideFirstPlacement gives under p.MultiAlbum when a remote of
-// objects is not upload-only, a remote for which StatusFrozen holds on the
+// placements. Otherwise an asset for which linked is false gets the first
+// placement that DecideFirstPlacement gives under p.MultiAlbum when a remote
+// of objects is not upload-only, a remote for which StatusFrozen holds on the
 // statuses after the run gets no placements, and the uploads of a remote
 // with a decision by R-LINK-10, which holds no file of the asset, take that
 // rule. The inputs are not changed.

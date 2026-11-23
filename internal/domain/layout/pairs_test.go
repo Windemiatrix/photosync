@@ -71,6 +71,8 @@ func TestFirstPairs(t *testing.T) {
 			[]domain.AlbumPair{pair(8, "2024/05-01")}},
 		{r10, "a thematic album takes no directory by name", []domain.Album{pets}, nil, set("Albums/Pets", "Pets"), nil,
 			nil},
+		{r10, "an album without a directory takes none by name, though dirs hold an empty name", []domain.Album{pets}, nil, set(""), nil,
+			nil},
 		{r10, "a folder that the template does not cover takes none", []domain.Album{trips}, nil, set("2024/Trips"), nil,
 			nil},
 		{r10, "the name compares exactly", []domain.Album{holidays}, nil, set("2024/05-01 - holidays"), nil,
@@ -240,7 +242,7 @@ func TestFirstPairsProperties(t *testing.T) {
 				if g.CreatedBy != domain.OriginRemote || g.Remote != "" || g.Root != "" {
 					t.Fatalf("%s: FirstPairs = %+v: %+v, want CreatedBy %q and no Remote or Root", show(w), got, g, domain.OriginRemote)
 				}
-				byName := g.DirPath == layout.DirFor(a, p) && w.dirs[g.DirPath]
+				byName := g.DirPath != "" && g.DirPath == layout.DirFor(a, p) && w.dirs[g.DirPath]
 				if !byName && !holdsMost(w.files[g.AlbumID], g.DirPath) {
 					t.Fatalf("%s: FirstPairs = %+v: %+v is neither the name of the album nor holds most of its files", show(w), got, g)
 				}

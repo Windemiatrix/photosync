@@ -46,6 +46,7 @@ func TestDirFor(t *testing.T) {
 		{"a description with slashes and dots stays one level", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 ../a/.."}, "2024/05-01 - ..∕a∕.．"},
 		{"a cloud level that sanitizing changes gives none", dots, domain.Album{FolderTitles: in("2024"), Title: "05/01 x"}, ""},
 		{"a description of control characters gives none", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 \x00"}, ""},
+		{"a cut at 255 bytes that takes the whole description gives none", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 a" + strings.Repeat(string(rune(0x301)), 200)}, ""},
 		{"the text before an empty description", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 "}, ""},
 		{"an album without a date", std, domain.Album{FolderTitles: in("2024"), Title: "Holidays"}, ""},
 		{"an album deeper than the template", std, domain.Album{FolderTitles: in("2024", "Trips"), Title: "05/01 Kazan"}, ""},
