@@ -296,6 +296,13 @@ func TestComponentOps(t *testing.T) {
 			nil, nil, filesOf(photo),
 			[]domain.Op{upload(2, domain.RoleLiveVideo, movie, personal, trip+"/IMG_0001.mov", 11, "R-COMPONENT-01")},
 			nil},
+		{"the video goes once beside the copy of the photo, and not again beside the copy of a RAW file that matching links beside the photo", group,
+			[]domain.Op{dup(photo, personal, trip+"/IMG_0001.HEIC", 11, "R-OBJECT-03"), dup(raw, personal, trip+"/IMG_0001.DNG", 11, "R-OBJECT-03")},
+			map[domain.LinkID][]domain.LinkDecision{1: {dec(video, unchanged, domain.ActionNone, "")}},
+			map[domain.LinkID][]domain.Placement{1: {place(domain.ActionCopyFile, video, 11, "R-OBJECT-03")}},
+			nil, filesOf(photo, video),
+			[]domain.Op{dup(video, personal, trip+"/IMG_0001.mov", 11, "R-OBJECT-03")},
+			nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

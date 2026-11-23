@@ -71,6 +71,7 @@ func TestFileOps(t *testing.T) {
 		{AlbumID: 11, Remote: "beta", Root: personal, DirPath: "Elsewhere/Trip", CreatedBy: domain.OriginRemote},
 		{AlbumID: 11, Remote: "alpha", Root: shared, DirPath: "Shared/Trip", CreatedBy: domain.OriginRemote},
 		{AlbumID: 12, Remote: "alpha", Root: personal, DirPath: party, CreatedBy: domain.OriginRemote},
+		{AlbumID: 13, Remote: "alpha", Root: personal, DirPath: cats, CreatedBy: domain.OriginRemote},
 	}
 	link := func(id domain.LinkID, root domain.LibraryKind, at string, album domain.AlbumID, md5 string) domain.Link {
 		return domain.Link{
