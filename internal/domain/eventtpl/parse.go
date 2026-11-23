@@ -63,7 +63,9 @@ var fields = map[string]string{
 // Parse returns the template of levels, one string per level as the
 // configuration writes them, for side. A name between braces is a field,
 // spelled with its case, and the rest is text. The error is an *Error, with
-// the zero Template, for the first unknown field by level and part.
+// the zero Template: for the first unknown field by level and part, else for
+// the first level or part that breaks a rule of the errors of this package,
+// else for the first of the year, month, day and description that it lacks.
 func Parse(levels []string, side Side) (Template, error) {
 	t := Template{Levels: make([][]Part, len(levels))}
 	for i, s := range levels {
@@ -89,6 +91,9 @@ func Parse(levels []string, side Side) (Template, error) {
 			}
 			s = after
 		}
+	}
+	if err := check(t, side); err != nil {
+		return Template{}, err
 	}
 	return t, nil
 }

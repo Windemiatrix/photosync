@@ -142,8 +142,8 @@ func FuzzParse(f *testing.F) {
 		got, err := eventtpl.Parse(levels, side)
 		var e *eventtpl.Error
 		switch {
-		case err != nil && (!errors.As(err, &e) || e.Side != side || e.Level < 1 || e.Level > len(levels) || e.Err == nil || !errors.Is(err, e.Err)):
-			t.Fatalf("Parse(%q, %s) error = %+v; want an *eventtpl.Error of side %s at a level from 1 to %d", levels, side, err, side, len(levels))
+		case err != nil && (!errors.As(err, &e) || e.Side != side || e.Level < 0 || e.Level > len(levels) || e.Err == nil || !errors.Is(err, e.Err)):
+			t.Fatalf("Parse(%q, %s) error = %+v; want an *eventtpl.Error of side %s at a level from 0 to %d", levels, side, err, side, len(levels))
 		case err != nil && len(got.Levels) > 0:
 			t.Fatalf("Parse(%q, %s) = %q with an error; want the zero Template", levels, side, got.Levels)
 		case err == nil && !slices.Equal(spell(got), levels):
