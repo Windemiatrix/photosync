@@ -59,6 +59,8 @@ func TestDecideComponents(t *testing.T) {
 		e.MD5 = "f0"
 		return e
 	}
+	renewed := raw
+	renewed.MD5 = "f0"
 	place := func(l domain.Link, p string) domain.Link {
 		l.Path = p
 		return l
@@ -106,7 +108,7 @@ func TestDecideComponents(t *testing.T) {
 		}
 		for _, id := range slices.Sorted(maps.Keys(r.components)) {
 			for _, d := range r.components[id] {
-				out = append(out, fmt.Sprintf("%d: %d %s/%s %s %s", id, d.Link.ID, d.ICloud, d.Remote, d.Action, d.Rule))
+				out = append(out, fmt.Sprintf("%d: %d %s %s/%s %s %s", id, d.Link.ID, d.Link.MD5, d.ICloud, d.Remote, d.Action, d.Rule))
 			}
 		}
 		for _, id := range slices.Sorted(maps.Keys(r.copies)) {
@@ -205,6 +207,9 @@ func TestDecideComponents(t *testing.T) {
 			result{fated{1: nothing}, followed{1: decs(dec(v, unchanged, replaced, takeBase, "R-MODE-01"))}, nil, statuses{2: active}}},
 		{"upload-only: a video deleted on its own is uploaded again", still, steady, nil, links(m, v), found{1: at(m)}, upOnly, quarantine,
 			result{fated{1: nothing}, followed{1: decs(dec(v, unchanged, deleted, upload, "R-COMPONENT-01"))}, nil, statuses{2: active}}},
+		{"upload-only: a RAW file with new content follows the photo that the plan moves, with that content", planned, steady, toTrip, links(m, raw),
+			found{1: at(m), 3: edited(raw)}, upOnly, quarantine,
+			result{fated{1: moveFile}, followed{1: decs(dec(renewed, moved, replaced, moveFile, "R-COMPONENT-04"))}, nil, statuses{3: active}}},
 		{"download-only: a video moved away on its own is taken into the base where it lies", still, steady, nil, links(m, v),
 			found{1: at(m), 2: to(v, personal, tripDir+"IMG_0001.MOV")}, downOnly, quarantine,
 			result{fated{1: nothing}, followed{1: decs(dec(v, unchanged, moved, takeBase, "R-MODE-02"))}, nil, statuses{2: active}}},
