@@ -51,7 +51,6 @@ func TestDefaultPolicies(t *testing.T) {
 			Photos: []string{"{YYYY}", "{MM}/{DD} {Description}"},
 			Cloud:  []string{"{YYYY}", "{MM}-{DD} - {Description}"},
 		},
-		NestedSeparator: " / ",
 	}
 	got := domain.DefaultPolicies()
 	if !reflect.DeepEqual(got, want) {
@@ -128,19 +127,6 @@ func TestPoliciesValidate(t *testing.T) {
 			[]domain.PolicyError{{Key: "quarantine_keep_days", Value: "0"}}},
 		{"quarantine_keep_days=-1", func(p *domain.Policies) { p.QuarantineKeepDays = -1 },
 			[]domain.PolicyError{{Key: "quarantine_keep_days", Value: "-1"}}},
-		{"untitled_event Latin", func(p *domain.Policies) { p.UntitledEvent = "Untitled" }, nil},
-		{"untitled_event Cyrillic", func(p *domain.Policies) { p.UntitledEvent = "Без названия" }, nil},
-		// Whether a name suits the cloud is for package naming, which imports
-		// domain and so cannot be called from here.
-		{"untitled_event a/b", func(p *domain.Policies) { p.UntitledEvent = "a/b" }, nil},
-		{"untitled_event empty", func(p *domain.Policies) { p.UntitledEvent = "" },
-			[]domain.PolicyError{{Key: "untitled_event"}}},
-		{"nested_separator \" / \"", func(p *domain.Policies) { p.NestedSeparator = " / " }, nil},
-		{"nested_separator empty", func(p *domain.Policies) { p.NestedSeparator = "" },
-			[]domain.PolicyError{{Key: "nested_separator"}}},
-		{"albums_root Cyrillic", func(p *domain.Policies) { p.AlbumsRoot = "Альбомы" }, nil},
-		{"albums_root empty", func(p *domain.Policies) { p.AlbumsRoot = "" },
-			[]domain.PolicyError{{Key: "albums_root"}}},
 		{"unchecked fields", func(p *domain.Policies) {
 			p.DeleteEmptyAlbums = true
 			p.AlbumsForPersonal = false
@@ -165,9 +151,6 @@ func TestPoliciesValidate(t *testing.T) {
 			{Key: "burst", Value: "selected"},
 			{Key: "settle_minutes", Value: "-10"},
 			{Key: "quarantine_keep_days", Value: "-5"},
-			{Key: "untitled_event"},
-			{Key: "nested_separator"},
-			{Key: "albums_root"},
 		}},
 	}
 	for _, c := range cases {
@@ -178,8 +161,7 @@ func TestPoliciesValidate(t *testing.T) {
 
 	// A configuration starts from the defaults, so Validate must take the
 	// result of DefaultPolicies as it is: a value receiver.
-	checkPolicyErrors(t, "DefaultPolicies()", domain.DefaultPolicies().Validate(),
-		domain.PolicyError{Key: "deletes"}, domain.PolicyError{Key: "untitled_event"}, domain.PolicyError{Key: "albums_root"})
+	checkPolicyErrors(t, "DefaultPolicies()", domain.DefaultPolicies().Validate(), domain.PolicyError{Key: "deletes"})
 }
 
 // The text goes to the log as it is, so it names its package like every
@@ -206,9 +188,6 @@ func validPolicies() domain.Policies {
 		Burst:              "selected_only",
 		SettleMinutes:      10,
 		QuarantineKeepDays: 30,
-		UntitledEvent:      "Untitled",
-		NestedSeparator:    " > ",
-		AlbumsRoot:         "Albums",
 	}
 }
 

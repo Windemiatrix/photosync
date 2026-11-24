@@ -690,7 +690,7 @@ func TestSimulateConverges(t *testing.T) {
 	}
 	alpha, beta, alphaUp := spec("alpha", domain.ModeTwoWay), spec("beta", domain.ModeTwoWay), spec("alpha", domain.ModeUploadOnly)
 	p := domain.DefaultPolicies()
-	p.Deletes, p.UntitledEvent, p.AlbumsRoot = domain.DeletesQuarantine, "Untitled", "Albums"
+	p.Deletes = domain.DeletesQuarantine
 	propagate, ask, edits, own := p, p, p, p
 	propagate.Deletes, ask.Conflict, edits.EditedFiles = domain.DeletesPropagate, domain.ConflictAsk, domain.EditedQuarantine
 	own.Templates.Cloud = []string{"{YYYY}", "{MM}-{DD} {Description}"}

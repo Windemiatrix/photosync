@@ -112,15 +112,6 @@ type Policies struct {
 	// cloud root; a sync deletes it for good once it has stayed longer.
 	QuarantineKeepDays int
 	Templates          Templates
-	// UntitledEvent stands for the missing title in the cloud directory of an
-	// event album without one: "MM-DD - " followed by it.
-	UntitledEvent string
-	// NestedSeparator divides an album title into the levels of its cloud
-	// directory.
-	NestedSeparator string
-	// AlbumsRoot is the top-level cloud directory of the albums and folders
-	// outside the year folders.
-	AlbumsRoot string
 }
 
 // Templates lay events out: Photos names the folders and the album of an
@@ -135,9 +126,9 @@ type Templates struct {
 
 // DefaultPolicies returns the policies for the keys that a configuration
 // leaves out, with new slices on each call. Deletes stays empty because the
-// user must choose it; UntitledEvent, AlbumsRoot and Templates.Names because
-// setup sets them by the language that the user chooses; and RemotePriority
-// because it is the order of the remotes in the configuration.
+// user must choose it; Templates.Names because setup sets it by the language
+// that the user chooses; and RemotePriority because it is the order of the
+// remotes in the configuration.
 func DefaultPolicies() Policies {
 	return Policies{
 		Conflict:           ConflictRemoteWins,
@@ -155,19 +146,16 @@ func DefaultPolicies() Policies {
 			Photos: []string{"{YYYY}", "{MM}/{DD} {Description}"},
 			Cloud:  []string{"{YYYY}", "{MM}-{DD} - {Description}"},
 		},
-		NestedSeparator: " / ",
 	}
 }
 
 // Validate returns nil, or an errors.Join of one *PolicyError for each key
 // with a value that photosync does not take, in the order of the fields. An
-// enumeration takes only its constants, spelled exactly; Deletes,
-// UntitledEvent, NestedSeparator and AlbumsRoot must not be empty,
-// SettleMinutes must not be negative, and QuarantineKeepDays must be above
-// zero. The caller checks the rest: RemotePriority against its remotes,
-// EditedDirs, UntitledEvent and AlbumsRoot as cloud names with
-// naming.IsValidPart, NestedSeparator against the day form of an event
-// title, and Templates with eventtpl.Validate.
+// enumeration takes only its constants, spelled exactly; Deletes must not be
+// empty, SettleMinutes must not be negative, and QuarantineKeepDays must be
+// above zero. The caller checks the rest: RemotePriority against its
+// remotes, EditedDirs as cloud names with naming.IsValidPart, and Templates
+// with eventtpl.Validate.
 func (p Policies) Validate() error {
 	var errs []error
 	errs = checkPolicy(errs, "conflict", p.Conflict, ConflictRemoteWins, ConflictICloudWins, ConflictAsk, ConflictSkip)
@@ -183,15 +171,6 @@ func (p Policies) Validate() error {
 	}
 	if p.QuarantineKeepDays < 1 {
 		errs = append(errs, &PolicyError{Key: "quarantine_keep_days", Value: fmt.Sprint(p.QuarantineKeepDays)})
-	}
-	if p.UntitledEvent == "" {
-		errs = append(errs, &PolicyError{Key: "untitled_event"})
-	}
-	if p.NestedSeparator == "" {
-		errs = append(errs, &PolicyError{Key: "nested_separator"})
-	}
-	if p.AlbumsRoot == "" {
-		errs = append(errs, &PolicyError{Key: "albums_root"})
 	}
 	return errors.Join(errs...)
 }

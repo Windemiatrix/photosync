@@ -68,7 +68,6 @@ func parse(t *testing.T, s string) *template.Template {
 func TestEventPath(t *testing.T) {
 	t.Parallel()
 	p := domain.DefaultPolicies()
-	p.UntitledEvent, p.AlbumsRoot = "Untitled", "Albums"
 	event := domain.Album{ID: 7, FolderTitles: []string{"2024"}, Title: "05/01 Sea"}
 	pairs := []domain.AlbumPair{
 		{AlbumID: 3, DirPath: "2024/05-01 - Hills"},
