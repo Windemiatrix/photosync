@@ -27,17 +27,22 @@ type Names struct {
 }
 
 // NewNames returns the names of remote: the path of every entry of scan, its
-// whole listing with the directories and the directory .photosync, and the
-// QuarantinePath of every link of remote among links. The inputs are not
-// changed.
+// whole listing with the directories and the directory .photosync, the
+// QuarantinePath of every link of remote among links and the Path of each of
+// them that is detached. The inputs are not changed.
 func NewNames(remote string, scan []domain.RemoteEntry, links []domain.Link) *Names {
 	n := &Names{remote: remote, keys: map[[2]string]map[string]bool{}, paths: map[domain.LibraryKind]map[string]bool{}}
 	for _, e := range scan {
 		n.take(e.Root, e.Path)
 	}
 	for _, l := range links {
-		if l.Remote == remote {
-			n.take(l.Root, l.QuarantinePath)
+		if l.Remote != remote {
+			continue
+		}
+		n.take(l.Root, l.QuarantinePath)
+		// A detached link waits for the user to bring its file back to its path.
+		if l.Status == domain.StatusDetached {
+			n.take(l.Root, l.Path)
 		}
 	}
 	return n
