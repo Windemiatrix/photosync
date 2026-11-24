@@ -329,11 +329,17 @@ func checkPlan(t rapid.TB, in plan.Input, p domain.Plan) {
 		}
 		count(l)
 	}
+	moved := map[domain.LinkID]bool{}
+	for _, o := range p.Ops {
+		for _, l := range o.Links {
+			moved[l.ID] = moved[l.ID] || o.Kind == domain.OpMove
+		}
+	}
 	for _, o := range p.Ops {
 		for _, l := range o.Links {
 			// An import that replaces an asset takes the new content of a link
 			// that a move of the same run takes to its new place.
-			if o.Kind != domain.OpImport || !known[l.ID] {
+			if o.Kind != domain.OpImport || !known[l.ID] || !moved[l.ID] {
 				count(l)
 			}
 		}
@@ -364,6 +370,7 @@ func checkPlan(t rapid.TB, in plan.Input, p domain.Plan) {
 			t.Fatalf("the operation %+v goes against the modes of %+v", o, in.Remotes)
 		case o.Remote != "" && (!clean(o.Src) || !clean(o.Dst)),
 			(o.Kind == domain.OpMove || o.Kind == domain.OpQuarantine || o.Kind == domain.OpCopy) && (o.Root == "" || o.Src == ""),
+			(o.Kind == domain.OpMove || o.Kind == domain.OpCopy || o.Kind == domain.OpPut) && (o.DstRoot == "" || o.Dst == ""),
 			o.Kind == domain.OpQuarantine && (o.DstRoot != o.Root || !strings.HasPrefix(o.Dst, today)),
 			o.Kind == domain.OpExpire && (!kept || undated != nil):
 			t.Fatalf("the operation %+v leaves its root or the quarantine of %s", o, today)
@@ -375,7 +382,8 @@ func checkPlan(t rapid.TB, in plan.Input, p domain.Plan) {
 // INV-3, to one directory for each album pair, to components beside their
 // main files, and to a state that the next run reconciles to itself. An
 // asset that waits for the user in a remote keeps its links there as they
-// were; so does a component whose name was taken, a known limit of the plan.
+// were; so does a component of an asset whose main file lies in a directory
+// where the plan found a name taken, a known limit of the plan.
 func checkApplied(t rapid.TB, p domain.Plan, next plan.Input) {
 	t.Helper()
 	entries, modes, waits := map[domain.Link]domain.RemoteEntry{}, map[string]domain.Mode{}, map[domain.Conflict]bool{}
@@ -390,7 +398,15 @@ func checkApplied(t rapid.TB, p domain.Plan, next plan.Input) {
 	for _, c := range next.State.Conflicts {
 		waits[domain.Conflict{AssetID: c.AssetID, Remote: c.Remote}] = true
 	}
-	taken := slices.ContainsFunc(p.Notices, func(n domain.Notice) bool { return n.Code == "plan.path_taken" })
+	taken := map[domain.Link]bool{}
+	for _, n := range p.Notices {
+		if n.Code == "plan.path_taken" {
+			taken[domain.Link{Remote: n.Params[0], Root: domain.LibraryKind(n.Params[1]), Path: path.Dir(n.Params[2])}] = true
+		}
+	}
+	mainOf := func(m, l domain.Link) bool {
+		return (m.Role == domain.RoleOriginal || m.Role == domain.RoleSource) && m.Status == domain.StatusActive && m.AssetID == l.AssetID && m.Remote == l.Remote
+	}
 	places := map[domain.Link]bool{}
 	for _, l := range next.State.Links {
 		at := domain.Link{Remote: l.Remote, Root: l.Root, Path: l.Path}
@@ -409,12 +425,14 @@ func checkApplied(t rapid.TB, p domain.Plan, next plan.Input) {
 		if !ok || e.Size != l.Size || l.MD5 != "" && l.MD5 != e.MD5 || l.SHA256 != "" && l.SHA256 != e.SHA256 {
 			t.Fatalf("the active link %+v has the file %+v (listed: %t)", l, e, ok)
 		}
-		// A download-only remote leaves a component where it lies when the user
-		// moves its main file: the plan moves nothing in that cloud.
-		if (l.Role == domain.RoleLiveVideo || l.Role == domain.RoleRAWPair) && modes[l.Remote] != domain.ModeDownloadOnly && !taken &&
+		// The plan moves nothing in a download-only cloud, so a component stays
+		// where it lies when the user moves its main file; the check skips such
+		// remotes whole.
+		if (l.Role == domain.RoleLiveVideo || l.Role == domain.RoleRAWPair) && modes[l.Remote] != domain.ModeDownloadOnly &&
 			!slices.ContainsFunc(next.State.Links, func(m domain.Link) bool {
-				return (m.Role == domain.RoleOriginal || m.Role == domain.RoleSource) && m.Status == domain.StatusActive && plan.ComponentBeside(m, l)
-			}) {
+				return mainOf(m, l) && taken[domain.Link{Remote: m.Remote, Root: m.Root, Path: path.Dir(m.Path)}]
+			}) &&
+			!slices.ContainsFunc(next.State.Links, func(m domain.Link) bool { return mainOf(m, l) && plan.ComponentBeside(m, l) }) {
 			t.Fatalf("the component %+v lies beside no main file of its asset:\n%+v", l, next.State.Links)
 		}
 	}
@@ -578,7 +596,7 @@ func TestPlanChecksNotVacuous(t *testing.T) {
 	}{
 		{"a link that a record or an operation changes", 50}, {"two operations", 33}, {"an operation that removes for good", 4},
 		{"an operation of an upload-only remote", 15}, {"an operation of a download-only remote", 11}, {"a quarantine", 22},
-		{"a move or a copy", 7}, {"a Live Photo video or RAW file linked after the run", 26},
+		{"a move or a copy", 7}, {"a Live Photo video or RAW file linked after the run", 17},
 	}
 	met := make([]int, len(whats))
 	for seed := range cases {
@@ -601,8 +619,9 @@ func TestPlanChecksNotVacuous(t *testing.T) {
 				len(p.Ops) > 0 && in.Remotes[0].Mode == domain.ModeDownloadOnly,
 				has(domain.OpQuarantine),
 				has(domain.OpMove, domain.OpCopy),
-				slices.ContainsFunc(next.State.Links, func(l domain.Link) bool {
-					return l.Status == domain.StatusActive && (l.Role == domain.RoleLiveVideo || l.Role == domain.RoleRAWPair)
+				in.Remotes[0].Mode != domain.ModeDownloadOnly && slices.ContainsFunc(next.State.Links, func(l domain.Link) bool {
+					return l.Status == domain.StatusActive && (l.Role == domain.RoleLiveVideo || l.Role == domain.RoleRAWPair) &&
+						!slices.ContainsFunc(next.State.Conflicts, func(c domain.Conflict) bool { return c.AssetID == l.AssetID && c.Remote == l.Remote })
 				}),
 			} {
 				seen[i] = seen[i] || ok
