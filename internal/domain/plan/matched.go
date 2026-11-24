@@ -39,9 +39,10 @@ import (
 // are not changed.
 //
 // The assets for which IsNew holds under p, that have no link in r that is
-// not active and that known, the assets of the state, lacks or that have a
-// link in some remote meet the candidates first, and the assets for which
-// Syncs does not hold under p meet those that the first leave.
+// not active, and that have a link in some remote, are in an album or are
+// not in known, the assets of the state, meet the candidates first, and the
+// assets for which Syncs does not hold under p meet those that the first
+// leave.
 func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.LinkID]domain.RemoteEntry, r domain.RemoteSpec, fresh []domain.RemoteEntry, last domain.LinkID, p domain.Policies, known []domain.Asset) (decisions []domain.LinkDecision, left []match.Candidate, notices []domain.Notice) {
 	cands, unknown := match.Group(fresh)
 	for _, e := range unknown {
@@ -82,10 +83,14 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 		}
 		decisions = append(decisions, domain.LinkDecision{Link: l, ICloud: domain.ChangeNew, Remote: domain.ChangeNew, Action: domain.ActionLink, Rule: rule})
 	}
-	// An asset that the sync linked before and that lost every link took
-	// that loss from a run, which imports the file; a limit or a stop may
-	// leave the import to a later run, which must not link the file instead.
-	ready := func(a domain.Asset) bool { return IsNew(a, p) && !out[a.ID] && (anywhere[a.ID] || !synced[a.ID]) }
+	// An asset that the sync linked before and that lost every link outside
+	// any album took that loss from a run, which imports the file; a limit
+	// or a stop may leave the import to a later run, which must not link the
+	// file and so put the asset back into the album of its folder. One in an
+	// album may still lack the link of a file that a stopped run put for it.
+	ready := func(a domain.Asset) bool {
+		return IsNew(a, p) && !out[a.ID] && (anywhere[a.ID] || !synced[a.ID] || len(a.Memberships) > 0)
+	}
 	take := func(a domain.Asset, c match.Candidate, level domain.MatchLevel, rule string) {
 		if !ready(a) {
 			return
