@@ -29,7 +29,8 @@ type Names struct {
 // NewNames returns the names of remote: the path of every entry of scan, its
 // whole listing with the directories and the directory .photosync, the
 // QuarantinePath of every link of remote among links and the Path of each of
-// them that is detached. The inputs are not changed.
+// them that is detached or of the original or the source role. The inputs are
+// not changed.
 func NewNames(remote string, scan []domain.RemoteEntry, links []domain.Link) *Names {
 	n := &Names{remote: remote, keys: map[[2]string]map[string]bool{}, paths: map[domain.LibraryKind]map[string]bool{}}
 	for _, e := range scan {
@@ -40,8 +41,9 @@ func NewNames(remote string, scan []domain.RemoteEntry, links []domain.Link) *Na
 			continue
 		}
 		n.take(l.Root, l.QuarantinePath)
-		// A detached link waits for the user to bring its file back to its path.
-		if l.Status == domain.StatusDetached {
+		// Until a run clears a link, a file of another asset at its path would
+		// pass for the file of the link, as one that the user brought back.
+		if l.Status == domain.StatusDetached || l.Role == domain.RoleOriginal || l.Role == domain.RoleSource {
 			n.take(l.Root, l.Path)
 		}
 	}
