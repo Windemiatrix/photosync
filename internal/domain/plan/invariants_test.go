@@ -121,11 +121,14 @@ func settles(t rapid.TB, in plan.Input) {
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
+	checkPlan(t, in, p)
 	next := after(in, p, delta)
+	checkApplied(t, p, next)
 	second, again, err := plan.Build(next)
 	if err != nil {
 		t.Fatalf("the second Build: %v", err)
 	}
+	checkPlan(t, next, second)
 	end := after(next, second, again)
 	if componentQuarantineCleared(second, next.State) {
 		third, _, err := plan.Build(end)
@@ -207,6 +210,7 @@ func limited(t rapid.TB, in plan.Input) {
 		if err != nil {
 			t.Fatalf("Build of run %d: %v", run, err)
 		}
+		checkPlan(t, cur, next)
 		if len(next.Ops)+len(next.Links)+len(next.Albums)+len(next.Pairs) == 0 {
 			break
 		}
@@ -296,12 +300,183 @@ func componentQuarantineCleared(second domain.Plan, after domain.State) bool {
 	return true
 }
 
+// checkPlan holds a plan to what package domain promises of every plan: a
+// link changed once, the operations in order, nothing removed for good but by
+// a delete under propagate, an expire or an asset_delete by R-STATUS-06
+// (INV-2), nothing that the mode of its remote does not run (INV-5), and no
+// path out of its root or out of the quarantine of the day (INV-20).
+func checkPlan(t rapid.TB, in plan.Input, p domain.Plan) {
+	t.Helper()
+	known, modes := map[domain.LinkID]bool{}, map[string]domain.Mode{}
+	for _, l := range in.State.Links {
+		known[l.ID] = true
+	}
+	for _, r := range in.Remotes {
+		modes[r.Name] = r.Mode
+	}
+	upOnly := !slices.ContainsFunc(in.Remotes, func(r domain.RemoteSpec) bool { return r.Mode != domain.ModeUploadOnly })
+	times := map[domain.Link]int{}
+	count := func(l domain.Link) {
+		if known[l.ID] {
+			times[domain.Link{ID: l.ID}]++
+		} else {
+			times[domain.Link{Remote: l.Remote, Root: l.Root, Path: l.Path}]++
+		}
+	}
+	for _, l := range p.Links {
+		if l.ID == 0 {
+			t.Fatalf("the plan records a link without an ID:\n%+v", p)
+		}
+		count(l)
+	}
+	moved := map[domain.LinkID]bool{}
+	for _, o := range p.Ops {
+		for _, l := range o.Links {
+			moved[l.ID] = moved[l.ID] || o.Kind == domain.OpMove
+		}
+	}
+	for _, o := range p.Ops {
+		for _, l := range o.Links {
+			// An import that replaces an asset takes the new content of a link
+			// that a move of the same run takes to its new place.
+			if o.Kind != domain.OpImport || !known[l.ID] || !moved[l.ID] {
+				count(l)
+			}
+		}
+	}
+	for l, n := range times {
+		if n > 1 {
+			t.Fatalf("the plan changes the link %+v %d times:\n%+v", l, n, p)
+		}
+	}
+	clean := func(s string) bool {
+		return s == "" || path.Clean(s) == s && !path.IsAbs(s) && !slices.Contains(strings.Split(s, "/"), "..")
+	}
+	today := ".photosync/quarantine/" + in.Now.UTC().Format(time.DateOnly) + "/"
+	for i, o := range p.Ops {
+		mode := modes[o.Remote]
+		rest, kept := strings.CutPrefix(o.Src, ".photosync/quarantine/")
+		day, _, _ := strings.Cut(rest, "/")
+		_, undated := time.Parse(time.DateOnly, day)
+		switch {
+		case i > 0 && p.Ops[i-1].Compare(o) >= 0:
+			t.Fatalf("the operation %+v comes after %+v:\n%+v", o, p.Ops[i-1], p)
+		case o.Irreversible != (o.Kind == domain.OpDelete || o.Kind == domain.OpExpire || o.Kind == domain.OpAssetDelete && o.Rule == "R-STATUS-06"),
+			o.Kind == domain.OpDelete && in.Policies.Deletes != domain.DeletesPropagate,
+			o.Kind == domain.OpExpire && o.Rule != "R-STATUS-09":
+			t.Fatalf("the operation %+v is irreversible=%t under deletes %s", o, o.Irreversible, in.Policies.Deletes)
+		case o.Remote == "" && upOnly, o.Kind == domain.OpImport && mode == domain.ModeUploadOnly,
+			o.Remote != "" && o.Kind != domain.OpImport && o.Kind != domain.OpExpire && mode == domain.ModeDownloadOnly:
+			t.Fatalf("the operation %+v goes against the modes of %+v", o, in.Remotes)
+		case o.Remote != "" && (!clean(o.Src) || !clean(o.Dst)),
+			(o.Kind == domain.OpMove || o.Kind == domain.OpQuarantine || o.Kind == domain.OpCopy) && (o.Root == "" || o.Src == ""),
+			(o.Kind == domain.OpMove || o.Kind == domain.OpCopy || o.Kind == domain.OpPut) && (o.DstRoot == "" || o.Dst == ""),
+			o.Kind == domain.OpQuarantine && (o.DstRoot != o.Root || !strings.HasPrefix(o.Dst, today)),
+			o.Kind == domain.OpExpire && (!kept || undated != nil):
+			t.Fatalf("the operation %+v leaves its root or the quarantine of %s", o, today)
+		}
+	}
+}
+
+// checkApplied holds what a run leaves once its plan p succeeds, next, to
+// INV-3, to one directory for each album pair, to components beside their
+// main files, and to a state that the next run reconciles to itself. An
+// asset that waits for the user in a remote keeps its links there as they
+// were; so does a component of an asset whose main file lies in a directory
+// where the plan found a name taken, a known limit of the plan.
+func checkApplied(t rapid.TB, p domain.Plan, next plan.Input) {
+	t.Helper()
+	entries, modes, waits := map[domain.Link]domain.RemoteEntry{}, map[string]domain.Mode{}, map[domain.Conflict]bool{}
+	for name, es := range next.Scans {
+		for _, e := range es {
+			entries[domain.Link{Remote: name, Root: e.Root, Path: e.Path}] = e
+		}
+	}
+	for _, r := range next.Remotes {
+		modes[r.Name] = r.Mode
+	}
+	for _, c := range next.State.Conflicts {
+		waits[domain.Conflict{AssetID: c.AssetID, Remote: c.Remote}] = true
+	}
+	taken := map[domain.Link]bool{}
+	for _, n := range p.Notices {
+		if n.Code == "plan.path_taken" {
+			taken[domain.Link{Remote: n.Params[0], Root: domain.LibraryKind(n.Params[1]), Path: path.Dir(n.Params[2])}] = true
+		}
+	}
+	mainOf := func(m, l domain.Link) bool {
+		return (m.Role == domain.RoleOriginal || m.Role == domain.RoleSource) && m.Status == domain.StatusActive && m.AssetID == l.AssetID && m.Remote == l.Remote
+	}
+	places := map[domain.Link]bool{}
+	for _, l := range next.State.Links {
+		at := domain.Link{Remote: l.Remote, Root: l.Root, Path: l.Path}
+		// Quarantine frees the path of a link; the state holds the others one to
+		// a path.
+		if l.Status == domain.StatusActive || l.Status == domain.StatusDetached {
+			if places[at] {
+				t.Fatalf("two links of the state lie at %+v:\n%+v", at, next.State.Links)
+			}
+			places[at] = true
+		}
+		if l.Status != domain.StatusActive || waits[domain.Conflict{AssetID: l.AssetID, Remote: l.Remote}] {
+			continue
+		}
+		e, ok := entries[at]
+		if !ok || e.Size != l.Size || l.MD5 != "" && l.MD5 != e.MD5 || l.SHA256 != "" && l.SHA256 != e.SHA256 {
+			t.Fatalf("the active link %+v has the file %+v (listed: %t)", l, e, ok)
+		}
+		// The plan moves nothing in a download-only cloud, so a component stays
+		// where it lies when the user moves its main file; the check skips such
+		// remotes whole.
+		if (l.Role == domain.RoleLiveVideo || l.Role == domain.RoleRAWPair) && modes[l.Remote] != domain.ModeDownloadOnly &&
+			!slices.ContainsFunc(next.State.Links, func(m domain.Link) bool {
+				return mainOf(m, l) && taken[domain.Link{Remote: m.Remote, Root: m.Root, Path: path.Dir(m.Path)}]
+			}) &&
+			!slices.ContainsFunc(next.State.Links, func(m domain.Link) bool { return mainOf(m, l) && plan.ComponentBeside(m, l) }) {
+			t.Fatalf("the component %+v lies beside no main file of its asset:\n%+v", l, next.State.Links)
+		}
+	}
+	dirs := map[domain.AlbumPair]bool{}
+	for _, x := range next.State.AlbumPairs {
+		k := domain.AlbumPair{Remote: x.Remote, Root: x.Root, DirPath: x.DirPath}
+		if dirs[k] {
+			t.Fatalf("two album pairs hold %+v:\n%+v", k, next.State.AlbumPairs)
+		}
+		dirs[k] = true
+	}
+	delta, _, err := plan.Reconcile(next.State, next.Snapshot, next.RunID, next.Policies)
+	if err != nil {
+		t.Fatalf("Reconcile: %v", err)
+	}
+	held, albums := map[domain.AssetKey]domain.Asset{}, map[domain.AlbumID]domain.Album{}
+	for _, a := range next.State.Assets {
+		held[a.Key] = a
+	}
+	for _, a := range next.State.Albums {
+		albums[a.ID] = a
+	}
+	for _, a := range delta.Assets {
+		if h, ok := held[a.Key]; ok && !reflect.DeepEqual(a, h) {
+			t.Fatalf("the state holds\n%+v\nwhich the next run reconciles to\n%+v", h, a)
+		}
+	}
+	for _, a := range delta.Albums {
+		if !reflect.DeepEqual(a, albums[a.ID]) {
+			t.Fatalf("the state holds\n%+v\nwhich the next run reconciles to\n%+v", albums[a.ID], a)
+		}
+	}
+}
+
 // After the first sync of a world of package gen, and again after a user acts
 // on both sides, the next run has nothing to do, whatever the mode and the
 // deletes and conflict policies.
 func TestPlanConvergesOnGenWorlds(t *testing.T) {
 	t.Parallel()
 	// covers: INV-1
+	// covers: INV-2
+	// covers: INV-3
+	// covers: INV-5
+	// covers: INV-20
 	rapid.Check(t, func(t *rapid.T) {
 		c := genCases().Draw(t, "case")
 		settles(t, c.first)
@@ -315,6 +490,9 @@ func TestPlanConvergesOnGenWorlds(t *testing.T) {
 func TestPlanLimitConvergesOnGenWorlds(t *testing.T) {
 	t.Parallel()
 	// covers: INV-1
+	// covers: INV-2
+	// covers: INV-5
+	// covers: INV-20
 	rapid.Check(t, func(t *rapid.T) {
 		limited(t, genCases().Draw(t, "case").in)
 	})
@@ -400,6 +578,66 @@ func TestGenCasesNotVacuous(t *testing.T) {
 	for _, kind := range []gen.ActionKind{gen.Create, gen.Move, gen.Rename, gen.Replace, gen.Delete, gen.AlbumRename} {
 		if !drawn[gen.Action{Side: gen.Remote, Kind: kind}] {
 			missing = append(missing, fmt.Sprintf("the action %s in the cloud", kind))
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("the cases of seeds 0 to %d lack %s", cases-1, strings.Join(missing, "; "))
+	}
+}
+
+// The checks of every plan must meet what they look at in the cases of the
+// properties above. Fixed seeds give the same cases on every run.
+func TestPlanChecksNotVacuous(t *testing.T) {
+	t.Parallel()
+	const cases = 100
+	whats := []struct {
+		what string
+		want int
+	}{
+		{"a link that a record or an operation changes", 50}, {"two operations", 33}, {"an operation that removes for good", 4},
+		{"an operation of an upload-only remote", 15}, {"an operation of a download-only remote", 11}, {"a quarantine", 22},
+		{"a move or a copy", 7}, {"a Live Photo video or RAW file linked after the run", 17},
+	}
+	met := make([]int, len(whats))
+	for seed := range cases {
+		c := genCases().Example(seed)
+		seen := make([]bool, len(whats))
+		for _, in := range []plan.Input{c.first, c.in} {
+			p, delta, err := plan.Build(in)
+			if err != nil {
+				t.Fatalf("seed %d: Build: %v", seed, err)
+			}
+			next := after(in, p, delta)
+			has := func(kinds ...domain.OpKind) bool {
+				return slices.ContainsFunc(p.Ops, func(o domain.Op) bool { return slices.Contains(kinds, o.Kind) })
+			}
+			for i, ok := range []bool{
+				len(p.Links) > 0 || slices.ContainsFunc(p.Ops, func(o domain.Op) bool { return len(o.Links) > 0 }),
+				len(p.Ops) > 1,
+				slices.ContainsFunc(p.Ops, func(o domain.Op) bool { return o.Irreversible }),
+				len(p.Ops) > 0 && in.Remotes[0].Mode == domain.ModeUploadOnly,
+				len(p.Ops) > 0 && in.Remotes[0].Mode == domain.ModeDownloadOnly,
+				has(domain.OpQuarantine),
+				has(domain.OpMove, domain.OpCopy),
+				in.Remotes[0].Mode != domain.ModeDownloadOnly && slices.ContainsFunc(next.State.Links, func(l domain.Link) bool {
+					return l.Status == domain.StatusActive && (l.Role == domain.RoleLiveVideo || l.Role == domain.RoleRAWPair) &&
+						!slices.ContainsFunc(next.State.Conflicts, func(c domain.Conflict) bool { return c.AssetID == l.AssetID && c.Remote == l.Remote })
+				}),
+			} {
+				seen[i] = seen[i] || ok
+			}
+		}
+		for i, ok := range seen {
+			if ok {
+				met[i]++
+			}
+		}
+	}
+	var missing []string
+	for i, w := range whats {
+		t.Logf("%d of %d cases have %s", met[i], cases, w.what)
+		if met[i] < w.want {
+			missing = append(missing, fmt.Sprintf("%d cases with %s (%d are)", w.want, w.what, met[i]))
 		}
 	}
 	if len(missing) > 0 {
