@@ -372,8 +372,11 @@ func TestGenCasesNotVacuous(t *testing.T) {
 	var missing []string
 	// A known limit that spares more cases than these would leave the
 	// properties checking little.
-	if unlimited > 15 || unsettled > 3 {
-		missing = append(missing, fmt.Sprintf("cases that no known limit spares (%d and %d are spared)", unlimited, unsettled))
+	if unlimited > 15 {
+		missing = append(missing, fmt.Sprintf("at most 15 cases spared by a moved pair (%d are)", unlimited))
+	}
+	if unsettled > 3 {
+		missing = append(missing, fmt.Sprintf("at most 3 cases spared by a component out of quarantine (%d are)", unsettled))
 	}
 	for _, c := range []struct {
 		what      string
