@@ -28,8 +28,9 @@ type Names struct {
 
 // NewNames returns the names of remote: the path of every entry of scan, its
 // whole listing with the directories and the directory .photosync, the
-// QuarantinePath of every link of remote among links and the Path of each of
-// them that is detached. The inputs are not changed.
+// QuarantinePath of every link of remote among links, and for Free alone the
+// Path of each of them that is detached or of the original or the source
+// role. The inputs are not changed.
 func NewNames(remote string, scan []domain.RemoteEntry, links []domain.Link) *Names {
 	n := &Names{remote: remote, keys: map[[2]string]map[string]bool{}, paths: map[domain.LibraryKind]map[string]bool{}}
 	for _, e := range scan {
@@ -40,9 +41,13 @@ func NewNames(remote string, scan []domain.RemoteEntry, links []domain.Link) *Na
 			continue
 		}
 		n.take(l.Root, l.QuarantinePath)
-		// A detached link waits for the user to bring its file back to its path.
-		if l.Status == domain.StatusDetached {
-			n.take(l.Root, l.Path)
+		// Until a run clears a link, a file of another asset at its path would
+		// pass for the file of the link, as one that the user brought back.
+		// A Live Photo video or a RAW file goes up again at its own path once
+		// its file is gone, so that path stays free. No file is at the path,
+		// so it doubles none.
+		if l.Status == domain.StatusDetached || l.Role == domain.RoleOriginal || l.Role == domain.RoleSource {
+			n.hold(l.Root, l.Path)
 		}
 	}
 	return n
@@ -121,4 +126,12 @@ func (n *Names) take(root domain.LibraryKind, p string) {
 	if !n.paths[root][k[1]] {
 		n.take(root, k[1])
 	}
+}
+
+func (n *Names) hold(root domain.LibraryKind, p string) {
+	k := [2]string{string(root), path.Dir(p)}
+	if n.keys[k] == nil {
+		n.keys[k] = map[string]bool{}
+	}
+	n.keys[k][export.StemKey(path.Base(p))] = true
 }
