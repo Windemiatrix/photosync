@@ -106,7 +106,7 @@ func TestReadScans(t *testing.T) {
 	alpha, plain := spec("alpha", domain.ModeTwoWay, domain.HashMD5), spec("alpha", domain.ModeTwoWay, domain.HashNone)
 	beta, betaUp := spec("beta", domain.ModeDownloadOnly, domain.HashMD5), spec("beta", domain.ModeUploadOnly, domain.HashMD5)
 	p := domain.DefaultPolicies()
-	p.Deletes, p.UntitledEvent, p.AlbumsRoot = domain.DeletesQuarantine, "Untitled", "Albums"
+	p.Deletes = domain.DeletesQuarantine
 	skip := p
 	skip.Hidden = domain.HiddenSkip
 	slow := p

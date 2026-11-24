@@ -73,7 +73,6 @@ func TestMovePairs(t *testing.T) {
 	cloudy := album(holidays, event, year, "05/01 Holidays", "2024")
 	cloudy.Key, cloudy.KeySource = "guid-10", domain.KeyCloudGUID
 	p := domain.DefaultPolicies()
-	p.UntitledEvent, p.AlbumsRoot = "Untitled", "Albums"
 	for _, c := range []struct {
 		name    string
 		albums  []domain.Album
@@ -347,7 +346,6 @@ func TestRenamedDirs(t *testing.T) {
 	l17, m2, k2 := link(17, personal, "Albums/Hobby/Lego/Kits/IMG_0017.HEIC", original), file(personal, "Albums/Crafts/Models/IMG_0016.HEIC"), file(personal, "Albums/Crafts/Lego/Kits/IMG_0017.HEIC")
 	sub, toys := file(personal, "Albums/Crafts/Sub/Models/IMG_0016.HEIC"), file(personal, "Albums/Hobby/Toys/Kits/IMG_0017.HEIC")
 	p := domain.DefaultPolicies()
-	p.UntitledEvent, p.AlbumsRoot = "Untitled", "Albums"
 	local, events := p, p
 	local.AlbumsForPersonal = false
 	events.Templates.Photos = []string{"{YYYY}", "Events", "{MM}/{DD} {Description}"}

@@ -27,7 +27,7 @@ func TestPlanScale(t *testing.T) {
 		t.Fatalf("template.Parse: %v", err)
 	}
 	p := domain.DefaultPolicies()
-	p.Deletes, p.UntitledEvent, p.AlbumsRoot = domain.DeletesQuarantine, "Untitled", "Albums"
+	p.Deletes = domain.DeletesQuarantine
 	now := time.Date(2026, 11, 15, 12, 0, 0, 0, time.UTC)
 	// The times are three times the slowest measured on the macOS CI runner
 	// under the race detector with one and four CPUs, about three times slower

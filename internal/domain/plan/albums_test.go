@@ -57,7 +57,6 @@ func TestPairDirs(t *testing.T) {
 	}
 	type scan = map[domain.AlbumID][]string
 	p := domain.DefaultPolicies()
-	p.UntitledEvent, p.AlbumsRoot = "Untitled", "Albums"
 	noAlbums, word := p, p
 	noAlbums.AlbumsForPersonal = false
 	word.Templates.Cloud = []string{"{YYYY} год", "{MM}-{DD} - {Description}"}

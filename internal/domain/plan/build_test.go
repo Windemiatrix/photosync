@@ -120,7 +120,7 @@ func TestBuild(t *testing.T) {
 	}
 	alpha, beta, down := spec("alpha", domain.ModeTwoWay), spec("beta", domain.ModeTwoWay), spec("alpha", domain.ModeDownloadOnly)
 	p := domain.DefaultPolicies()
-	p.Deletes, p.UntitledEvent, p.AlbumsRoot = domain.DeletesQuarantine, "Untitled", "Albums"
+	p.Deletes = domain.DeletesQuarantine
 	propagate, ask := p, p
 	propagate.Deletes, ask.Conflict = domain.DeletesPropagate, domain.ConflictAsk
 
