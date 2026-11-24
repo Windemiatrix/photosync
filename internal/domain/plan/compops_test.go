@@ -88,7 +88,7 @@ func TestComponentOps(t *testing.T) {
 	filesOf := func(ls ...domain.Link) map[domain.LinkID]domain.RemoteEntry {
 		files := map[domain.LinkID]domain.RemoteEntry{}
 		for _, l := range ls {
-			files[l.ID] = domain.RemoteEntry{Root: l.Root, Path: l.Path, Size: l.Size, MD5: l.MD5}
+			files[l.ID] = domain.RemoteEntry{Root: l.Root, Path: l.Path, Size: l.Size, MD5: l.MD5, SHA256: l.SHA256, ETag: l.ETag, MTime: l.MTime}
 		}
 		return files
 	}
