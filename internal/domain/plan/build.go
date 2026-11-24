@@ -39,7 +39,8 @@ type Input struct {
 }
 
 // Build returns the plan of a run and the delta that Reconcile gives, which
-// the run writes to the state before the operations; the error, with a zero
+// the run writes to the state before the operations, a new asset only with
+// its first link; the error, with a zero
 // plan and delta, is that of eventtpl.Validate for Policies.Templates,
 // checked before all else, of Reconcile or of FileOps. The run syncs the
 // remotes of Remotes, or the one that OnlyRemote names: ReadScans reads their

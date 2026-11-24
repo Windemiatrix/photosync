@@ -14,8 +14,10 @@ import (
 // Simulate returns the state, the snapshot and the scans that a run leaves
 // once every operation of p succeeds, where p and delta are what Build gives
 // for in and p may be cut by Limit. The state takes delta as the run writes
-// it before the operations: its assets and albums over those of in.State
-// with the same ID, the others of in.State staying, and its History. A pair
+// it: its assets and albums over those of in.State with the same ID, the
+// others of in.State staying, and its History, but an asset that in.State
+// lacks, of delta or of an import, only when a link of the state names it,
+// as the run writes a new asset with its first link. A pair
 // of p takes the place of the pair of in.State for its album, remote and
 // root, if any. The links of p, then those of each operation in the order
 // of p.Ops, go over the links of in.State with the same ID: a link with an
@@ -275,6 +277,14 @@ func Simulate(in Input, p domain.Plan, delta domain.SnapshotDelta) (domain.State
 			return cmp.Or(cmp.Compare(x.Root, y.Root), cmp.Compare(x.Path, y.Path))
 		})
 	}
+	held := map[domain.AssetID]bool{}
+	for _, a := range in.State.Assets {
+		held[a.ID] = true
+	}
+	for _, l := range links {
+		held[l.AssetID] = true
+	}
+	maps.DeleteFunc(assets, func(id domain.AssetID, _ domain.Asset) bool { return !held[id] })
 	state := domain.State{
 		Assets:     slices.SortedFunc(maps.Values(assets), func(x, y domain.Asset) int { return cmp.Compare(x.ID, y.ID) }),
 		Albums:     slices.SortedFunc(maps.Values(albums), func(x, y domain.Album) int { return cmp.Compare(x.ID, y.ID) }),

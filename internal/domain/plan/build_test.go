@@ -1003,7 +1003,7 @@ func TestBuild(t *testing.T) {
 		{"a new file in the directory of the pair of an album that left the templates goes into that album",
 			state(nil, pairs{alphaHolidays}), themedSnapshot, scans{"alpha": {new3}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{importNew("alpha", new3)}}, domain.SnapshotDelta{Albums: themedAlbums}, nil},
-		{"a new asset that the state holds already gets no first placement",
+		{"an asset that the state holds after its links have left gets no first placement",
 			state(assets{n1}, pairs{alphaHolidays}), snapshot(n1), nil, specs{alpha}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{skippedAsset("IMG_0001.HEIC", "uuid-1")}}, delta(n1), nil},
 		{"a new asset does not take the path of a linked file that the user moved below its event",
