@@ -67,7 +67,9 @@ type Input struct {
 // they lie now: so DecideLayout takes them, the asset counting as linked when
 // the state holds the asset or a link of it, or when those new links name
 // it, and DecideComponents its links as the
-// state holds them. AssetOps, ImportOps with its links as they lie now, then
+// state holds them. In an upload-only remote a link of matching that a
+// placement takes to quarantine is not made, nor are the links of its Live
+// Photo video and RAW file, and that placement is dropped. AssetOps, ImportOps with its links as they lie now, then
 // FileOps, ComponentOps and SidecarOps in each remote that the run syncs, by
 // name, where the asset takes part in the plan, give its operations: FileOps
 // with the decisions of matching there, each replacement turned into
@@ -244,6 +246,24 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 		}
 		_, seen := base[id]
 		decisions, status, target, join, leave, placements := DecideLayout(asset, found, linked || seen, objects, current, in.Remotes, albums, events, moved, in.Policies, in.RunID)
+		for _, r := range in.Remotes {
+			if r.Mode != domain.ModeUploadOnly {
+				continue
+			}
+			// An upload-only remote only reports a new file of the user
+			// (R-MODE-01), so the layout must not take one to quarantine.
+			var unmade []domain.Link
+			for _, pl := range placements[r.Name] {
+				if pl.Action == domain.ActionQuarantineFile && slices.ContainsFunc(matched[r.Name], func(d domain.LinkDecision) bool { return d.Link.ID == pl.Link.ID }) {
+					unmade = append(unmade, pl.Link)
+				}
+			}
+			gone := func(l domain.Link) bool {
+				return slices.ContainsFunc(unmade, func(x domain.Link) bool { return x.ID == l.ID || ComponentBeside(x, l) })
+			}
+			matched[r.Name] = slices.DeleteFunc(matched[r.Name], func(d domain.LinkDecision) bool { return gone(d.Link) })
+			placements[r.Name] = slices.DeleteFunc(placements[r.Name], func(pl domain.Placement) bool { return gone(pl.Link) })
+		}
 		if IsNew(asset, in.Policies) && !linked && len(objectAlbums(target, albums)) == 0 {
 			notices = append(notices, domain.Notice{Code: "plan.skipped", Params: []string{"asset", asset.OriginalName, asset.Key.UUID}})
 		}
