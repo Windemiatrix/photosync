@@ -11,18 +11,19 @@ import (
 // MatchFresh links the new files of remote r to the assets that they hold.
 // fresh and files are what ReadScan gives for r, links are the links of the
 // state in every remote, role and status, and assets are those of the
-// snapshot reconciled with the state. The assets without an active or a
-// detached link of the original or the source role in r meet in match.Match
-// the candidates that match.Group makes of fresh. A candidate that match.Match leaves is a
+// snapshot reconciled with the state. The assets without an active link of
+// the original or the source role in r meet in match.Match the candidates
+// that match.Group makes of fresh. A candidate that match.Match leaves is a
 // copy (R-LAYOUT-08) when its Main has, by the hash of kind
 // r.Capabilities.ContentHash, the content of the Main of a pair or of the
 // entry that files gives an active link of the original or the source role
 // in r of an asset of assets; it goes with the asset of that file, the
 // lowest AssetID when several hold the content. A pair or a copy links
-// nothing and leaves nothing when IsNew does not hold for its asset under p
-// or the asset has a link in r that is not active. Otherwise Main gets a
-// link with the role of the candidate and the level of the pair, or exact
-// for a copy, and so does each Live or RAW whose role the asset has a
+// nothing and leaves nothing when Syncs does not hold for its asset under p,
+// and a copy is left as a new file when IsNew does not hold for its asset
+// under p or the asset has a link in r that is not active. Otherwise Main
+// gets a link with the role of the candidate and the level of the pair, or
+// exact for a copy, and so does each Live or RAW whose role the asset has a
 // resource of, with the role live_video or raw_pair and the level
 // pair_component; one whose role the asset lacks is left as a candidate of
 // its own with the role original. A link lies at the root and path of its
@@ -38,8 +39,8 @@ import (
 // are not changed.
 //
 // The assets for which IsNew holds under p and that have no link in r that
-// is not active meet the candidates first, and the other assets meet those
-// that the first leave.
+// is not active meet the candidates first, and the assets for which Syncs
+// does not hold under p meet those that the first leave.
 func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.LinkID]domain.RemoteEntry, r domain.RemoteSpec, fresh []domain.RemoteEntry, last domain.LinkID, p domain.Policies) (decisions []domain.LinkDecision, left []match.Candidate, notices []domain.Notice) {
 	cands, unknown := match.Group(fresh)
 	for _, e := range unknown {
@@ -62,9 +63,7 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 		if l.Remote != r.Name {
 			continue
 		}
-		// A file that a detached asset matched would never sync, though the run
-		// that detached the link imports it.
-		linked[l.AssetID] = linked[l.AssetID] || objectFile(l) || StatusFrozen([]domain.Link{l}, r.Name)
+		linked[l.AssetID] = linked[l.AssetID] || objectFile(l)
 		out[l.AssetID] = out[l.AssetID] || l.Status != domain.StatusActive
 		if a, found := byID[l.AssetID]; found && objectFile(l) {
 			hold(files[l.ID], a)
@@ -104,12 +103,15 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 		hold(x.Candidate.Main, byKey[x.Key])
 		take(byKey[x.Key], x.Candidate, x.Level, "R-LINK-03")
 	}
-	absorbed, _, rest := match.Match(slices.DeleteFunc(free, ready), rest)
+	// A run that changes an asset imports the file that it matches, and a
+	// record or a limit may land before that import: only an asset that never
+	// changes holds a file back.
+	absorbed, _, rest := match.Match(slices.DeleteFunc(free, func(a domain.Asset) bool { return Syncs(a, p) }), rest)
 	for _, x := range absorbed {
 		hold(x.Candidate.Main, byKey[x.Key])
 	}
 	for _, c := range rest {
-		if a, ok := held[content(c.Main)]; ok {
+		if a, ok := held[content(c.Main)]; ok && (ready(a) || !Syncs(a, p)) {
 			take(a, c, domain.LevelExact, "R-LAYOUT-08")
 		} else {
 			left = append(left, c)
