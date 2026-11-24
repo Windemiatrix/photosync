@@ -708,6 +708,7 @@ func TestSimulateConverges(t *testing.T) {
 	left7 := asset(7, "IMG_0001.HEIC", 100, may1, "run-1")
 	n8 := withVideo(asset(8, "IMG_0001.HEIC", 200, may1.Add(time.Hour), "run-2", holidays))
 	catsHolidays := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", cats, holidays)
+	both7 := asset(7, "IMG_0001.HEIC", 100, may1, "run-1", holidays, trip)
 	alphaHolidays, alphaTrip := pair(holidays, "alpha", personal, holidaysDir), pair(trip, "alpha", personal, tripDir)
 	alphaCats, alphaShared := pair(cats, "alpha", personal, catsDir), pair(holidays, "alpha", shared, holidaysDir)
 	betaHolidays := pair(holidays, "beta", personal, holidaysDir)
@@ -867,6 +868,15 @@ func TestSimulateConverges(t *testing.T) {
 		{"a photo that the user changed while its asset moved to another event goes there with its Live Photo video, and the asset is replaced from their new place",
 			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(in7Trip)), scans{"alpha": {ev, replaced}}, specs{alpha}, "", p,
 			kinds{domain.OpMove, domain.OpMove, domain.OpImport, domain.OpAlbumAdd, domain.OpAssetDelete}, nil},
+		{"a photo that the user changed in place while its asset joined another event is copied there with its new content, and the asset is replaced once",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(both7), scans{"alpha": {replaced}}, specs{alpha}, "", p,
+			kinds{domain.OpCopy, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumAdd, domain.OpAssetDelete}, nil},
+		{"a Live Photo video that the user changed in place while its asset joined another event is copied there with its new content, and the asset is replaced once",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(both7)), scans{"alpha": {changedMov, e1}}, specs{alpha}, "", p,
+			kinds{domain.OpCopy, domain.OpCopy, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumAdd, domain.OpAssetDelete}, nil},
+		{"upload-only: a Live Photo video that the user changed in place while its asset joined another event is copied there with its new content",
+			state(assets{withVideo(a7)}, pairs{alphaHolidays, alphaTrip}, photo, video), snapshot(withVideo(both7)), scans{"alpha": {changedMov, e1}}, specs{alphaUp}, "", p,
+			kinds{domain.OpCopy, domain.OpCopy}, nil},
 		{"two earlier replacements left half done take their old assets to Recently Deleted, beside the other changes of the asset",
 			remembered(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), history, history5), snapshot(a7, restored, restored5),
 			scans{"alpha": {tripFile}}, specs{alpha}, "", p, kinds{domain.OpAlbumAdd, domain.OpAlbumRemove, domain.OpAssetDelete}, nil},

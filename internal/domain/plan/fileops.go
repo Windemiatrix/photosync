@@ -35,7 +35,8 @@ import (
 // Names.Render (OpPut), its notices going to notices and its error returned
 // as it is; ActionQuarantineFile moves the file to quarantine, and its link
 // leaves the state. A moved link takes the new place and album, a copy is a
-// new link like its source, and a put makes one of the original role at the
+// new link like its source, with the size, hashes, ETag and MTime of the entry
+// where the source lies when files holds one, and a put makes one of the original role at the
 // level uploaded with the size and hashes of the original. An operation takes
 // the rule of its decision or placement and the asset of its link. A file that
 // a placement moves or copies without a replacement, or takes to quarantine,
@@ -163,6 +164,9 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 			kind, to := domain.OpMove, pl.Link
 			if pl.Action == domain.ActionCopyFile {
 				kind, to.ID = domain.OpCopy, 0
+				if e, ok := files[pl.Link.ID]; ok {
+					to.Size, to.SHA256, to.MD5, to.ETag, to.MTime = e.Size, e.SHA256, e.MD5, e.ETag, e.MTime
+				}
 			}
 			to.Root, to.AlbumID = root, pl.AlbumID
 			switch i := slices.IndexFunc(replaced, func(d domain.LinkDecision) bool { return d.Link.ID == pl.Link.ID }); {
