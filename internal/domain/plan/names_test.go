@@ -133,6 +133,36 @@ func TestNames(t *testing.T) {
 			n := plan.NewNames("alpha", nil, nil)
 			return append([]string{n.Free(personal, holidays, "IMG_0001.HEIC"), n.Quarantine(personal, day, holidays+"/IMG_0003.HEIC")}, doubles(n)...)
 		}, []string{holidays + "/IMG_0001.HEIC", inQuarantine + holidays + "/IMG_0003.HEIC"}},
+		{"the path of a detached link waits for its file", func(*plan.Names) []string {
+			n := plan.NewNames("alpha", nil, []domain.Link{{ID: 3, AssetID: 3, Remote: "alpha", Root: personal,
+				Path: holidays + "/IMG_0003.HEIC", Role: domain.RoleOriginal, Status: domain.StatusDetached}})
+			return []string{n.Free(personal, holidays, "IMG_0003.HEIC")}
+		}, []string{holidays + "/IMG_0003 (1).HEIC"}},
+		{"the path of a detached link of another remote is free", func(*plan.Names) []string {
+			n := plan.NewNames("alpha", nil, []domain.Link{{ID: 3, AssetID: 3, Remote: "beta", Root: personal,
+				Path: holidays + "/IMG_0003.HEIC", Role: domain.RoleOriginal, Status: domain.StatusDetached}})
+			return []string{n.Free(personal, holidays, "IMG_0003.HEIC")}
+		}, []string{holidays + "/IMG_0003.HEIC"}},
+		{"the path of an active link of a Live Photo video whose file is gone is free", func(*plan.Names) []string {
+			n := plan.NewNames("alpha", nil, []domain.Link{{ID: 3, AssetID: 3, Remote: "alpha", Root: personal,
+				Path: holidays + "/IMG_0003.MOV", Role: domain.RoleLiveVideo, Status: domain.StatusActive}})
+			return []string{n.Free(personal, holidays, "IMG_0003.MOV")}
+		}, []string{holidays + "/IMG_0003.MOV"}},
+		{"the path of an active link of an original whose file is gone waits for its file", func(*plan.Names) []string {
+			n := plan.NewNames("alpha", nil, []domain.Link{{ID: 3, AssetID: 3, Remote: "alpha", Root: personal,
+				Path: holidays + "/IMG_0003.HEIC", Role: domain.RoleOriginal, Status: domain.StatusActive}})
+			return []string{n.Free(personal, holidays, "IMG_0003.HEIC")}
+		}, []string{holidays + "/IMG_0003 (1).HEIC"}},
+		{"the path of an active link of a source whose file is gone waits for its file", func(*plan.Names) []string {
+			n := plan.NewNames("alpha", nil, []domain.Link{{ID: 3, AssetID: 3, Remote: "alpha", Root: personal,
+				Path: holidays + "/IMG_0003.HEIC", Role: domain.RoleSource, Status: domain.StatusActive}})
+			return []string{n.Free(personal, holidays, "IMG_0003.HEIC")}
+		}, []string{holidays + "/IMG_0003 (1).HEIC"}},
+		{"the path of a link whose file the user renamed by case alone doubles nothing", func(*plan.Names) []string {
+			n := plan.NewNames("alpha", []domain.RemoteEntry{{Root: personal, Path: trip + "/img_0003.HEIC", Size: 100}},
+				[]domain.Link{{ID: 3, AssetID: 3, Remote: "alpha", Root: personal, Path: trip + "/IMG_0003.HEIC", Role: domain.RoleOriginal, Status: domain.StatusActive}})
+			return doubles(n)
+		}, nil},
 		{"a directory of files of the scan takes its name in its parent", func(n *plan.Names) []string {
 			return []string{n.Free(personal, ".", "misc.jpg")}
 		}, []string{"misc (1).jpg"}},

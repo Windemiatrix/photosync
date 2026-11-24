@@ -1006,4 +1006,35 @@ func TestSimulateConverges(t *testing.T) {
 			}
 		}
 	})
+	traced := func(t *testing.T, s domain.State, snap domain.LibrarySnapshot, sc scans, rs specs, policies domain.Policies) plan.Input {
+		t.Helper()
+		tmpl, err := template.Parse("{event_path}/{original_name}")
+		if err != nil {
+			t.Fatalf("template.Parse: %v", err)
+		}
+		return plan.Input{State: s, Snapshot: snap, Scans: sc, Remotes: rs, Policies: policies, Template: tmpl}
+	}
+	t.Run("a copy of an asset does not take the path of a link of another asset of the same name whose file the user deleted, with a limit or without", func(t *testing.T) {
+		t.Parallel()
+		inTrip, gone8 := photo, photo
+		inTrip.Path, inTrip.AlbumID = tripFile.Path, trip
+		gone8.ID, gone8.AssetID, gone8.Size, gone8.MD5, gone8.SHA256, gone8.ETag = 2, 8, 200, "b8", "sb8", "eb8"
+		eight := asset(8, "IMG_0001.HEIC", 200, may1.Add(time.Hour), "run-1", holidays)
+		for _, limit := range []int{0, 1} {
+			at := traced(t, state(assets{both7, eight}, pairs{alphaHolidays, alphaTrip}, inTrip, gone8), snapshot(both7, eight), scans{"alpha": {tripFile}}, specs{alpha}, p)
+			for run := range 3 {
+				at.Now, at.RunID, at.Fields = now.Add(time.Duration(run)*time.Hour), fmt.Sprintf("run-%d", run+2), fieldsOf(at.Snapshot)
+				next, delta, err := plan.Build(at)
+				if err != nil {
+					t.Fatalf("Build of %s with a limit of %d: %v", at.RunID, limit, err)
+				}
+				at.State, at.Snapshot, at.Scans = plan.Simulate(at, plan.Limit(next, limit), delta)
+			}
+			trashed := slices.ContainsFunc(at.Snapshot.Assets, func(a domain.Asset) bool { return a.Key.UUID == "uuid-8" && a.InTrash })
+			copied := slices.ContainsFunc(at.Scans["alpha"], func(e domain.RemoteEntry) bool { return e.Path == holidaysDir+"/IMG_0001 (1).HEIC" })
+			if !trashed || !copied {
+				t.Errorf("with a limit of %d the runs leave\n%+v\n%+v\nwant asset 8 in Recently Deleted and the copy of asset 7 beside the path of its link", limit, at.Snapshot.Assets, at.Scans["alpha"])
+			}
+		}
+	})
 }
