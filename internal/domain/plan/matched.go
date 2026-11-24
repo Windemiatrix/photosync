@@ -11,9 +11,9 @@ import (
 // MatchFresh links the new files of remote r to the assets that they hold.
 // fresh and files are what ReadScan gives for r, links are the links of the
 // state in every remote, role and status, and assets are those of the
-// snapshot reconciled with the state. The assets without an active or a
-// detached link of the original or the source role in r meet in match.Match
-// the candidates that match.Group makes of fresh. A candidate that match.Match leaves is a
+// snapshot reconciled with the state. The assets without an active link of
+// the original or the source role in r meet in match.Match the candidates
+// that match.Group makes of fresh. A candidate that match.Match leaves is a
 // copy (R-LAYOUT-08) when its Main has, by the hash of kind
 // r.Capabilities.ContentHash, the content of the Main of a pair or of the
 // entry that files gives an active link of the original or the source role
@@ -38,8 +38,8 @@ import (
 // are not changed.
 //
 // The assets for which IsNew holds under p and that have no link in r that
-// is not active meet the candidates first, and the other assets meet those
-// that the first leave.
+// is not active meet the candidates first, and the assets for which Syncs
+// does not hold under p meet those that the first leave.
 func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.LinkID]domain.RemoteEntry, r domain.RemoteSpec, fresh []domain.RemoteEntry, last domain.LinkID, p domain.Policies) (decisions []domain.LinkDecision, left []match.Candidate, notices []domain.Notice) {
 	cands, unknown := match.Group(fresh)
 	for _, e := range unknown {
@@ -62,9 +62,7 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 		if l.Remote != r.Name {
 			continue
 		}
-		// A file that a detached asset matched would never sync, though the run
-		// that detached the link imports it.
-		linked[l.AssetID] = linked[l.AssetID] || objectFile(l) || StatusFrozen([]domain.Link{l}, r.Name)
+		linked[l.AssetID] = linked[l.AssetID] || objectFile(l)
 		out[l.AssetID] = out[l.AssetID] || l.Status != domain.StatusActive
 		if a, found := byID[l.AssetID]; found && objectFile(l) {
 			hold(files[l.ID], a)
@@ -104,7 +102,10 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 		hold(x.Candidate.Main, byKey[x.Key])
 		take(byKey[x.Key], x.Candidate, x.Level, "R-LINK-03")
 	}
-	absorbed, _, rest := match.Match(slices.DeleteFunc(free, ready), rest)
+	// A run that changes an asset imports the file that it matches, and a
+	// record or a limit may land before that import: only an asset that never
+	// changes holds a file back.
+	absorbed, _, rest := match.Match(slices.DeleteFunc(free, func(a domain.Asset) bool { return Syncs(a, p) }), rest)
 	for _, x := range absorbed {
 		hold(x.Candidate.Main, byKey[x.Key])
 	}
