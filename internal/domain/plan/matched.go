@@ -19,10 +19,11 @@ import (
 // entry that files gives an active link of the original or the source role
 // in r of an asset of assets; it goes with the asset of that file, the
 // lowest AssetID when several hold the content. A pair or a copy links
-// nothing and leaves nothing when IsNew does not hold for its asset under p
-// or the asset has a link in r that is not active. Otherwise Main gets a
-// link with the role of the candidate and the level of the pair, or exact
-// for a copy, and so does each Live or RAW whose role the asset has a
+// nothing and leaves nothing when Syncs does not hold for its asset under p,
+// and a copy is left as a new file when IsNew does not hold for its asset
+// under p or the asset has a link in r that is not active. Otherwise Main
+// gets a link with the role of the candidate and the level of the pair, or
+// exact for a copy, and so does each Live or RAW whose role the asset has a
 // resource of, with the role live_video or raw_pair and the level
 // pair_component; one whose role the asset lacks is left as a candidate of
 // its own with the role original. A link lies at the root and path of its
@@ -110,7 +111,7 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 		hold(x.Candidate.Main, byKey[x.Key])
 	}
 	for _, c := range rest {
-		if a, ok := held[content(c.Main)]; ok {
+		if a, ok := held[content(c.Main)]; ok && (ready(a) || !Syncs(a, p)) {
 			take(a, c, domain.LevelExact, "R-LAYOUT-08")
 		} else {
 			left = append(left, c)

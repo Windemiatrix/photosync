@@ -190,6 +190,8 @@ func TestMatchFresh(t *testing.T) {
 			entries(trip, heic), nil, nil, nil},
 		{"a file of an asset in Recently Deleted is new", byMD5, p, assets(trashed7), nil, nil, entries(heic),
 			nil, newFiles(alone(heic)), nil},
+		{"a copy of the file of an asset in Recently Deleted is new", byMD5, p, assets(trashed7), links(l1), found{1: heic},
+			entries(trip), nil, newFiles(alone(trip)), nil},
 		{"a new file of an asset with a detached link is new", byMD5, p, assets(a7), links(detached), nil,
 			entries(trip), nil, newFiles(alone(trip)), nil},
 		{"a new file of an asset with a detached link of a Live video alone is new", byMD5, p, assets(live7), links(detachedLive), nil,
