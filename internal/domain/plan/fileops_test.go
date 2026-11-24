@@ -40,7 +40,7 @@ func TestFileOps(t *testing.T) {
 	)
 	now := time.Date(2026, 11, 13, 10, 0, 0, 0, time.UTC)
 	p := domain.DefaultPolicies()
-	p.Deletes, p.UntitledEvent, p.AlbumsRoot = domain.DeletesQuarantine, "Untitled", "Albums"
+	p.Deletes = domain.DeletesQuarantine
 	fields := templateFields{"album": {Strings: []string{"Holidays", "Trips"}}}
 	asset := domain.Asset{
 		ID: 7, Key: domain.AssetKey{UUID: "uuid-7"}, Library: personal, TargetLibrary: personal,

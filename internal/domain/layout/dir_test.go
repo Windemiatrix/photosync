@@ -73,6 +73,7 @@ func TestDirFor(t *testing.T) {
 		{"a description that sanitizing changes", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 a:b"}, "2024/05-01 - a꞉b"},
 		{"a folder of text on both sides", textBoth, domain.Album{Kind: folder, Title: "Events"}, "Photos"},
 		{"a folder of other text", textBoth, domain.Album{Kind: folder, Title: "Other"}, ""},
+		{"a long description cuts the whole name at 255 bytes", std, domain.Album{FolderTitles: in("2024"), Title: "05/01 " + strings.Repeat("a", 248)}, "2024/05-01 - " + strings.Repeat("a", 247)},
 	}
 	for _, c := range cases {
 		t.Run(rule+" "+c.name, func(t *testing.T) {
