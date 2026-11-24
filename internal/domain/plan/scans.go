@@ -182,7 +182,7 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 		// that is still being written beside it would never take that file later.
 		fresh = slices.DeleteFunc(fresh, func(e domain.RemoteEntry) bool { return shots[sidecarKey(e.Root, e.Path)] })
 		maps.Copy(files, fs)
-		matched, left, ms := MatchFresh(delta.Assets, state.Links, fs, r, fresh, lastLink, p)
+		matched, left, ms := MatchFresh(delta.Assets, state.Links, fs, r, fresh, lastLink, p, state.Assets)
 		dirs, paths := map[domain.LibraryKind]map[string]bool{}, map[domain.LibraryKind]map[domain.AlbumID][]string{}
 		count := func(l domain.Link) {
 			if dirs[l.Root] == nil {
