@@ -138,6 +138,11 @@ func TestNames(t *testing.T) {
 				Path: holidays + "/IMG_0003.HEIC", Role: domain.RoleOriginal, Status: domain.StatusDetached}})
 			return []string{n.Free(personal, holidays, "IMG_0003.HEIC")}
 		}, []string{holidays + "/IMG_0003 (1).HEIC"}},
+		{"the path of a detached link of another remote is free", func(*plan.Names) []string {
+			n := plan.NewNames("alpha", nil, []domain.Link{{ID: 3, AssetID: 3, Remote: "beta", Root: personal,
+				Path: holidays + "/IMG_0003.HEIC", Role: domain.RoleOriginal, Status: domain.StatusDetached}})
+			return []string{n.Free(personal, holidays, "IMG_0003.HEIC")}
+		}, []string{holidays + "/IMG_0003.HEIC"}},
 		{"the path of an active link whose file is gone is free", func(*plan.Names) []string {
 			n := plan.NewNames("alpha", nil, []domain.Link{{ID: 3, AssetID: 3, Remote: "alpha", Root: personal,
 				Path: holidays + "/IMG_0003.HEIC", Role: domain.RoleOriginal, Status: domain.StatusActive}})
