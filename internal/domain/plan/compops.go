@@ -30,8 +30,8 @@ import (
 // in copies copies the component from where it lies (OpCopy), or puts its
 // resource for ActionUpload, to ComponentPath from the new link of the OpCopy
 // of mains that copies a file of the original or the source role into the
-// album of the placement, as a new link in that album like
-// the component. Each OpPut of mains with a new link puts the Live Photo
+// album of the placement, as a new link in that album like the component,
+// with the size, hashes, ETag and MTime of its entry. Each OpPut of mains with a new link puts the Live Photo
 // video and the RAW file of target to ComponentPath from that link, as new
 // links in its album under its rule. A put makes a link at the level uploaded
 // with the size and hashes of the resource, and nothing while target lacks
@@ -94,6 +94,9 @@ func ComponentOps(names *Names, target domain.Asset, mains []domain.Op, componen
 					case pl.Action == domain.ActionUpload:
 						put(0, to.Role, l, pl.Rule)
 					default:
+						if e, ok := files[to.ID]; ok {
+							to.Size, to.SHA256, to.MD5, to.ETag, to.MTime = e.Size, e.SHA256, e.MD5, e.ETag, e.MTime
+						}
 						to.ID = 0
 						beside(domain.OpCopy, pl.Link, to, l, pl.Rule)
 					}
