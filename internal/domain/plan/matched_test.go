@@ -227,19 +227,19 @@ func TestMatchFresh(t *testing.T) {
 			}
 			before := fmt.Sprintf("%+v %+v %+v %+v", c.assets, c.links, c.files, c.fresh)
 			as, ls, fs := slices.Clone(c.assets), slices.Clone(c.links), slices.Clone(c.fresh)
-			ds, cs, ns := plan.MatchFresh(c.assets, c.links, c.files, spec(domain.ModeTwoWay), c.fresh, last, c.p)
+			ds, cs, ns := plan.MatchFresh(c.assets, c.links, c.files, spec(domain.ModeTwoWay), c.fresh, last, c.p, nil)
 			if !same(ds, cs, ns, c.decisions, c.left, c.notices) {
 				t.Errorf("MatchFresh = %s; want %s", show(ds, cs, ns), show(c.decisions, c.left, c.notices))
 			}
 			for _, m := range []domain.Mode{domain.ModeUploadOnly, domain.ModeDownloadOnly} {
-				if md, mc, mn := plan.MatchFresh(c.assets, c.links, c.files, spec(m), c.fresh, last, c.p); !same(md, mc, mn, ds, cs, ns) {
+				if md, mc, mn := plan.MatchFresh(c.assets, c.links, c.files, spec(m), c.fresh, last, c.p, nil); !same(md, mc, mn, ds, cs, ns) {
 					t.Errorf("%s: %s; want %s, as two-way", m, show(md, mc, mn), show(ds, cs, ns))
 				}
 			}
 			slices.Reverse(as)
 			slices.Reverse(ls)
 			slices.Reverse(fs)
-			if rd, rc, rn := plan.MatchFresh(as, ls, c.files, spec(domain.ModeTwoWay), fs, last, c.p); !same(rd, rc, rn, ds, cs, ns) {
+			if rd, rc, rn := plan.MatchFresh(as, ls, c.files, spec(domain.ModeTwoWay), fs, last, c.p, nil); !same(rd, rc, rn, ds, cs, ns) {
 				t.Errorf("with the assets, links and scan reversed: %s; want %s", show(rd, rc, rn), show(ds, cs, ns))
 			}
 			if after := fmt.Sprintf("%+v %+v %+v %+v", c.assets, c.links, c.files, c.fresh); after != before {
@@ -252,4 +252,15 @@ func TestMatchFresh(t *testing.T) {
 			}
 		})
 	}
+	t.Run("an asset that the state holds takes a new file only while it has a link in some remote", func(t *testing.T) {
+		t.Parallel()
+		disk := domain.RemoteSpec{Name: "disk", Mode: domain.ModeTwoWay, Capabilities: domain.Capabilities{ContentHash: byMD5}}
+		if ds, cs, ns := plan.MatchFresh(assets(a7), nil, nil, disk, entries(heic), last, p, assets(a7)); !same(ds, cs, ns, nil, newFiles(alone(heic)), nil) {
+			t.Errorf("without a link: MatchFresh = %s; want the file new", show(ds, cs, ns))
+		}
+		want := decided(made(11, 7, heic, original, exact, pairRule))
+		if ds, cs, ns := plan.MatchFresh(assets(a7), links(l3), nil, disk, entries(heic), last, p, assets(a7)); !same(ds, cs, ns, want, nil, nil) {
+			t.Errorf("with a link in another remote: MatchFresh = %s; want %s", show(ds, cs, ns), show(want, nil, nil))
+		}
+	})
 }

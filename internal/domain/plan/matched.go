@@ -38,10 +38,12 @@ import (
 // neither media nor sidecar, both in the order of Root and Path. The inputs
 // are not changed.
 //
-// The assets for which IsNew holds under p and that have no link in r that
-// is not active meet the candidates first, and the assets for which Syncs
-// does not hold under p meet those that the first leave.
-func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.LinkID]domain.RemoteEntry, r domain.RemoteSpec, fresh []domain.RemoteEntry, last domain.LinkID, p domain.Policies) (decisions []domain.LinkDecision, left []match.Candidate, notices []domain.Notice) {
+// The assets for which IsNew holds under p, that have no link in r that is
+// not active, and that have a link in some remote, are in an album or are
+// not in known, the assets of the state, meet the candidates first, and the
+// assets for which Syncs does not hold under p meet those that the first
+// leave.
+func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.LinkID]domain.RemoteEntry, r domain.RemoteSpec, fresh []domain.RemoteEntry, last domain.LinkID, p domain.Policies, known []domain.Asset) (decisions []domain.LinkDecision, left []match.Candidate, notices []domain.Notice) {
 	cands, unknown := match.Group(fresh)
 	for _, e := range unknown {
 		notices = append(notices, domain.Notice{Code: "plan.unknown_file", Params: []string{string(e.Root), e.Path}})
@@ -58,8 +60,12 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 			held[k] = a
 		}
 	}
-	linked, out := map[domain.AssetID]bool{}, map[domain.AssetID]bool{}
+	linked, out, anywhere, synced := map[domain.AssetID]bool{}, map[domain.AssetID]bool{}, map[domain.AssetID]bool{}, map[domain.AssetID]bool{}
+	for _, a := range known {
+		synced[a.ID] = true
+	}
 	for _, l := range links {
+		anywhere[l.AssetID] = true
 		if l.Remote != r.Name {
 			continue
 		}
@@ -77,7 +83,14 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 		}
 		decisions = append(decisions, domain.LinkDecision{Link: l, ICloud: domain.ChangeNew, Remote: domain.ChangeNew, Action: domain.ActionLink, Rule: rule})
 	}
-	ready := func(a domain.Asset) bool { return IsNew(a, p) && !out[a.ID] }
+	// An asset that the sync linked before and that lost every link outside
+	// any album took that loss from a run, which imports the file; a limit
+	// or a stop may leave the import to a later run, which must not link the
+	// file and so put the asset back into the album of its folder. One in an
+	// album may still lack the link of a file that a stopped run put for it.
+	ready := func(a domain.Asset) bool {
+		return IsNew(a, p) && !out[a.ID] && (anywhere[a.ID] || !synced[a.ID] || len(a.Memberships) > 0)
+	}
 	take := func(a domain.Asset, c match.Candidate, level domain.MatchLevel, rule string) {
 		if !ready(a) {
 			return
