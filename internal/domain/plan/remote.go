@@ -29,7 +29,9 @@ import (
 // it; other links get none. A moved file lies in the album of the pair of r
 // that holds its directory, or in none, except that a move which the base
 // takes with ActionUpdateBase keeps the album of the base, so that the layout
-// does not undo it. An active link without a file is not in current, and a
+// does not undo it. A file with new content in an upload-only r lies in
+// current with the size, hashes, ETag and MTime of its entry, which the base
+// takes (R-MODE-01). An active link without a file is not in current, and a
 // quarantined link with a decision is there, active, only once its file is
 // back. Any other link is in current as the state has it. Decisions and
 // current are in the order of link ID, and the inputs are not changed.
@@ -72,6 +74,9 @@ func DecideRemoteLinks(now domain.Asset, found bool, baseLibrary domain.LibraryK
 			d.Link = l
 			if d.Action == domain.ActionUpdateBase {
 				cur.AlbumID = l.AlbumID
+			}
+			if r.Mode == domain.ModeUploadOnly && remote == domain.ChangeReplaced {
+				cur.Size, cur.SHA256, cur.MD5, cur.ETag, cur.MTime = e.Size, e.SHA256, e.MD5, e.ETag, e.MTime
 			}
 			decisions = append(decisions, d)
 		}
