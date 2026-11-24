@@ -754,6 +754,8 @@ func TestSimulateConverges(t *testing.T) {
 	h8, rawFile := asset(8, "IMG_0002.HEIC", 200, may1, "run-2", holidays), file(personal, holidaysDir+"/raw/IMG_0001.HEIC", 100, "a1", settled)
 	noAlbums := p
 	noAlbums.AlbumsForPersonal = false
+	noDeletes, detached := p, photo
+	noDeletes.Deletes, detached.Status = domain.DeletesNone, domain.StatusDetached
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -830,6 +832,9 @@ func TestSimulateConverges(t *testing.T) {
 			state(nil, pairs{alphaHolidays}), snapshot(n2, n1), nil, specs{alpha}, "", p, kinds{domain.OpPut, domain.OpPut, domain.OpAlbumAdd}, nil},
 		{"a file that the user brings back from quarantine for an asset gone from the library comes back to iCloud as a new asset under its link",
 			state(assets{a7}, pairs{alphaHolidays}, back), snapshot(), scans{"alpha": {e1}}, specs{alpha}, "", p, kinds{domain.OpImport}, nil},
+		{"a new file that an asset with a detached link matches comes into iCloud as a new asset",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, detached), snapshot(a7), scans{"alpha": {tripFile}}, specs{alpha}, "", noDeletes,
+			kinds{domain.OpImport}, nil},
 		{"a photo and its Live Photo video that the user changed while their asset is gone from the library come back to iCloud as one new asset",
 			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(), scans{"alpha": {changedMov, replaced}}, specs{alpha}, "", p,
 			kinds{domain.OpImport}, nil},
