@@ -359,10 +359,6 @@ func TestBuild(t *testing.T) {
 	alone1, alone2 := asset(1, "IMG_0001.HEIC", 100, may11, "run-2"), asset(1, "IMG_0002.HEIC", 200, may11, "run-2")
 	lone2 := file(personal, holidaysDir+"/IMG_0002.HEIC", 200, "b2", settled)
 	lone2.Meta = domain.MediaMeta{Taken: may11, Width: 4032, Height: 3024}
-	unplaced := domain.Link{
-		ID: 1, AssetID: 1, Remote: "alpha", Root: personal, Path: lone2.Path, Role: original, AlbumID: holidays, Size: 200,
-		SHA256: "sb2", MD5: "b2", ETag: "eb2", MTime: settled, Level: domain.LevelExact, QuarantinePath: quarantined + lone2.Path,
-	}
 	themed := inYear(holidays, "u-hol", "Holidays", may1.Add(-2*time.Hour))
 	themed.Kind = domain.KindThematic
 	themedAlbums, themedLibrary := slices.Clone(albums), slices.Clone(library)
@@ -995,11 +991,9 @@ func TestBuild(t *testing.T) {
 		{"a linked file that the user moved into a directory of edits keeps its asset as the state has it there",
 			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip), scans{"alpha": {editedFile}}, specs{alpha}, "", p, event,
 			domain.Plan{}, delta(in7Trip), nil},
-		{"upload-only: a file that matching links to an asset in no event goes to quarantine",
+		{"upload-only: a file of the user that matching finds for an asset in no event stays where it is, without a link, and is reported",
 			state(nil, pairs{alphaHolidays}), snapshot(alone2), scans{"alpha": {lone2}}, specs{alphaUp}, "", p, event,
-			domain.Plan{Ops: ops{{Kind: domain.OpQuarantine, Remote: "alpha", Root: personal, Src: lone2.Path, DstRoot: personal, Dst: unplaced.QuarantinePath,
-				Asset: 1, Rule: "R-OBJECT-04", Links: []domain.Link{unplaced}}}},
-			delta(alone2), nil},
+			domain.Plan{Notices: []domain.Notice{counted("plan.not_imported", "alpha", "1")}}, delta(alone2), nil},
 		{"a new file in the directory of the pair of an album that left the templates goes into that album",
 			state(nil, pairs{alphaHolidays}), themedSnapshot, scans{"alpha": {new3}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{importNew("alpha", new3)}}, domain.SnapshotDelta{Albums: themedAlbums}, nil},

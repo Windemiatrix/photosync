@@ -66,8 +66,12 @@ type Input struct {
 // Join, and the new links that matching makes there are added to its links as
 // they lie now: so DecideLayout takes them, the asset counting as linked when
 // the state holds the asset or a link of it, or when those new links name
-// it, and DecideComponents its links as the
-// state holds them. AssetOps, ImportOps with its links as they lie now, then
+// it, and DecideComponents its links as the state holds them. A link of
+// matching that a placement takes to quarantine is not made where it takes
+// the asset into no album, in an upload-only remote or under the personal
+// root while p.AlbumsForPersonal is false, nor are the links of its Live
+// Photo video and RAW file; that placement is dropped, and the file counts
+// in "plan.not_imported". AssetOps, ImportOps with its links as they lie now, then
 // FileOps, ComponentOps and SidecarOps in each remote that the run syncs, by
 // name, where the asset takes part in the plan, give its operations: FileOps
 // with the decisions of matching there, each replacement turned into
@@ -244,6 +248,29 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 		}
 		_, seen := base[id]
 		decisions, status, target, join, leave, placements := DecideLayout(asset, found, linked || seen, objects, current, in.Remotes, albums, events, moved, in.Policies, in.RunID)
+		for _, r := range in.Remotes {
+			// Where a new file of the user takes its asset into no album, it is
+			// only reported (R-MODE-01, R-MODE-04), so the layout must not take
+			// it to quarantine.
+			reported := func(l domain.Link) bool {
+				return r.Mode == domain.ModeUploadOnly || l.Root == domain.LibraryPersonal && !in.Policies.AlbumsForPersonal
+			}
+			var unmade []domain.Link
+			for _, pl := range placements[r.Name] {
+				if pl.Action == domain.ActionQuarantineFile && reported(pl.Link) && slices.ContainsFunc(matched[r.Name], func(d domain.LinkDecision) bool { return d.Link.ID == pl.Link.ID }) {
+					unmade = append(unmade, pl.Link)
+				}
+			}
+			if len(unmade) == 0 {
+				continue
+			}
+			later[[2]string{"plan.not_imported", r.Name}] += len(unmade)
+			gone := func(l domain.Link) bool {
+				return slices.ContainsFunc(unmade, func(x domain.Link) bool { return x.ID == l.ID || ComponentBeside(x, l) })
+			}
+			matched[r.Name] = slices.DeleteFunc(matched[r.Name], func(d domain.LinkDecision) bool { return gone(d.Link) })
+			placements[r.Name] = slices.DeleteFunc(placements[r.Name], func(pl domain.Placement) bool { return gone(pl.Link) })
+		}
 		if IsNew(asset, in.Policies) && !linked && len(objectAlbums(target, albums)) == 0 {
 			notices = append(notices, domain.Notice{Code: "plan.skipped", Params: []string{"asset", asset.OriginalName, asset.Key.UUID}})
 		}
