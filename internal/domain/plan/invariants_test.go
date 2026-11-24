@@ -1,0 +1,405 @@
+package plan_test
+
+import (
+	"fmt"
+	"path"
+	"reflect"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"pgregory.net/rapid"
+
+	"github.com/Windemiatrix/go-libs/osxphotos/template"
+
+	"github.com/Windemiatrix/photosync/internal/domain"
+	"github.com/Windemiatrix/photosync/internal/domain/plan"
+	"github.com/Windemiatrix/photosync/internal/testkit/gen"
+)
+
+// converging leaves out the one perturbation whose worlds do not converge by
+// design: a directory in NFD beside the title of its album in NFC makes
+// doubles, and a run leaves doubles alone until the user renames one.
+const converging = gen.PerturbAll &^ gen.PerturbNFD
+
+type genCase struct {
+	first, in plan.Input
+	actions   []gen.Action
+}
+
+func genCases() *rapid.Generator[genCase] {
+	return rapid.Custom(func(t *rapid.T) genCase {
+		w := gen.Worlds(gen.Config{Frames: rapid.IntRange(1, 8).Draw(t, "frames"), Perturb: converging}).Draw(t, "world")
+		tmpl, err := template.Parse("{event_path}/{original_name}")
+		if err != nil {
+			t.Fatalf("template.Parse: %v", err)
+		}
+		p := domain.DefaultPolicies()
+		p.Deletes = rapid.SampledFrom([]domain.DeletesPolicy{domain.DeletesNone, domain.DeletesQuarantine, domain.DeletesPropagate}).Draw(t, "deletes")
+		p.Conflict = rapid.SampledFrom([]domain.ConflictPolicy{domain.ConflictRemoteWins, domain.ConflictICloudWins, domain.ConflictAsk, domain.ConflictSkip}).Draw(t, "conflict")
+		mode := rapid.SampledFrom([]domain.Mode{domain.ModeTwoWay, domain.ModeUploadOnly, domain.ModeDownloadOnly}).Draw(t, "mode")
+		first := plan.Input{
+			Snapshot: w.Snapshot, Scans: map[string][]domain.RemoteEntry{"alpha": w.Files}, Policies: p, Template: tmpl,
+			Remotes: []domain.RemoteSpec{{Name: "alpha", Mode: mode, Capabilities: domain.Capabilities{ContentHash: domain.HashMD5}}},
+			Fields:  fieldsByKey(w.Snapshot), Now: time.Date(2026, 11, 13, 1, 0, 0, 0, time.UTC), RunID: "run-1",
+		}
+		p1, delta, err := plan.Build(first)
+		if err != nil {
+			t.Fatalf("the first Build: %v", err)
+		}
+		synced := after(first, p1, delta)
+		var files, service []domain.RemoteEntry
+		for _, e := range synced.Scans["alpha"] {
+			if e.IsDir || strings.HasPrefix(e.Path, ".photosync/") {
+				service = append(service, e)
+			} else {
+				files = append(files, e)
+			}
+		}
+		was := gen.World{Snapshot: synced.Snapshot, Files: files}
+		actions := gen.Actions(was).Draw(t, "actions")
+		now := was.Apply(actions...)
+		if rapid.Bool().Draw(t, "loose") {
+			now.Snapshot.Assets = withLoose(t, now.Snapshot.Assets)
+		}
+		in := synced
+		in.Snapshot, in.Scans, in.Fields = now.Snapshot, map[string][]domain.RemoteEntry{"alpha": slices.Concat(now.Files, service)}, fieldsByKey(now.Snapshot)
+		return genCase{first: first, in: in, actions: actions}
+	})
+}
+
+// An asset without an album, on the day of an asset in an event, takes a first
+// placement, which no action of package gen makes: a new asset there always
+// comes into an album. An hour away from that asset and without SubSec, it
+// pairs with no file by its time.
+func withLoose(t *rapid.T, assets []domain.Asset) []domain.Asset {
+	placed := slices.DeleteFunc(slices.Clone(assets), func(a domain.Asset) bool {
+		return a.InTrash || len(a.AlbumUUIDs) == 0 || a.TZOffset == nil
+	})
+	if len(placed) == 0 {
+		return assets
+	}
+	a := rapid.SampledFrom(placed).Draw(t, "dated like")
+	shift := time.Hour
+	if a.Taken.Add(time.Duration(*a.TZOffset)*time.Second).Hour() >= 12 {
+		shift = -time.Hour
+	}
+	a.Key, a.AlbumUUIDs = domain.AssetKey{CloudAssetGUID: "guid-LOOSE", UUID: "uuid-LOOSE"}, nil
+	a.Taken, a.SubSec, a.OriginalName = a.Taken.Add(shift), "", "LOOSE"+path.Ext(a.OriginalName)
+	a.Resources = []domain.Resource{{Role: domain.ResourceOriginal, Filename: a.OriginalName, Size: 7_000_000}}
+	return append(slices.Clone(assets), a)
+}
+
+func fieldsByKey(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
+	byKey := map[domain.AssetKey]template.Photo{}
+	for _, a := range s.Assets {
+		byKey[a.Key] = templateFields{"original_name": {Strings: []string{a.OriginalName}}}
+	}
+	return func(k domain.AssetKey) template.Photo {
+		if f, ok := byKey[k]; ok {
+			return f
+		}
+		return templateFields{}
+	}
+}
+
+// A quarter of an hour is longer than SettleMinutes, so what a run puts has
+// settled by the next run, and short enough that all the runs of a case fall
+// on one day, the day in the path of the quarantine.
+func after(in plan.Input, p domain.Plan, delta domain.SnapshotDelta) plan.Input {
+	next := in
+	next.State, next.Snapshot, next.Scans = plan.Simulate(in, p, delta)
+	next.Now = in.Now.Add(15 * time.Minute)
+	next.Fields, next.RunID = fieldsByKey(next.Snapshot), next.Now.Format(time.RFC3339)
+	return next
+}
+
+func settles(t rapid.TB, in plan.Input) {
+	t.Helper()
+	p, delta, err := plan.Build(in)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	next := after(in, p, delta)
+	second, again, err := plan.Build(next)
+	if err != nil {
+		t.Fatalf("the second Build: %v", err)
+	}
+	end := after(next, second, again)
+	if componentQuarantineCleared(second, next.State) {
+		third, _, err := plan.Build(end)
+		if err != nil || len(third.Ops)+len(third.Links)+len(third.Albums)+len(third.Pairs) > 0 {
+			t.Fatalf("the plan after a component left quarantine\n%+v\n%v\nwant no operation, record, album or pair", third, err)
+		}
+		return
+	}
+	open := !slices.ContainsFunc(second.Conflicts, func(c domain.Conflict) bool {
+		return c.Status != domain.ConflictStatusOpen && c.Status != domain.ConflictStatusSkipped
+	})
+	if len(second.Ops)+len(second.Links)+len(second.Albums)+len(second.Pairs) > 0 || !open ||
+		!reflect.DeepEqual(end.State, next.State) || !reflect.DeepEqual(end.Snapshot, next.Snapshot) || !reflect.DeepEqual(end.Scans, next.Scans) {
+		t.Fatalf("the plan\n%+v\nleaves\n%+v\n%+v\n%+v\nand the next plan\n%+v\nleaves\n%+v\n%+v\n%+v\nwant no operation, record, album or pair, only open or skipped conflicts, and nothing that it changes",
+			p, next.State, next.Snapshot, next.Scans, second, end.State, end.Snapshot, end.Scans)
+	}
+}
+
+// Assets count as plan.Limit counts them: an import of a new asset is an
+// asset of its own, and an operation of no asset is none.
+func assetsWithOps(p domain.Plan) int {
+	n, seen := 0, map[domain.AssetID]bool{}
+	for _, o := range p.Ops {
+		switch {
+		case o.Kind == domain.OpImport && o.Asset == 0:
+			n++
+		case o.Asset != 0 && !seen[o.Asset]:
+			n, seen[o.Asset] = n+1, true
+		}
+	}
+	return n
+}
+
+// outcome is what a sync leaves in the photo library and the listings, as
+// sorted lines that do not depend on when or in how many runs it got there:
+// an asset that a run imports, whose UUID names that run, counts by its name,
+// an album by its place, and a file without its MTime, the time of the run
+// that put it.
+func outcome(in plan.Input) []string {
+	places := map[string]string{}
+	for _, a := range in.Snapshot.Albums {
+		places[a.UUID] = strings.Join(append(slices.Clone(a.FolderTitles), a.Title), "/")
+	}
+	var lines []string
+	for _, a := range in.Snapshot.Albums {
+		lines = append(lines, "album "+places[a.UUID])
+	}
+	for _, a := range in.Snapshot.Assets {
+		key := a.Key.UUID
+		if strings.HasPrefix(key, "sim-") {
+			key = "imported"
+		}
+		var albums []string
+		for _, u := range a.AlbumUUIDs {
+			albums = append(albums, places[u])
+		}
+		slices.Sort(albums)
+		lines = append(lines, fmt.Sprintf("asset %s %s %v trashed=%t in %q", key, a.OriginalName, a.Resources, a.InTrash, albums))
+	}
+	for name, es := range in.Scans {
+		for _, e := range es {
+			lines = append(lines, fmt.Sprintf("file %s %s %s %d %s %s dir=%t", name, e.Root, e.Path, e.Size, e.MD5, e.SHA256, e.IsDir))
+		}
+	}
+	slices.Sort(lines)
+	return lines
+}
+
+func limited(t rapid.TB, in plan.Input) {
+	t.Helper()
+	p, delta, err := plan.Build(in)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	want, budget := outcome(after(in, p, delta)), assetsWithOps(p)
+	cur, before := in, budget+1
+	for run := 0; ; run++ {
+		next, d, err := plan.Build(cur)
+		if err != nil {
+			t.Fatalf("Build of run %d: %v", run, err)
+		}
+		if len(next.Ops)+len(next.Links)+len(next.Albums)+len(next.Pairs) == 0 {
+			break
+		}
+		n := assetsWithOps(next)
+		if n >= before && n > 0 || run > budget {
+			t.Fatalf("run %d with a limit of one asset plans for %d assets after %d; want fewer, in at most %d runs:\n%+v", run, n, before, budget+1, next)
+		}
+		before, cur = n, after(cur, plan.Limit(next, 1), d)
+	}
+	if pairFollowCut(in, p) {
+		return
+	}
+	got := unnumbered(outcome(cur))
+	if want = unnumbered(want); !slices.Equal(got, want) {
+		t.Fatalf("runs with a limit of one asset end in\n%s\nwant the end of one run without it\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A pair that follows an album renamed in Photos moves in the records of the
+// run, and the files of its directory with the operations of their assets: a
+// limit that cuts one of those off leaves its file in the directory of the old
+// name, which a later run may take for a new album. A known limit of the
+// plan.
+func pairFollowCut(in plan.Input, p domain.Plan) bool {
+	var old []string
+	for _, x := range p.Pairs {
+		for _, y := range in.State.AlbumPairs {
+			if x.AlbumID == y.AlbumID && x.Remote == y.Remote && x.Root == y.Root && x.DirPath != y.DirPath {
+				old = append(old, y.DirPath)
+			}
+		}
+	}
+	kept := plan.Limit(p, 1).Ops
+	return slices.ContainsFunc(p.Ops, func(o domain.Op) bool {
+		cut := !slices.ContainsFunc(kept, func(k domain.Op) bool { return k.Compare(o) == 0 })
+		return cut && (slices.Contains(old, path.Dir(o.Src)) || slices.Contains(old, path.Dir(o.Dst)))
+	})
+}
+
+// The order of runs decides which of two files of one name in a directory
+// gets " (N)": a known limit of the plan, so the runs compare without it.
+func unnumbered(lines []string) []string {
+	out := make([]string, len(lines))
+	for k, line := range lines {
+		if !strings.HasPrefix(line, "file ") {
+			out[k] = line
+			continue
+		}
+		var b strings.Builder
+		for {
+			i := strings.Index(line, " (")
+			if i < 0 {
+				break
+			}
+			j := strings.IndexByte(line[i:], ')')
+			if j > 2 && strings.Trim(line[i+2:i+j], "0123456789") == "" {
+				b.WriteString(line[:i])
+			} else {
+				b.WriteString(line[:i+2])
+				j = 1
+			}
+			line = line[i+j+1:]
+		}
+		out[k] = b.String() + line
+	}
+	slices.Sort(out)
+	return out
+}
+
+// A component that follows its main file to quarantine while the asset stays
+// keeps a quarantined_remote link that the next run clears with a record
+// alone: a known limit of the plan.
+func componentQuarantineCleared(second domain.Plan, after domain.State) bool {
+	if len(second.Ops)+len(second.Conflicts)+len(second.Albums)+len(second.Pairs) > 0 || len(second.Links) == 0 {
+		return false
+	}
+	was := map[domain.LinkID]domain.Link{}
+	for _, l := range after.Links {
+		was[l.ID] = l
+	}
+	for _, l := range second.Links {
+		w, ok := was[l.ID]
+		if !ok || l.Status != "" || w.Status != domain.StatusQuarantinedRemote || w.Role != domain.RoleLiveVideo && w.Role != domain.RoleRAWPair {
+			return false
+		}
+	}
+	return true
+}
+
+// After the first sync of a world of package gen, and again after a user acts
+// on both sides, the next run has nothing to do, whatever the mode and the
+// deletes and conflict policies.
+func TestPlanConvergesOnGenWorlds(t *testing.T) {
+	t.Parallel()
+	// covers: INV-1
+	rapid.Check(t, func(t *rapid.T) {
+		c := genCases().Draw(t, "case")
+		settles(t, c.first)
+		settles(t, c.in)
+	})
+}
+
+// Runs with a limit of one asset end where one run without a limit ends, each
+// planning for fewer assets than the one before: a new asset that the limit
+// cuts off from its first link stays new and takes its first placement later.
+func TestPlanLimitConvergesOnGenWorlds(t *testing.T) {
+	t.Parallel()
+	// covers: INV-1
+	rapid.Check(t, func(t *rapid.T) {
+		limited(t, genCases().Draw(t, "case").in)
+	})
+}
+
+// The cases of the properties above must hold what they claim to check. Fixed
+// seeds give the same cases on every run.
+func TestGenCasesNotVacuous(t *testing.T) {
+	t.Parallel()
+	const cases = 100
+	var matched, acting, several, loose, quarantined, unlimited, unsettled int
+	drawn := map[gen.Action]bool{}
+	for seed := range cases {
+		c := genCases().Example(seed)
+		first, _, err := plan.Build(c.first)
+		if err != nil {
+			t.Fatalf("seed %d: the first Build: %v", seed, err)
+		}
+		p, delta, err := plan.Build(c.in)
+		if err != nil {
+			t.Fatalf("seed %d: Build after the actions: %v", seed, err)
+		}
+		next := after(c.in, p, delta)
+		second, _, err := plan.Build(next)
+		if err != nil {
+			t.Fatalf("seed %d: the second Build: %v", seed, err)
+		}
+		if pairFollowCut(c.in, p) {
+			unlimited++
+		}
+		if componentQuarantineCleared(second, next.State) {
+			unsettled++
+		}
+		if len(first.Links) > 0 {
+			matched++
+		}
+		if len(p.Ops)+len(p.Links)+len(p.Albums)+len(p.Pairs) > 0 {
+			acting++
+		}
+		if assetsWithOps(p) > 1 {
+			several++
+		}
+		if slices.ContainsFunc(p.Ops, func(o domain.Op) bool { return o.Kind == domain.OpPut && strings.HasPrefix(path.Base(o.Dst), "LOOSE") }) {
+			loose++
+		}
+		if slices.ContainsFunc(p.Ops, func(o domain.Op) bool { return o.Kind == domain.OpQuarantine && o.Rule == "R-OBJECT-04" }) {
+			quarantined++
+		}
+		for _, a := range c.actions {
+			drawn[gen.Action{Side: a.Side, Kind: a.Kind}] = true
+		}
+	}
+	t.Logf("of %d cases the first sync matches files in %d; after the actions %d plan something, %d for more than one asset, %d put an asset without an album into an event, %d take the file of an asset out of every event to quarantine; a known limit spares %d from the comparison of runs with a limit and %d from the check of the next run",
+		cases, matched, acting, several, loose, quarantined, unlimited, unsettled)
+	var missing []string
+	// A known limit that spares more cases than these would leave the
+	// properties checking little.
+	if unlimited > 15 || unsettled > 3 {
+		missing = append(missing, fmt.Sprintf("cases that no known limit spares (%d and %d are spared)", unlimited, unsettled))
+	}
+	for _, c := range []struct {
+		what      string
+		got, want int
+	}{
+		{"a first sync that matches files", matched, 48},
+		{"a plan after the actions", acting, 46},
+		{"a plan for more than one asset", several, 25},
+		{"a first placement", loose, 4},
+		{"a quarantine of an asset out of every event", quarantined, 6},
+	} {
+		if c.got < c.want {
+			missing = append(missing, fmt.Sprintf("%d cases with %s (%d are)", c.want, c.what, c.got))
+		}
+	}
+	for _, kind := range []gen.ActionKind{gen.Create, gen.Delete, gen.AlbumAdd, gen.AlbumRemove, gen.AlbumMove, gen.AlbumRename} {
+		if !drawn[gen.Action{Side: gen.ICloud, Kind: kind}] {
+			missing = append(missing, fmt.Sprintf("the action %s in Photos", kind))
+		}
+	}
+	for _, kind := range []gen.ActionKind{gen.Create, gen.Move, gen.Rename, gen.Replace, gen.Delete, gen.AlbumRename} {
+		if !drawn[gen.Action{Side: gen.Remote, Kind: kind}] {
+			missing = append(missing, fmt.Sprintf("the action %s in the cloud", kind))
+		}
+	}
+	if len(missing) > 0 {
+		t.Errorf("the cases of seeds 0 to %d lack %s", cases-1, strings.Join(missing, "; "))
+	}
+}
