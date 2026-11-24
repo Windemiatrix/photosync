@@ -1,7 +1,9 @@
 package domain
 
 // SnapshotDelta is a snapshot of the photo library reconciled with the state,
-// as a run writes it to the state before its operations. Assets and Albums
+// as a run writes it to the state before its operations, but for a new asset,
+// which the run writes with its first link: one left without a link is new
+// again on the next run. Assets and Albums
 // are those of the snapshot, each with its ID in the state or a new ID above
 // every ID of its kind there, and with the fields that only the state fills;
 // an asset or an album that the snapshot lacks is not in them, and neither is

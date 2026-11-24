@@ -17,7 +17,8 @@ var ErrBadSnapshot = errors.New("plan: the snapshot breaks its contract")
 
 // Reconcile returns snap, the snapshot of the library as a run reads it,
 // reconciled with state, which the last applied run left: the delta that the
-// run writes to the state before its operations. Its albums are those of
+// run writes to the state before its operations, a new asset only with its
+// first link. Its albums are those of
 // ReconcileAlbums with p. An asset of snap is the asset of state, or the earlier
 // identity that an entry of state.History names, with its cloud GUID, else
 // with its UUID, when no other asset or entry left on either side has that
