@@ -83,6 +83,8 @@ func TestMatchFresh(t *testing.T) {
 	l4 := link(4, 7, "disk", liveHolidays, liveVideo, domain.StatusActive)
 	l4.Size, l4.MD5 = 300, "c1"
 	detached := link(1, 7, "disk", atHolidays, original, domain.StatusDetached)
+	detachedLive := l4
+	detachedLive.Status = domain.StatusDetached
 	quarantined := link(6, 7, "disk", atHolidays, original, domain.StatusQuarantinedRemote)
 	quarantined.QuarantinePath = ".photosync/quarantine/2024-06-01/" + atHolidays
 	made := func(id domain.LinkID, asset domain.AssetID, e domain.RemoteEntry, role domain.LinkRole, level domain.MatchLevel, rule string) domain.LinkDecision {
@@ -188,8 +190,10 @@ func TestMatchFresh(t *testing.T) {
 			entries(trip, heic), nil, nil, nil},
 		{"an asset in Recently Deleted takes its file without a link", byMD5, p, assets(trashed7), nil, nil, entries(heic),
 			nil, nil, nil},
-		{"an asset with a detached link takes a new file of it without a link", byMD5, p, assets(a7), links(detached), nil,
-			entries(trip), nil, nil, nil},
+		{"a new file of an asset with a detached link is new", byMD5, p, assets(a7), links(detached), nil,
+			entries(trip), nil, newFiles(alone(trip)), nil},
+		{"a detached link of a Live video alone does not make the new file of its asset new", byMD5, p, assets(live7), links(detachedLive), nil,
+			entries(heic), nil, nil, nil},
 		{"an asset with a quarantined link takes a new file of it without a link", byMD5, p, assets(a7), links(quarantined, l4),
 			nil, entries(trip), nil, nil, nil},
 		{"a copy of the file of a hidden asset is neither linked nor new", byMD5, skip, assets(hidden7), links(l1), found{1: heic},

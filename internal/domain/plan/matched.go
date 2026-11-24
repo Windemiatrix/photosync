@@ -11,9 +11,9 @@ import (
 // MatchFresh links the new files of remote r to the assets that they hold.
 // fresh and files are what ReadScan gives for r, links are the links of the
 // state in every remote, role and status, and assets are those of the
-// snapshot reconciled with the state. The assets without an active link of
-// the original or the source role in r meet in match.Match the candidates
-// that match.Group makes of fresh. A candidate that match.Match leaves is a
+// snapshot reconciled with the state. The assets without an active or a
+// detached link of the original or the source role in r meet in match.Match
+// the candidates that match.Group makes of fresh. A candidate that match.Match leaves is a
 // copy (R-LAYOUT-08) when its Main has, by the hash of kind
 // r.Capabilities.ContentHash, the content of the Main of a pair or of the
 // entry that files gives an active link of the original or the source role
@@ -62,7 +62,9 @@ func MatchFresh(assets []domain.Asset, links []domain.Link, files map[domain.Lin
 		if l.Remote != r.Name {
 			continue
 		}
-		linked[l.AssetID] = linked[l.AssetID] || objectFile(l)
+		// A file that a detached asset matched would never sync, though the run
+		// that detached the link imports it.
+		linked[l.AssetID] = linked[l.AssetID] || objectFile(l) || StatusFrozen([]domain.Link{l}, r.Name)
 		out[l.AssetID] = out[l.AssetID] || l.Status != domain.StatusActive
 		if a, found := byID[l.AssetID]; found && objectFile(l) {
 			hold(files[l.ID], a)
