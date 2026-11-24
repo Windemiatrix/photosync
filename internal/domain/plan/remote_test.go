@@ -85,7 +85,9 @@ func TestDecideRemoteLinks(t *testing.T) {
 	}
 	same := func(l domain.Link) domain.RemoteEntry { return entry(l, l.Root, l.Path) }
 	other := same(l1)
-	other.MD5 = "b2"
+	other.Size, other.MD5 = 120, "b2"
+	renewed := l1
+	renewed.Size, renewed.MD5 = 120, "b2"
 	dec := func(l domain.Link, icloud, remote domain.ChangeKind, a domain.LinkAction, rule string) domain.LinkDecision {
 		return domain.LinkDecision{Link: l, ICloud: icloud, Remote: remote, Action: a, Rule: rule}
 	}
@@ -97,7 +99,7 @@ func TestDecideRemoteLinks(t *testing.T) {
 	skipHidden, noAlbums := p, p
 	skipHidden.Hidden, noAlbums.AlbumsForPersonal = domain.HiddenSkip, false
 	where := func(l domain.Link) string {
-		return fmt.Sprintf("%d %s:%s #%d %s %s", l.ID, l.Root, l.Path, l.AlbumID, l.Status, l.QuarantinePath)
+		return fmt.Sprintf("%d %s:%s #%d %s %s %d %s", l.ID, l.Root, l.Path, l.AlbumID, l.Status, l.QuarantinePath, l.Size, l.MD5)
 	}
 	show := func(ds []domain.LinkDecision, ls []domain.Link) []string {
 		var out []string
@@ -195,6 +197,12 @@ func TestDecideRemoteLinks(t *testing.T) {
 		{"upload-only: the asset and its file moved", in(trip), true, personal, links(l1), uploadOnly,
 			scan{1: entry(l1, personal, atTrip)}, p,
 			decs(dec(l1, moved, moved, moveFile, "R-LINK-04")), links(place(l1, personal, atTrip, trip)), false},
+		{"upload-only: the base takes the new content of a file", in(holidays), true, personal, links(l1), uploadOnly,
+			scan{1: other}, p,
+			decs(dec(l1, unchanged, replaced, updateBase, "R-MODE-01")), links(renewed), false},
+		{"upload-only: a file with new content moves to the new event of its asset with that content", in(trip), true, personal, links(l1), uploadOnly,
+			scan{1: other}, p,
+			decs(dec(l1, moved, replaced, moveFile, "R-LINK-04")), links(renewed), false},
 		{"albums_for_personal false: a move within the personal root", in(holidays), true, personal, links(l1), twoWay,
 			scan{1: entry(l1, personal, atTrip)}, noAlbums,
 			decs(dec(l1, unchanged, moved, updateBase, "R-MODE-04")), links(place(l1, personal, atTrip, holidays)), false},
