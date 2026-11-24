@@ -91,6 +91,8 @@ func TestSimulate(t *testing.T) {
 	forgotten, removed, parked := video, photo, photo
 	forgotten.Status, removed.Status = "", ""
 	parked.Status, parked.QuarantinePath = domain.StatusQuarantinedRemote, inQuarantine.Path
+	e2Away, lostFresh := to(e2, personal, quarantined+e2.Path), fresh
+	lostFresh.Status, lostFresh.QuarantinePath = "", e2Away.Path
 	up := domain.Link{
 		AssetID: 9, Remote: "alpha", Root: personal, Path: holidaysDir + "/IMG_0003.HEIC", Role: original, AlbumID: holidays,
 		Size: 300, SHA256: "sc3", MD5: "c3", Level: domain.LevelUploaded, Status: domain.StatusActive,
@@ -305,6 +307,12 @@ func TestSimulate(t *testing.T) {
 				Links:      links{moved(photo, sharedFile, holidays), other, fresh}, History: []domain.AssetHistory{historyGone},
 			},
 			ordered, scans{"alpha": {e2, sharedFile}, "beta": {e1}}},
+		{"a new asset comes into the state with a link that the run leaves, one whose only link leaves stays out, and an asset of the state without a link stays",
+			domain.State{Assets: []domain.Asset{a5}}, domain.LibrarySnapshot{}, scans{"alpha": {e2}},
+			domain.Plan{Links: links{photo}, Ops: ops{op(domain.OpQuarantine, 8, e2, e2Away, "R-OBJECT-04", lostFresh)}},
+			domain.SnapshotDelta{Assets: []domain.Asset{a7, a5, a8}},
+			domain.State{Assets: []domain.Asset{a5, a7}, Links: links{photo}},
+			domain.LibrarySnapshot{}, scans{"alpha": {e2Away}}},
 		{"a file moves with its link to another root and folder, its Live Photo video and its sidecar go along, and its folder, a file of the user and a file of another remote stay",
 			domain.State{Links: links{photo, video, other}}, domain.LibrarySnapshot{}, scans{"alpha": {xmp, userFile, shot, folder, ev}, "beta": {e1}},
 			domain.Plan{Links: links{photo}, Ops: ops{
@@ -404,7 +412,7 @@ func TestSimulate(t *testing.T) {
 			}},
 			domain.SnapshotDelta{Assets: []domain.Asset{a8, a7}, Albums: []domain.Album{hol}},
 			domain.State{
-				Assets: []domain.Asset{a7, a8, made9, made10}, Albums: []domain.Album{hol},
+				Assets: []domain.Asset{a7, made9, made10}, Albums: []domain.Album{hol},
 				Links: links{photo, owned(relinked, 6, 10), owned(imported(newPhoto, original, holidays), 7, 9), owned(imported(newVideo, live, holidays), 8, 9)},
 			},
 			domain.LibrarySnapshot{
@@ -438,7 +446,7 @@ func TestSimulate(t *testing.T) {
 			},
 			scans{"alpha": {changed5}}},
 		{"an album operation puts its asset into its album or takes it out in the state and the snapshot, and does nothing where the asset is in already or not in it, and a delete takes its asset and the earlier identities to Recently Deleted, the identities alone under R-STATUS-08",
-			domain.State{Links: links{other}},
+			domain.State{Assets: []domain.Asset{a5, a7, a8}, Links: links{other}},
 			domain.LibrarySnapshot{
 				Assets: []domain.Asset{seen(q8), earlier(identity(5, 4, false)), seen(q5), earlier(identity(8, 3, false)), seen(q7)},
 				Albums: []domain.Album{{UUID: zoo.UUID, Title: zoo.Title}, {UUID: cats.UUID, Title: cats.Title}, {UUID: hol.UUID, Title: hol.Title}},
@@ -586,6 +594,12 @@ func TestSimulate(t *testing.T) {
 // the conflicts that the first left open, and its plan, applied, changes
 // nothing in the state, the snapshot or the listings. Each row names the
 // operations of the first plan, so that no row passes by planning nothing.
+// The conflicts of the first plan and the earlier identities in the state
+// after it name only assets that this state holds, as domain.State requires,
+// so a new asset that the run leaves without a link is in neither. A last
+// world runs with a limit of one asset too: a run leaves a new asset that
+// the limit cuts off from its first link new, so the runs end where one run
+// without a limit ends.
 func TestSimulateConverges(t *testing.T) {
 	t.Parallel()
 	const (
@@ -796,6 +810,8 @@ func TestSimulateConverges(t *testing.T) {
 		{"an asset that left its only event, the only one of its day, takes its file to quarantine and stays out of that event", // covers: R-OBJECT-06
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(left7, n8), scans{"alpha": {e1}}, specs{alpha}, "", p,
 			kinds{domain.OpQuarantine, domain.OpPut, domain.OpPut}, nil},
+		{"an asset that left its only event, the only one of its day, while the user deleted its file stays out of that event",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(left7), nil, specs{alpha}, "", p, nil, nil},
 		{"a file that the user moved takes the asset into the album of its new folder, and a new asset in Recently Deleted goes nowhere",
 			remembered(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), history), snapshot(a7, trashed), scans{"alpha": {tripFile}}, specs{alpha}, "", p,
 			kinds{domain.OpAlbumAdd, domain.OpAlbumRemove}, nil},
@@ -878,6 +894,20 @@ func TestSimulateConverges(t *testing.T) {
 				t.Fatalf("Build = %+v, %v; want a plan with the operations %v", first, err, c.kinds)
 			}
 			s, snap, listed := plan.Simulate(in, first, d)
+			held := map[domain.AssetID]bool{}
+			for _, a := range s.Assets {
+				held[a.ID] = true
+			}
+			for _, c := range first.Conflicts {
+				if !held[c.AssetID] {
+					t.Errorf("the first plan has a conflict of asset %d, which the state after it lacks", c.AssetID)
+				}
+			}
+			for _, h := range s.History {
+				if !held[h.AssetID] {
+					t.Errorf("the state after the first plan keeps an earlier identity of asset %d, which it lacks", h.AssetID)
+				}
+			}
 			next := in
 			next.State, next.Snapshot, next.Scans, next.Fields, next.Now, next.RunID = s, snap, listed, fieldsOf(snap), now.Add(time.Hour), "run-3"
 			second, again, err := plan.Build(next)
@@ -889,4 +919,38 @@ func TestSimulateConverges(t *testing.T) {
 			}
 		})
 	}
+	t.Run("runs with a limit of one asset end where one run without it ends, each new asset in the only event of its day", func(t *testing.T) {
+		t.Parallel()
+		tmpl, err := template.Parse("{event_path}/{original_name}")
+		if err != nil {
+			t.Fatalf("template.Parse: %v", err)
+		}
+		shots := snapshot(asset(1, "IMG_0001.HEIC", 100, may2, "run-2"), asset(2, "IMG_0002.HEIC", 200, may2, "run-2"))
+		placed := snapshot(asset(1, "IMG_0001.HEIC", 100, may2, "run-2", trip), asset(2, "IMG_0002.HEIC", 200, may2, "run-2", trip))
+		files := []domain.RemoteEntry{{Root: personal, Path: tripDir + "/IMG_0001.HEIC", Size: 100}, {Root: personal, Path: tripDir + "/IMG_0002.HEIC", Size: 200}}
+		for _, limit := range []int{0, 1} {
+			at := plan.Input{
+				State: state(nil, pairs{alphaHolidays}), Snapshot: shots, Remotes: specs{alpha}, Policies: p, Template: tmpl, Fields: fieldsOf(shots),
+			}
+			var last domain.Plan
+			for run := range 3 {
+				at.Now, at.RunID = now.Add(time.Duration(run)*time.Hour), fmt.Sprintf("run-%d", run+2)
+				next, delta, err := plan.Build(at)
+				if err != nil {
+					t.Fatalf("Build of %s with a limit of %d: %v", at.RunID, limit, err)
+				}
+				last = next
+				at.State, at.Snapshot, at.Scans = plan.Simulate(at, plan.Limit(next, limit), delta)
+			}
+			var got []domain.RemoteEntry
+			for _, e := range at.Scans["alpha"] {
+				e.MTime = time.Time{}
+				got = append(got, e)
+			}
+			if len(last.Ops) > 0 || !reflect.DeepEqual(at.Snapshot, placed) || !reflect.DeepEqual(got, files) {
+				t.Errorf("after three runs with a limit of %d:\n%+v\n%+v\nthe last plan %+v\nwant both assets in the only event of their day with their files there, and nothing left to do",
+					limit, at.Snapshot, at.Scans, last)
+			}
+		}
+	})
 }
