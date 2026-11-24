@@ -27,15 +27,17 @@ import (
 // changed, as RemoteSide says with a file found elsewhere moved, and on that
 // fate, same holding when no placement moves that file and the component lies
 // beside it as both lie now; its iCloud side is that of the decision on that
-// file, unchanged for none. In an upload-only remote
-// ActionMoveFileReplaceAsset becomes ActionMoveFile by R-COMPONENT-04, its
-// Link with the size, hashes, ETag and MTime of the entry of the component,
-// which the base takes (R-MODE-01). Any other action that the mode of the
-// remote does not run becomes ActionUpdateBase when the file of the
-// component moved or has new content, else ActionNone, by R-MODE-01 or
-// R-MODE-02, and then StatusDeletes applies deletes. after gives, by link ID, the status that
-// each decision leaves its link in, "" when it follows a file to quarantine
-// by a placement. copies gives, under the same key, the placement of the
+// file, unchanged for none. A component gone from the cloud beside a file of
+// an ActionImport decision is forgotten by R-COMPONENT-04, since the asset
+// that it would come from is not the one that the file goes to. In an
+// upload-only remote ActionMoveFileReplaceAsset becomes ActionMoveFile by
+// R-COMPONENT-04, its Link with the size, hashes, ETag and MTime of the entry
+// of the component, which the base takes (R-MODE-01). Any other action that
+// the mode of the remote does not run becomes ActionUpdateBase when the file
+// of the component moved or has new content, else ActionNone, by R-MODE-01
+// or R-MODE-02, and then StatusDeletes applies deletes. after gives, by link
+// ID, the status that each decision leaves its link in, "" when it follows a
+// file to quarantine by a placement. copies gives, under the same key, the placement of the
 // component into the album of each copy that placements make of that file, as
 // ComponentAction gives it for ActionCopyFile, with Link where the component
 // lies now, or as in the state when gone, an upload too. The lists are in the
@@ -48,7 +50,7 @@ func DecideComponents(decisions map[string][]domain.LinkDecision, status map[dom
 		}
 		return l
 	}
-	fates, ends := map[domain.LinkID]domain.LinkAction{}, map[domain.LinkID]domain.Link{}
+	fates, ends, imported := map[domain.LinkID]domain.LinkAction{}, map[domain.LinkID]domain.Link{}, map[domain.LinkID]bool{}
 	for name, ds := range decisions {
 		for _, d := range ds {
 			if !objectFile(d.Link) {
@@ -66,7 +68,7 @@ func DecideComponents(decisions map[string][]domain.LinkDecision, status map[dom
 			if d.Remote == domain.ChangeDeleted || status[d.Link.ID] != domain.StatusActive {
 				fate = domain.ActionDeleteFile
 			}
-			fates[d.Link.ID], ends[d.Link.ID] = fate, end
+			fates[d.Link.ID], ends[d.Link.ID], imported[d.Link.ID] = fate, end, d.Action == domain.ActionImport
 		}
 	}
 	specs, rules := map[string]domain.RemoteSpec{}, map[domain.Mode]string{domain.ModeUploadOnly: "R-MODE-01", domain.ModeDownloadOnly: "R-MODE-02"}
@@ -98,6 +100,9 @@ func DecideComponents(decisions map[string][]domain.LinkDecision, status map[dom
 			if r.Mode == domain.ModeUploadOnly && d.Action == domain.ActionMoveFileReplaceAsset {
 				d.Action, d.Rule = domain.ActionMoveFile, "R-COMPONENT-04"
 				d.Link.Size, d.Link.SHA256, d.Link.MD5, d.Link.ETag, d.Link.MTime = e.Size, e.SHA256, e.MD5, e.ETag, e.MTime
+			}
+			if side == domain.ChangeDeleted && imported[main] {
+				d.Action, d.Rule = domain.ActionForget, "R-COMPONENT-04"
 			}
 			if !ModeAllows(r.Mode, d.Action) {
 				d.Action, d.Rule = domain.ActionNone, rules[r.Mode]
