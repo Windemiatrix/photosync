@@ -71,6 +71,10 @@ func TestReadScan(t *testing.T) {
 	edit, toEdits, inThemed := file(personal, anEdit, "c6"), file(personal, movedToEdits, "a1"), file(personal, inAlbumEdited, "a1")
 	liveTripNew, liveTripDouble := file(personal, "2024/05-02 - Trip/IMG_0001.mov", "c8"), file(personal, "2024/05-02 - Trip/img_0001.MOV", "c9")
 	xmpTrip, liveHere := file(personal, "2024/05-02 - Trip/IMG_0001.xmp", "x1"), file(personal, "2024/05-01 - Holidays/IMG_0001.mov", "c8")
+	raw := link(14, "disk", domain.RoleRAWPair, domain.StatusActive)
+	raw.Path, raw.MD5 = "2024/05-01 - Holidays/IMG_0001.DNG", "a3"
+	rawInTrip, replacedInTrip := file(personal, "2024/05-02 - Trip/IMG_0001.DNG", "a3"), file(personal, atTrip, "d1")
+	jpgInTrip, namesakeInParty := file(personal, "2024/05-02 - Trip/IMG_0001.JPG", "d2"), file(personal, "2024/05-03 - Party/IMG_0001.HEIC", "d3")
 	links := func(l ...domain.Link) []domain.Link { return l }
 	entries := func(e ...domain.RemoteEntry) []domain.RemoteEntry { return e }
 	type found = map[domain.LinkID]domain.RemoteEntry
@@ -135,6 +139,14 @@ func TestReadScan(t *testing.T) {
 			links(live, l1), entries(liveHere, held), found{1: held}, entries(liveHere), nil, nil},
 		{"a video of the name of a Live Photo video left in the old folder of its moved photo is a new file", byMD5,
 			links(live, l1), entries(liveHere, inTrip), found{1: inTrip}, entries(liveHere), nil, nil},
+		{"a RAW file moved beside its photo that the user replaced while moving it is new with that photo", byMD5,
+			links(raw, l1), entries(rawInTrip, replacedInTrip), nil, entries(rawInTrip, replacedInTrip), nil, nil},
+		{"a RAW file moved while its photo is gone stays with its link", byMD5,
+			links(raw, l1), entries(rawInTrip), found{14: rawInTrip}, nil, nil, nil},
+		{"a file of another type of the name of the gone photo beside the moved RAW file is new alone", byMD5,
+			links(raw, l1), entries(rawInTrip, jpgInTrip), found{14: rawInTrip}, entries(jpgInTrip), nil, nil},
+		{"a photo of the name of the gone photo in another folder than the moved RAW file is new alone", byMD5,
+			links(raw, l1), entries(rawInTrip, namesakeInParty), found{14: rawInTrip}, entries(namesakeInParty), nil, nil},
 		{"a directory at the path of a link", byMD5, links(l1), entries(dirAtHolidays), found{1: dirAtHolidays}, nil, nil, nil},
 		{"a directory at the path of a link, its file moved elsewhere", byMD5, links(l1), entries(dirAtHolidays, inTrip),
 			found{1: inTrip}, nil, nil, nil},
