@@ -24,10 +24,11 @@ import (
 // Main has, by the hash of kind Capabilities.ContentHash of its remote, the
 // content of the Main of one imported before, an empty hash matching none: its
 // links, made as below, follow those of that import when it is of another
-// remote and into the same album, and else it waits for a later run. The links of an import are new and of no asset yet:
-// the Main with the role of the file, then the Live Photo video and the RAW
-// file, if any, each where its entry lies, with the size, hashes, ETag and
-// MTime of the entry, the level imported and the album of the import. When
+// remote and into the same album, and else it waits for a later run. The
+// links of an import are new and of no asset yet: the Main with the role of
+// the file, then the Live Photo video and the RAW file, if any, each where its
+// entry lies, with the size, hashes, ETag and MTime of the entry, the level
+// imported and the album of the import. When
 // p.EditedFiles is quarantine, each of the Edited of a remote where
 // ModeAllows ActionQuarantineFile moves without a link under R-STATUS-10, in
 // the order of Root, then Path, to the path that Names.Quarantine gives it on

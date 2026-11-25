@@ -7,8 +7,9 @@ import (
 )
 
 // Tally is a number of operations and the bytes that they transfer: the sizes
-// of the links of each OpPut and OpImport among them. The cloud moves, copies
-// and deletes a file in place, so the other kinds transfer none.
+// of the links of each OpPut among them, and of each OpImport those of its
+// Remote. The cloud moves, copies and deletes a file in place, so the other
+// kinds transfer none.
 type Tally struct {
 	Count int
 	Bytes int64

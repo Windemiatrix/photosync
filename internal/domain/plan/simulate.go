@@ -51,8 +51,8 @@ import (
 // with the capture time, offset, fraction of a second, width and height of
 // the Meta of the entry at Src as the operations before it leave it, in the
 // album of AlbumID unless it is zero, and with a resource for each of its
-// links of Remote in their order, the first the original, each named by the base of its
-// path, with its size. The state takes that asset with the hashes of the
+// links of Remote in their order, the first the original, each named by the
+// base of its path, with its size. The state takes that asset with the hashes of the
 // links in its resources, Root as its TargetLibrary and in.RunID as the
 // FirstSeenRun of the album: under the ID of Asset, whose key before goes to
 // History with Deleted false, or, for a zero Asset, under the next ID above
