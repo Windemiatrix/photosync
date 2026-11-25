@@ -446,7 +446,11 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	for _, o := range out.Ops {
 		switch {
 		case o.Kind == domain.OpImport && o.Links[0].ID == 0:
-			later[[2]string{"plan.waiting_import", o.Remote}]--
+			for _, l := range o.Links {
+				if l.Role == domain.RoleOriginal || l.Role == domain.RoleSource {
+					later[[2]string{"plan.waiting_import", l.Remote}]--
+				}
+			}
 		case o.Rule == "R-STATUS-10":
 			later[[2]string{"plan.edits_left", o.Remote}]--
 		}

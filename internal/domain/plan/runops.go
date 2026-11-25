@@ -22,11 +22,13 @@ import (
 // it lies under the rule of its decision, into its AlbumID while albums hold
 // that album outside Recently Deleted and else into none, but for one whose
 // Main has, by the hash of kind Capabilities.ContentHash of its remote, the
-// content of the Main of one imported before, an empty hash matching none: it
-// waits for a later run. The links of an import are new and of no asset yet:
-// the Main with the role of the file, then the Live Photo video and the RAW
-// file, if any, each where its entry lies, with the size, hashes, ETag and
-// MTime of the entry, the level imported and the album of the import. When
+// content of the Main of one imported before, an empty hash matching none: its
+// links, made as below, follow those of that import when it is of another
+// remote and into the same album, and else it waits for a later run. The
+// links of an import are new and of no asset yet: the Main with the role of
+// the file, then the Live Photo video and the RAW file, if any, each where its
+// entry lies, with the size, hashes, ETag and MTime of the entry, the level
+// imported and the album of the import. When
 // p.EditedFiles is quarantine, each of the Edited of a remote where
 // ModeAllows ActionQuarantineFile moves without a link under R-STATUS-10, in
 // the order of Root, then Path, to the path that Names.Quarantine gives it on
@@ -37,7 +39,7 @@ func RunOps(read map[string]RemoteScan, added, albums []domain.Album, names map[
 	for _, a := range added {
 		ops = append(ops, domain.Op{Kind: domain.OpAlbumCreate, AlbumID: a.ID, Rule: "R-LAYOUT-06"})
 	}
-	seen := map[string]bool{}
+	seen := map[string]int{}
 	for _, r := range slices.SortedFunc(slices.Values(remotes), func(x, y domain.RemoteSpec) int { return cmp.Compare(x.Name, y.Name) }) {
 		for _, a := range read[r.Name].Renamed {
 			rule := "R-LAYOUT-12"
@@ -50,11 +52,9 @@ func RunOps(read map[string]RemoteScan, added, albums []domain.Album, names map[
 			ops = append(ops, domain.Op{Kind: domain.OpAlbumMove, AlbumID: a.ID, ParentID: a.ParentID, Rule: "R-LAYOUT-13"})
 		}
 		for _, f := range read[r.Name].NewFiles {
-			k := moveKey(f.File.Main.MD5, f.File.Main.SHA256, r.Capabilities.ContentHash)
-			if f.Decision.Action != domain.ActionImport || k != "" && seen[k] {
+			if f.Decision.Action != domain.ActionImport {
 				continue
 			}
-			seen[k] = true
 			album := f.AlbumID
 			if !slices.ContainsFunc(albums, func(a domain.Album) bool { return a.ID == album && !a.InTrash }) {
 				album = 0
@@ -72,6 +72,16 @@ func RunOps(read map[string]RemoteScan, added, albums []domain.Album, names map[
 			if f.File.RAW != nil {
 				links = append(links, link(*f.File.RAW, domain.RoleRAWPair))
 			}
+			k := moveKey(f.File.Main.MD5, f.File.Main.SHA256, r.Capabilities.ContentHash)
+			if i, ok := seen[k]; k != "" && ok {
+				// A file left to wait has no link, so the next run would take it for a
+				// new file of the user, whatever the user did to the asset meanwhile.
+				if ops[i].Remote != r.Name && ops[i].AlbumID == album {
+					ops[i].Links = append(ops[i].Links, links...)
+				}
+				continue
+			}
+			seen[k] = len(ops)
 			ops = append(ops, domain.Op{
 				Kind: domain.OpImport, Remote: r.Name, Root: f.File.Main.Root, Src: f.File.Main.Path, AlbumID: album,
 				Rule: f.Decision.Rule, Links: links,

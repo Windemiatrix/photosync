@@ -914,6 +914,9 @@ func TestSimulateConverges(t *testing.T) {
 		{"a new file that matches an asset the state holds without links comes in as a new asset, and the asset stays out of the album of its folder",
 			state(assets{a7}, pairs{alphaHolidays}), snapshot(left7), scans{"alpha": {e1}}, specs{alpha}, "", p,
 			kinds{domain.OpImport}, nil},
+		{"one content new in two remotes comes in once, and the run links the file of each remote to that asset",
+			state(nil, pairs{alphaHolidays, betaHolidays}), snapshot(), scans{"alpha": {e1}, "beta": {e1}}, specs{alpha, beta}, "", p,
+			kinds{domain.OpImport}, nil},
 		{"a file that a stopped run put for an asset of its event before it wrote the link is linked to that asset again",
 			state(assets{a7}, pairs{alphaHolidays}), snapshot(a7), scans{"alpha": {e1}}, specs{alpha}, "", p,
 			nil, nil},
@@ -1036,5 +1039,58 @@ func TestSimulateConverges(t *testing.T) {
 				t.Errorf("with a limit of %d the runs leave\n%+v\n%+v\nwant asset 8 in Recently Deleted and the copy of asset 7 beside the path of its link", limit, at.Snapshot.Assets, at.Scans["alpha"])
 			}
 		}
+	})
+	replay := func(t *testing.T, at plan.Input, from int, only []string, wants []kinds) (plan.Input, domain.Plan) {
+		t.Helper()
+		var first domain.Plan
+		for i, want := range wants {
+			run := from + i
+			at.OnlyRemote, at.Now, at.RunID, at.Fields = only[i], now.Add(time.Duration(run)*time.Hour), fmt.Sprintf("run-%d", run+2), fieldsOf(at.Snapshot)
+			got, delta, err := plan.Build(at)
+			var did kinds
+			for _, o := range got.Ops {
+				did = append(did, o.Kind)
+			}
+			if err != nil || !reflect.DeepEqual(did, want) {
+				t.Fatalf("run %d: Build = %+v, %v; want the operations %v", run+1, got, err, want)
+			}
+			if i == 0 {
+				first = got
+			}
+			at.State, at.Snapshot, at.Scans = plan.Simulate(at, got, delta)
+		}
+		return at, first
+	}
+	for _, c := range []struct {
+		name  string
+		only  []string
+		wants []kinds
+	}{
+		{"one content new in two remotes comes in once, so the asset that the user then takes out of its album stays out after a run of one remote and a full run",
+			[]string{"alpha", "", ""}, []kinds{{domain.OpQuarantine}, {domain.OpQuarantine}, nil}},
+		{"one content new in two remotes comes in once, so the asset that the user then takes out of its album stays out after a full run",
+			[]string{"", ""}, []kinds{{domain.OpQuarantine, domain.OpQuarantine}, nil}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			at, first := replay(t, traced(t, state(nil, pairs{alphaHolidays, betaHolidays}), snapshot(), scans{"alpha": {e1}, "beta": {e1}}, specs{alpha, beta}, p),
+				0, []string{""}, []kinds{{domain.OpImport}})
+			at.Snapshot.Assets = slices.Clone(at.Snapshot.Assets)
+			for i := range at.Snapshot.Assets {
+				at.Snapshot.Assets[i].AlbumUUIDs = nil
+			}
+			at, _ = replay(t, at, 1, c.only, c.wants)
+			if slices.ContainsFunc(first.Notices, func(n domain.Notice) bool { return n.Code == "plan.waiting_import" }) {
+				t.Errorf("the first plan %+v leaves a file waiting for an import; want the file of beta linked to the asset that the import makes", first)
+			}
+			if len(at.Snapshot.Assets) != 1 || len(at.Snapshot.Assets[0].AlbumUUIDs) > 0 || len(at.Snapshot.Assets[0].Resources) != 1 {
+				t.Errorf("the runs leave the assets %+v; want one asset of one resource in no album", at.Snapshot.Assets)
+			}
+		})
+	}
+	t.Run("one content new in two remotes under the folders of two albums comes in once, and the next run links the other file to that asset in the album of its folder and copies each file to the folder of the other album", func(t *testing.T) {
+		t.Parallel()
+		at := traced(t, state(nil, pairs{alphaHolidays, pair(trip, "beta", personal, tripDir)}), snapshot(), scans{"alpha": {e1}, "beta": {tripFile}}, specs{alpha, beta}, p)
+		replay(t, at, 0, []string{"", "", ""}, []kinds{{domain.OpImport}, {domain.OpCopy, domain.OpCopy, domain.OpAlbumAdd}, nil})
 	})
 }

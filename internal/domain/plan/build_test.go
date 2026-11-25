@@ -293,6 +293,10 @@ func TestBuild(t *testing.T) {
 	importNew := func(remote string, e domain.RemoteEntry) domain.Op {
 		return relink("R-LINK-02", holidays, imported(domain.Link{Remote: remote, Role: original, Status: domain.StatusActive}, e, holidays))
 	}
+	alongBeta := func(o domain.Op, e domain.RemoteEntry) domain.Op {
+		o.Links = append(o.Links, imported(domain.Link{Remote: "beta", Role: original, Status: domain.StatusActive}, e, holidays))
+		return o
+	}
 	counted := func(code, remote, count string) domain.Notice {
 		return domain.Notice{Code: code, Params: []string{remote, count}}
 	}
@@ -794,16 +798,15 @@ func TestBuild(t *testing.T) {
 		{"upload-only: new files of the cloud stay out of iCloud and an edit stays where it is, and notices count them",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {new4, e1, edit2, new3}}, specs{alphaUp}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{counted("plan.edits_left", "alpha", "1"), counted("plan.not_imported", "alpha", "2")}}, delta(a7), nil},
-		{"new files that one remote imports wait in another for a later run with a notice of their number, while that remote imports a new file of its own, brings a changed file back by its link and sets an edit aside",
+		{"new files that one remote imports are linked in another along, while that remote imports a new file of its own, brings a changed file back by its link and sets an edit aside",
 			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, other), snapshot(),
 			scans{"alpha": {new4, new3}, "beta": {new5, edit2, new4, replaced, new3}}, specs{alpha, beta}, "", edits, event,
 			domain.Plan{
 				Ops: ops{
 					{Kind: domain.OpQuarantine, Remote: "beta", Root: personal, Src: edit2.Path, DstRoot: personal, Dst: quarantined + edit2.Path, Rule: "R-STATUS-10"},
-					importNew("alpha", new3), importNew("alpha", new4),
+					alongBeta(importNew("alpha", new3), new3), alongBeta(importNew("alpha", new4), new4),
 					relink("R-LINK-11", holidays, imported(other, replaced, holidays)), importNew("beta", new5),
 				},
-				Notices: []domain.Notice{counted("plan.waiting_import", "beta", "2")},
 			},
 			delta(), nil},
 		{"an edit stays where it is while a lesser copy that matching finds goes to quarantine, and a notice counts the edit",

@@ -7,8 +7,9 @@ import (
 )
 
 // Tally is a number of operations and the bytes that they transfer: the sizes
-// of the links of each OpPut and OpImport among them. The cloud moves, copies
-// and deletes a file in place, so the other kinds transfer none.
+// of the links of each OpPut among them, and of each OpImport those of its
+// Remote. The cloud moves, copies and deletes a file in place, so the other
+// kinds transfer none.
 type Tally struct {
 	Count int
 	Bytes int64
@@ -104,7 +105,10 @@ func Summarize(p domain.Plan, delta domain.SnapshotDelta, state domain.State) Su
 		var bytes int64
 		if o.Kind == domain.OpPut || o.Kind == domain.OpImport {
 			for _, l := range o.Links {
-				bytes += l.Size
+				// An import does not read the files of its links in other remotes.
+				if o.Kind == domain.OpPut || l.Remote == o.Remote {
+					bytes += l.Size
+				}
 			}
 		}
 		count := func(t Tally) Tally { return Tally{Count: t.Count + 1, Bytes: t.Bytes + bytes} }

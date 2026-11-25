@@ -87,18 +87,18 @@ func TestSummarize(t *testing.T) {
 				{Kind: domain.OpPut, Remote: "beta", DstRoot: personal, Dst: trip + "IMG_0006.HEIC", Asset: 6, Rule: "R-LINK-01", Links: []domain.Link{{Size: 100}}},
 				{
 					Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: "Inbox/IMG_0011.HEIC", Rule: "R-LINK-02",
-					Links: []domain.Link{{Size: 400, Level: domain.LevelImported}},
+					Links: []domain.Link{{Remote: "alpha", Size: 400, Level: domain.LevelImported}, {Remote: "beta", Size: 999, Level: domain.LevelImported}},
 				},
 				{
 					Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: "Inbox/IMG_0012.HEIC", Rule: "R-LINK-02",
-					Links: []domain.Link{{Size: 500}, {Size: 50}},
+					Links: []domain.Link{{Remote: "alpha", Size: 500}, {Remote: "alpha", Size: 50}},
 				},
 				{
 					Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: holidays + "IMG_0001.HEIC", Asset: 1, Rule: "R-LINK-06",
-					Links: []domain.Link{{Size: 300}, {Size: 30}},
+					Links: []domain.Link{{Remote: "alpha", Size: 300}, {Remote: "alpha", Size: 30}},
 				},
-				{Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: holidays + "IMG_0008.HEIC", Asset: 8, Rule: "R-LINK-06", Links: []domain.Link{{Size: 80}}},
-				{Kind: domain.OpImport, Remote: "beta", Root: personal, Src: holidays + "IMG_0003.HEIC", Asset: 3, Rule: "R-COMPONENT-03", Links: []domain.Link{{Size: 60}}},
+				{Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: holidays + "IMG_0008.HEIC", Asset: 8, Rule: "R-LINK-06", Links: []domain.Link{{Remote: "alpha", Size: 80}}},
+				{Kind: domain.OpImport, Remote: "beta", Root: personal, Src: holidays + "IMG_0003.HEIC", Asset: 3, Rule: "R-COMPONENT-03", Links: []domain.Link{{Remote: "beta", Size: 60}}},
 				{Kind: domain.OpAlbumAdd, Asset: 1, AlbumID: 10, Rule: "R-LINK-06"},
 				{Kind: domain.OpAlbumAdd, Asset: 6, AlbumID: 23, Rule: "R-LINK-05"},
 				{

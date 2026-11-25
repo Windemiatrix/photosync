@@ -51,8 +51,8 @@ import (
 // with the capture time, offset, fraction of a second, width and height of
 // the Meta of the entry at Src as the operations before it leave it, in the
 // album of AlbumID unless it is zero, and with a resource for each of its
-// links in their order, the first the original, each named by the base of its
-// path, with its size. The state takes that asset with the hashes of the
+// links of Remote in their order, the first the original, each named by the
+// base of its path, with its size. The state takes that asset with the hashes of the
 // links in its resources, Root as its TargetLibrary and in.RunID as the
 // FirstSeenRun of the album: under the ID of Asset, whose key before goes to
 // History with Deleted false, or, for a zero Asset, under the next ID above
@@ -199,6 +199,11 @@ func Simulate(in Input, p domain.Plan, delta domain.SnapshotDelta) (domain.State
 				a.AlbumUUIDs, members = []string{albums[o.AlbumID].UUID}, []domain.Membership{{AlbumID: o.AlbumID, FirstSeenRun: in.RunID}}
 			}
 			for j, l := range o.Links {
+				// A link of another remote is of a file of the same content there,
+				// which the import does not read.
+				if l.Remote != o.Remote {
+					continue
+				}
 				r := domain.Resource{Role: domain.ResourceRole(l.Role), Filename: path.Base(l.Path), Size: l.Size}
 				if j == 0 {
 					r.Role = domain.ResourceOriginal
