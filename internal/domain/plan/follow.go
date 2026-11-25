@@ -24,7 +24,8 @@ import (
 // decisions gets one decision in components, under the link ID of the file of
 // fates that ComponentBeside finds it beside in the state, 0 for none, whose
 // fate is then ActionDeleteFile: that of ComponentAction on how its file
-// changed, as RemoteSide says with a file found elsewhere moved, and on that
+// changed, as RemoteSide says of it where it lies now, a file found elsewhere
+// with the content of the base being moved, and on that
 // fate, same holding when no placement moves that file and the component lies
 // beside it as both lie now; its iCloud side is that of the decision on that
 // file, unchanged for none. A component gone from the cloud beside a file of
@@ -90,8 +91,10 @@ func DecideComponents(decisions map[string][]domain.LinkDecision, status map[dom
 		}
 		e, there := files[c.ID]
 		at := there && e.Root == c.Root && e.Path == c.Path
-		side := RemoteSide(c, e, at, r.Capabilities.ContentHash)
-		if there && !at {
+		side := RemoteSide(c, e, there, r.Capabilities.ContentHash)
+		// A component found by its name beside its main file may hold new
+		// content, which replaces the asset rather than passing for a move.
+		if !at && side == domain.ChangeUnchanged {
 			side = domain.ChangeMoved
 		}
 		decide := func(f domain.LinkAction, same bool) (domain.LinkDecision, domain.LinkStatus) {

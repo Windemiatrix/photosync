@@ -1,6 +1,8 @@
 package plan
 
 import (
+	"cmp"
+	"path"
 	"slices"
 	"strings"
 
@@ -15,11 +17,17 @@ import (
 // the entry where the file of a link lies now, as DecideRemoteLinks takes it:
 // for an active link whose file RemoteSide finds deleted at its path, the
 // entry where MovesByContent finds it under r.Capabilities.ContentHash, if
-// any; otherwise the entry at the root and path of the link, a directory too,
-// if any. An active or detached link names the entry at its path, and a
-// quarantined link only when RemoteSide finds there the content of its base.
-// fresh are the entries, directories too, that no link names and no move
-// takes, without the edits that match.Edited tells by editedDirs, and edited
+// any; for such a link of a Live Photo video or a RAW file that it does not
+// find, the first entry by Root, then Path, that is no directory, that no
+// link names and nothing takes before it, and that ComponentBeside finds
+// beside the file of the original or the source role that the link lies
+// beside in the state, where that file lies now once it moved, with the
+// extension of the link in any case, if any; otherwise the entry at the root
+// and path of the link, a directory too, if any. An active or detached link
+// names the entry at its path, and a quarantined link only when RemoteSide
+// finds there the content of its base. fresh are the entries, directories
+// too, that no link names and that neither a move nor a component takes,
+// without the edits that match.Edited tells by editedDirs, and edited
 // are those edits: an entry that a link names or a move takes is no edit.
 // notices are those of MovesByContent. fresh and edited are in the order of
 // Root, then Path, each nil when empty, and the inputs are not changed.
@@ -28,6 +36,9 @@ func ReadScan(links []domain.Link, r domain.RemoteSpec, scan []domain.RemoteEntr
 	scan = slices.DeleteFunc(slices.Clone(scan), func(e domain.RemoteEntry) bool {
 		top, _, _ := strings.Cut(e.Path, "/")
 		return top == ".photosync"
+	})
+	slices.SortFunc(scan, func(x, y domain.RemoteEntry) int {
+		return cmp.Or(cmp.Compare(x.Root, y.Root), cmp.Compare(x.Path, y.Path))
 	})
 	at := map[[2]string]domain.RemoteEntry{}
 	for _, e := range scan {
@@ -58,6 +69,25 @@ func ReadScan(links []domain.Link, r domain.RemoteSpec, scan []domain.RemoteEntr
 	for _, m := range moves {
 		files[m.Link.ID] = m.To
 		named[key(m.To.Root, m.To.Path)] = true
+	}
+	// A component that the user replaced has no content of the base to be found
+	// by; beside its main file it keeps the name of the shot.
+	for _, c := range gone {
+		for _, m := range links {
+			to, ok := files[m.ID]
+			if _, done := files[c.ID]; done || !ok || !objectFile(m) || to.Root == m.Root && to.Path == m.Path || !ComponentBeside(m, c) {
+				continue
+			}
+			m.Root, m.Path = to.Root, to.Path
+			for _, e := range scan {
+				there := c
+				there.Root, there.Path = e.Root, e.Path
+				if k := key(e.Root, e.Path); !named[k] && !e.IsDir && strings.EqualFold(path.Ext(e.Path), path.Ext(c.Path)) && ComponentBeside(m, there) {
+					files[c.ID], named[k] = e, true
+					break
+				}
+			}
+		}
 	}
 	fresh, edited = match.Edited(slices.DeleteFunc(scan, isNamed), editedDirs)
 	return files, fresh, edited, notices
