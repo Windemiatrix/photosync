@@ -76,7 +76,9 @@ func (k OpKind) Phase() int {
 // Irreversible reports that undo cannot bring back what the operation removes.
 // Links are the links that the operation changes, each as the state keeps it
 // once the operation is done, in the order of ID, and those of an import with
-// the link of its main file first; a link with an empty Status leaves the
+// the link of its main file first; an import may also hold the links of
+// files of the same content in other remotes, which it does not read and
+// which take the asset that it makes; a link with an empty Status leaves the
 // state, one with a zero ID is new and takes its ID from the state, and one
 // with a zero AssetID takes that of the asset that its import makes.
 type Op struct {
