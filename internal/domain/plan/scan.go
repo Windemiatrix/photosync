@@ -18,17 +18,18 @@ import (
 // for an active link whose file RemoteSide finds deleted at its path, the
 // entry where MovesByContent finds it under r.Capabilities.ContentHash, if
 // any; for such a link of a Live Photo video or a RAW file that it does not
-// find, the first entry by Root, then Path, that is no directory, that no
-// link names and nothing takes before it, and that ComponentBeside finds
-// beside the file of the original or the source role that the link lies
-// beside in the state, where that file lies now once it moved, with the
-// extension of the link in any case, if any; otherwise the entry at the root
-// and path of the link, a directory too, if any. An active or detached link
-// names the entry at its path, and a quarantined link only when RemoteSide
-// finds there the content of its base. fresh are the entries, directories
-// too, that no link names and that neither a move nor a component takes,
-// without the edits that match.Edited tells by editedDirs, and edited
-// are those edits: an entry that a link names or a move takes is no edit.
+// find and with no directory at its path, the first entry by Root, then
+// Path, that is no directory, that no link names and nothing takes before
+// it, and that ComponentBeside finds beside the file of the original or the
+// source role that the link lies beside in the state, where that file lies
+// now once it moved, with the extension of the link in any case, if any;
+// otherwise the entry at the root and path of the link, a directory too, if
+// any. An active or detached link names the entry at its path, and a
+// quarantined link only when RemoteSide finds there the content of its base.
+// fresh are the entries, directories too, that no link names and that
+// neither a move nor a component takes, without the edits that match.Edited
+// tells by editedDirs, and edited are those edits: an entry that a link
+// names or a move takes is no edit.
 // notices are those of MovesByContent. fresh and edited are in the order of
 // Root, then Path, each nil when empty, and the inputs are not changed.
 func ReadScan(links []domain.Link, r domain.RemoteSpec, scan []domain.RemoteEntry, editedDirs []string) (files map[domain.LinkID]domain.RemoteEntry, fresh, edited []domain.RemoteEntry, notices []domain.Notice) {

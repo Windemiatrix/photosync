@@ -66,7 +66,8 @@ func stillInAlbum(a domain.Asset, id domain.AlbumID, albums []domain.Album) bool
 // the listing of the remote gave. With hash md5 or sha256 the content
 // compares by that hash when l and e both have it; otherwise, and always
 // with HashNone, by size and by an ETag that both have. Whether e lies at
-// the path of l is the caller's to tell, and a move is its (R-OBJECT-08).
+// the path of l, and so whether the file moved (R-OBJECT-08), is for the
+// caller to tell.
 func RemoteSide(l domain.Link, e domain.RemoteEntry, found bool, hash domain.HashKind) domain.ChangeKind {
 	switch {
 	case !found || e.IsDir:
