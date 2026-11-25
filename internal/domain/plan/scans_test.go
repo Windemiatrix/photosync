@@ -223,6 +223,8 @@ func TestReadScans(t *testing.T) {
 	}
 	renamedAway := domain.State{Albums: stateAlbums, Links: []domain.Link{link(1, 7, "alpha", e1, original, holidays), link(6, 7, "beta", e1, original, holidays)},
 		AlbumPairs: []domain.AlbumPair{named(pair(holidays, "alpha", personal, holidaysDir, domain.OriginICloud)), named(pair(holidays, "beta", personal, holidaysDir, domain.OriginICloud))}}
+	vacationLib := slices.Clone(lib)
+	vacationLib[1] = album(holidays, event, "05/01 Vacation")
 	retitled := scanned(nil, nil, nil, nil)
 	retitled.Renamed = []domain.Album{album(holidays, event, "05/01 Vacation")}
 	later, party25 := file(personal, "2025/05-01 - Holidays/IMG_0001.HEIC", 100, "a1", settled), file(personal, "2025/05-04 - Party/IMG_0004.HEIC", 400, "d4", settled)
@@ -259,7 +261,8 @@ func TestReadScans(t *testing.T) {
 		sameScan := func(a, b plan.RemoteScan) bool {
 			return slices.Equal(a.Linked, b.Linked) && maps.EqualFunc(a.Join, b.Join, slices.Equal[[]domain.AlbumChange]) &&
 				reflect.DeepEqual(a.NewFiles, b.NewFiles) && slices.Equal(a.Edited, b.Edited) && maps.Equal(a.Settling, b.Settling) &&
-				fmt.Sprintf("%+v", a.Renamed) == fmt.Sprintf("%+v", b.Renamed) && fmt.Sprintf("%+v", a.Refiled) == fmt.Sprintf("%+v", b.Refiled)
+				fmt.Sprintf("%+v", a.Renamed) == fmt.Sprintf("%+v", b.Renamed) && fmt.Sprintf("%+v", a.Refiled) == fmt.Sprintf("%+v", b.Refiled) &&
+				slices.Equal(a.Moved, b.Moved)
 		}
 		sameNotice := func(a, b domain.Notice) bool { return a.Code == b.Code && slices.Equal(a.Params, b.Params) }
 		return maps.Equal(x.files, y.files) && maps.EqualFunc(x.read, y.read, sameScan) &&
@@ -302,6 +305,9 @@ func TestReadScans(t *testing.T) {
 			}
 			for _, a := range s.Refiled {
 				out = append(out, fmt.Sprintf("%s refiled %+v", name, a))
+			}
+			for _, x := range s.Moved {
+				out = append(out, fmt.Sprintf("%s moved %+v", name, x))
 			}
 		}
 		for _, a := range x.added {
@@ -421,6 +427,9 @@ func TestReadScans(t *testing.T) {
 			movedTwo, delta(a7, a8), scans{"alpha": {later, yearDir}, "beta": {trip25}}, specs{beta, alpha}, p,
 			result{found{1: later, 7: trip25}, reads{"alpha": filedHolidays, "beta": filedTrip}, []domain.Album{album(next, folder, "2025")},
 				[]domain.AlbumPair{pair(holidays, "alpha", personal, "2025/05-01 - Holidays", domain.OriginICloud), pair(trip, "beta", personal, "2025/05-02 - Trip", domain.OriginICloud)}, nil}},
+		{"a directory that the user renamed takes the pair of an album renamed in iCloud along once, keeping its new name, and the old place of the pair moves nowhere",
+			renamedAway, domain.SnapshotDelta{Assets: []domain.Asset{a7}, Albums: vacationLib}, scans{"alpha": {zoo}}, specs{alpha}, p,
+			result{found{1: zoo}, reads{"alpha": scanned(nil, nil, nil, nil)}, nil, []domain.AlbumPair{pair(holidays, "alpha", personal, zooDir, domain.OriginICloud)}, nil}},
 		{"a new photo waits whole while its Live Photo video is still being written, unlike a file of another name, directory or root",
 			shotHeld, delta(), scans{"alpha": {s4, t4, h5, h4, y4v}}, specs{alpha}, p,
 			result{nil, reads{"alpha": scanned(nil, nil, news{imported(h5, holidays), imported(t4, trip), imported(s4, holidays)}, nil)}, nil, nil,
