@@ -113,27 +113,11 @@ func variantDoubles(n domain.Notice) bool {
 	return n.Code == "plan.doubles"
 }
 
-// Two assets of one content leave one of their files waiting for a later run
-// in a remote, a known limit of the plan, so the skips leave such worlds out.
-func variantSharedContent(s domain.LibrarySnapshot) bool {
-	owners := map[string]domain.AssetKey{}
-	for _, a := range s.Assets {
-		for _, r := range a.Resources {
-			h := r.MD5 + r.SHA256
-			if o, ok := owners[h]; ok && h != "" && o != a.Key {
-				return true
-			}
-			owners[h] = a.Key
-		}
-	}
-	return false
-}
-
 // The plan writes into a directory by the name that the listing gives it, so
 // the worlds of package gen hold no doubles: a user of a client of the cloud
 // blind to case makes them, writing a file beside another under its name in
 // lower case.
-func withCaseDouble(in plan.Input) plan.Input {
+func variantWithCaseDouble(in plan.Input) plan.Input {
 	scan := in.Scans["alpha"]
 	i := slices.IndexFunc(scan, func(e domain.RemoteEntry) bool { return !e.IsDir && !strings.HasPrefix(e.Path, ".photosync/") })
 	if i < 0 {
@@ -176,16 +160,19 @@ func TestPlanSkipsOutsideTemplates(t *testing.T) {
 	rapid.Check(t, func(t *rapid.T) {
 		// The user moves the file in a library at rest: in a plan of its own, an
 		// album renamed in Photos takes the pair of its directory along while
-		// the asset of the file waits, a known limit of the plan.
-		acted := remoteCases(rapid.SampledFrom(remoteModes).Draw(t, "mode")).Draw(t, "case")
-		if variantSharedContent(acted.Snapshot) {
-			return
+		// the asset of the file waits, a known limit of the plan. Rest may take
+		// a second run, which links a file of the content of another.
+		base := remoteCases(rapid.SampledFrom(remoteModes).Draw(t, "mode")).Draw(t, "case")
+		for range 3 {
+			p0, d0, err := plan.Build(base)
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			base = after(base, p0, d0)
+			if len(p0.Ops)+len(p0.Links)+len(p0.Albums)+len(p0.Pairs) == 0 {
+				break
+			}
 		}
-		p0, d0, err := plan.Build(acted)
-		if err != nil {
-			t.Fatalf("Build: %v", err)
-		}
-		base := after(acted, p0, d0)
 		scan, at := base.Scans["alpha"], map[string]int{}
 		for i, e := range scan {
 			at[e.Path] = i
@@ -252,7 +239,7 @@ func TestPlanLeavesDoublesOnGenWorlds(t *testing.T) {
 	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
 		c := variantCases(gen.PerturbAll).Draw(t, "case")
-		for _, in := range []plan.Input{withCaseDouble(c.first), withCaseDouble(c.in)} {
+		for _, in := range []plan.Input{variantWithCaseDouble(c.first), variantWithCaseDouble(c.in)} {
 			p, delta, err := plan.Build(in)
 			if err != nil {
 				t.Fatalf("Build: %v", err)
@@ -295,7 +282,7 @@ func TestVariantCasesNotVacuous(t *testing.T) {
 	for seed := range cases {
 		c := variantCases(gen.PerturbAll).Example(seed)
 		met := false
-		for _, in := range []plan.Input{withCaseDouble(c.first), withCaseDouble(c.in)} {
+		for _, in := range []plan.Input{variantWithCaseDouble(c.first), variantWithCaseDouble(c.in)} {
 			p, _, err := plan.Build(in)
 			if err != nil {
 				t.Fatalf("seed %d: Build: %v", seed, err)
