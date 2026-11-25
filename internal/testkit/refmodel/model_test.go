@@ -209,6 +209,12 @@ func TestNew(t *testing.T) {
 			t.Errorf("%sgot %+v, error %v; want an error that starts with %q and names uuid-1", c.prefix, got, err, c.prefix)
 		}
 	}
+	renamed := fixture()
+	renamed.Snapshot.Assets[2].InTrash = true
+	renamed.Snapshot.Albums[2].Title = "05/01 Trip 2 3"
+	if got, err := refmodel.New(fixture(), renamed); err == nil || !strings.HasPrefix(err.Error(), "now: ") || !strings.Contains(err.Error(), "album-1") {
+		t.Errorf("an album renamed: got %+v, error %v; want an error that starts with %q and names album-1", got, err, "now: ")
+	}
 }
 
 // TestNewOnGenWorlds reads samples drawn as in the actions test of package
@@ -225,13 +231,14 @@ func TestNewOnGenWorlds(t *testing.T) {
 		w := gen.Worlds(gen.Config{Frames: 6, Perturb: simple}).Example(seed)
 		actions := gen.Actions(w).Example(samples + seed)
 		after := w.Apply(actions...)
+		retitled := slices.ContainsFunc(actions, func(a gen.Action) bool { return a.Side == gen.ICloud && a.Kind == gen.AlbumRename })
 		for _, c := range []struct {
 			name string
 			now  gen.World
 			out  bool
 		}{
 			{"unchanged", w, outside(w)},
-			{"after actions", after, outside(w) || outside(after)},
+			{"after actions", after, outside(w) || outside(after) || retitled},
 		} {
 			m, err := refmodel.New(w, c.now)
 			switch {
@@ -245,7 +252,7 @@ func TestNewOnGenWorlds(t *testing.T) {
 				}
 			}
 		}
-		if outside(w) || outside(after) {
+		if outside(w) || outside(after) || retitled {
 			continue
 		}
 		inside++
@@ -263,7 +270,7 @@ func TestNewOnGenWorlds(t *testing.T) {
 		missing = append(missing, fmt.Sprintf("20 samples inside the simplified world (%d are)", inside))
 	}
 	for _, p := range []gen.Action{
-		{Side: gen.ICloud, Kind: gen.Create}, {Side: gen.ICloud, Kind: gen.Delete}, {Side: gen.ICloud, Kind: gen.AlbumRename},
+		{Side: gen.ICloud, Kind: gen.Create}, {Side: gen.ICloud, Kind: gen.Delete},
 		{Side: gen.Remote, Kind: gen.Create}, {Side: gen.Remote, Kind: gen.Move}, {Side: gen.Remote, Kind: gen.Rename},
 		{Side: gen.Remote, Kind: gen.Replace}, {Side: gen.Remote, Kind: gen.Delete}, {Side: gen.Remote, Kind: gen.AlbumRename},
 	} {
