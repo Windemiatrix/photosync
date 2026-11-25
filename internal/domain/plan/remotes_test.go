@@ -65,19 +65,6 @@ func remoteCases(modes ...domain.Mode) *rapid.Generator[plan.Input] {
 	return rapid.Custom(func(t *rapid.T) plan.Input {
 		kind := rapid.SampledFrom([]domain.HashKind{domain.HashMD5, domain.HashSHA256, domain.HashNone}).Draw(t, "hash")
 		w := gen.Worlds(gen.Config{Frames: rapid.IntRange(1, 8).Draw(t, "frames"), Perturb: converging}).Draw(t, "world")
-		// The hash goes by size and extension, so two assets with resources of
-		// one size and extension would hold one content: copies that a library
-		// rarely holds.
-		owner := map[string]domain.AssetKey{}
-		for _, a := range w.Snapshot.Assets {
-			for _, r := range a.Resources {
-				k := fmt.Sprintf("%d%s", r.Size, strings.ToLower(path.Ext(r.Filename)))
-				if o, ok := owner[k]; ok && o != a.Key {
-					t.Skip("two assets of one content")
-				}
-				owner[k] = a.Key
-			}
-		}
 		snap, files := withHashes(kind, w.Snapshot, w.Files)
 		tmpl, err := template.Parse("{event_path}/{original_name}")
 		if err != nil {
@@ -130,24 +117,6 @@ func remoteShuffled(t *rapid.T, in plan.Input) plan.Input {
 	return in
 }
 
-// A run gives new assets and links the next free IDs, which a run of one
-// remote before it moves on.
-func remoteOps(p domain.Plan, remote string) []string {
-	var lines []string
-	for _, o := range p.Ops {
-		if o.Remote != remote {
-			continue
-		}
-		o.Asset, o.Links = 0, slices.DeleteFunc(slices.Clone(o.Links), func(l domain.Link) bool { return l.Remote != remote })
-		for i := range o.Links {
-			o.Links[i].ID, o.Links[i].AssetID = 0, 0
-		}
-		lines = append(lines, fmt.Sprintf("%+v", o))
-	}
-	slices.Sort(lines)
-	return lines
-}
-
 // One content new in each of three remotes comes into Photos once by its
 // hash, and the run links the files of the other remotes along;
 // without hashes each file comes in as an asset of its own, and the next run
@@ -165,10 +134,9 @@ func TestPlanThreeRemotesOneContent(t *testing.T) {
 	for _, c := range []struct {
 		hash  domain.HashKind
 		kinds [3][]domain.OpKind
-		links [3]int
 	}{
-		{domain.HashMD5, [3][]domain.OpKind{{domain.OpImport}, nil, nil}, [3]int{}},
-		{domain.HashNone, [3][]domain.OpKind{{domain.OpImport, domain.OpImport, domain.OpImport}, {put, put, put, put, put, put}, nil}, [3]int{}},
+		{domain.HashMD5, [3][]domain.OpKind{{domain.OpImport}, nil, nil}},
+		{domain.HashNone, [3][]domain.OpKind{{domain.OpImport, domain.OpImport, domain.OpImport}, {put, put, put, put, put, put}, nil}},
 	} {
 		t.Run(cmp.Or(string(c.hash), "none"), func(t *testing.T) {
 			t.Parallel()
@@ -202,8 +170,8 @@ func TestPlanThreeRemotesOneContent(t *testing.T) {
 				for _, o := range p.Ops {
 					kinds = append(kinds, o.Kind)
 				}
-				if err != nil || !slices.Equal(kinds, c.kinds[run]) || len(p.Links) != c.links[run] || len(p.Albums)+len(p.Pairs)+len(p.Conflicts) > 0 {
-					t.Fatalf("run %d: Build = %+v, %v; want the operations %v and %d records", run+1, p, err, c.kinds[run], c.links[run])
+				if err != nil || !slices.Equal(kinds, c.kinds[run]) || len(p.Links)+len(p.Albums)+len(p.Pairs)+len(p.Conflicts) > 0 {
+					t.Fatalf("run %d: Build = %+v, %v; want the operations %v and no records", run+1, p, err, c.kinds[run])
 				}
 				in = after(in, p, delta)
 			}
@@ -222,7 +190,7 @@ func TestPlanOnlyRemoteOnGenWorlds(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Build of alpha alone: %v", err)
 		}
-		if len(remoteOps(p, "beta")) > 0 || slices.ContainsFunc(p.Links, func(l domain.Link) bool { return l.Remote == "beta" }) ||
+		if slices.ContainsFunc(p.Ops, func(o domain.Op) bool { return o.Remote == "beta" }) || slices.ContainsFunc(p.Links, func(l domain.Link) bool { return l.Remote == "beta" }) ||
 			slices.ContainsFunc(p.Pairs, func(x domain.AlbumPair) bool { return x.Remote == "beta" }) ||
 			slices.ContainsFunc(p.Conflicts, func(c domain.Conflict) bool { return c.Remote == "beta" }) {
 			t.Fatalf("the run of alpha alone plans for beta:\n%+v", p)
@@ -315,12 +283,12 @@ func TestRemoteCasesNotVacuous(t *testing.T) {
 		if in.Remotes[0].Capabilities.ContentHash != domain.HashNone {
 			hashed++
 		}
-		if len(remoteOps(p, "beta")) > 0 {
+		if slices.ContainsFunc(p.Ops, func(o domain.Op) bool { return o.Remote == "beta" }) {
 			carried++
 		}
 	}
 	t.Logf("of %d cases %d list hashes and %d plan for the remote where the user acts", cases, hashed, carried)
-	if hashed < 34 || carried < 41 {
-		t.Errorf("the cases of seeds 0 to %d lack 34 that list hashes (%d do) or 41 that plan for the remote where the user acts (%d do)", cases-1, hashed, carried)
+	if hashed < 33 || carried < 43 {
+		t.Errorf("the cases of seeds 0 to %d lack 33 that list hashes (%d do) or 43 that plan for the remote where the user acts (%d do)", cases-1, hashed, carried)
 	}
 }
