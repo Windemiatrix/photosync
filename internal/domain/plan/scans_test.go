@@ -366,7 +366,7 @@ func TestReadScans(t *testing.T) {
 			delta(frozen, trashed, hidden, a7), scans{"alpha": {e34, e32, e32d, e31, e30, zoo}}, specs{alpha}, skip,
 			result{found{1: zoo, 30: e30, 31: e31, 32: e32d, 33: e32, 34: e34}, reads{"alpha": scanned(nil, nil, nil, nil)},
 				[]domain.Album{album(next, event, "05/10 Zoo")}, []domain.AlbumPair{pair(next, "alpha", personal, zooDir, byRemote)}, nil}},
-		{"a linked file that the user moved to the other root, at the path that it left behind a moved pair, counts among the files of its album there",
+		{"a linked file that the user moved to the other root at the same path, where the pair of its album moved away, makes a pair of that album in the other root",
 			movedApart, delta(a7), scans{"alpha": {e1Shared}}, specs{alpha}, p,
 			result{found{1: e1Shared}, reads{"alpha": scanned(nil, nil, nil, nil)}, nil, []domain.AlbumPair{pair(holidays, "alpha", shared, holidaysDir, byRemote)}, nil}},
 		{"a Live video linked beside its photo does not count among the files of an album",

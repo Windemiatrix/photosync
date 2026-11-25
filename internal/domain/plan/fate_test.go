@@ -206,8 +206,9 @@ func TestDecideFate(t *testing.T) {
 // Recently Deleted, in each of two remotes, under every deletes policy: each
 // remote keeps one decision on its link and file that its mode runs under a
 // known rule, a change of the asset leaves no deletion in a two-way remote,
-// at most one replacement is made, a deletion that stands reaches the other
-// remote unless deletes is none, and nothing else changes a decision.
+// at most one replacement is made, the first by name, and the other remote
+// takes its replaced file into the base, a deletion that stands reaches the
+// other remote unless deletes is none, and nothing else changes a decision.
 func TestDecideFateTotal(t *testing.T) {
 	t.Parallel()
 	type side struct {
@@ -276,7 +277,7 @@ func TestDecideFateTotal(t *testing.T) {
 					case spread && o.Action != domain.ActionDeleteAsset && o.ICloud != domain.ChangeDeleted:
 						problem = name + " misses the deletion"
 					case waits && (o.Action != domain.ActionUpdateBase || o.Rule != "R-OBJECT-09"):
-						problem = name + " waits for the replacement of alpha by no rule"
+						problem = name + " does not take its replaced file into the base under R-OBJECT-09"
 					case o != d && !beaten && !spread && !waits:
 						problem = name + " changes by no rule"
 					}

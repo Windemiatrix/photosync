@@ -599,7 +599,9 @@ func TestSimulate(t *testing.T) {
 // so a new asset that the run leaves without a link is in neither. A last
 // world runs with a limit of one asset too: a run leaves a new asset that
 // the limit cuts off from its first link new, so the runs end where one run
-// without a limit ends.
+// without a limit ends. The subtests after it follow a world over several
+// runs; those named a known limit hold what the plan does now, so that a fix
+// of the limit rewrites them as a change of rule, not as a weaker test.
 func TestSimulateConverges(t *testing.T) {
 	t.Parallel()
 	const (
@@ -828,7 +830,7 @@ func TestSimulateConverges(t *testing.T) {
 		{"a conflict under ask stays open, and the asset stays as the state has it",
 			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip), scans{"alpha": {partyFile, holidaysFolder}}, specs{alpha}, "", ask,
 			kinds{domain.OpAlbumCreate}, []domain.Conflict{conflict("alpha", domain.ConflictStatusOpen)}},
-		{"a conflict that the user settled for the cloud under ask takes the asset to the album of the folder of its file and closes",
+		{"a conflict that the user settled for the cloud under ask adds the asset to the album of the folder of its file, keeps it in its event with a copy of the file there, and closes",
 			recorded(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), chosen), snapshot(in7Trip), scans{"alpha": {partyFile, holidaysFolder}}, specs{alpha}, "", ask,
 			kinds{domain.OpAlbumCreate, domain.OpCopy, domain.OpAlbumAdd}, nil},
 		{"a file that the user moved to the shared root takes the asset to the shared library in the state, and the file of another remote follows",
@@ -1143,7 +1145,7 @@ func TestSimulateConverges(t *testing.T) {
 		at.Scans["alpha"] = append(at.Scans["alpha"], stray4)
 		replay(t, at, 2, []string{""}, []kinds{{domain.OpAlbumCreate, domain.OpImport}})
 	})
-	t.Run("a Live Photo video that goes to quarantine after its photo while the asset stays keeps a link that the next run clears with a record alone: a known limit", func(t *testing.T) {
+	t.Run("a Live Photo video whose photo the user renamed in a remote without hashes goes to quarantine while the asset stays, and keeps a link that the next run clears with a record alone: a known limit", func(t *testing.T) {
 		t.Parallel()
 		at := traced(t, state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(withVideo(left7)), scans{"alpha": {ev, renamed9}}, specs{bare}, p)
 		at, _ = replay(t, at, 0, []string{""}, []kinds{{domain.OpQuarantine, domain.OpImport}})
