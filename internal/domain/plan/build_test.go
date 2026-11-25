@@ -1099,3 +1099,186 @@ func TestBuild(t *testing.T) {
 		})
 	}
 }
+
+// Each row is the world of a run where the user renamed in the cloud the
+// folder of an album that holds a photo with its RAW file and changed the
+// files of that pair, then the world of the next run, as the first leaves it
+// once every operation succeeds. The expected operations and links follow the
+// rules on components, detached links and new files, not the code.
+func TestBuildRAWPairInRenamedFolder(t *testing.T) {
+	t.Parallel()
+	const (
+		personal                = domain.LibraryPersonal
+		original, raw           = domain.RoleOriginal, domain.RoleRAWPair
+		holidaysDir, renamedDir = "2024/05-01 - Holidays", "2024/05-01 - Holidays 1"
+
+		year, holidays domain.AlbumID = 1, 10
+	)
+	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	settled, may1 := now.Add(-time.Hour), time.Date(2024, 5, 1, 12, 0, 0, 0, time.UTC)
+	albums := []domain.Album{
+		{ID: year, UUID: "u-2024", Key: `[] "2024"`, KeySource: domain.KeyPath, Kind: domain.KindFolder, Title: "2024"},
+		{
+			ID: holidays, UUID: "u-hol", Key: `["2024"] "05/01 Holidays"`, KeySource: domain.KeyPath, Kind: domain.KindEvent,
+			Title: "05/01 Holidays", Start: may1.Add(-2 * time.Hour), ParentID: year, ParentUUID: "u-2024", FolderTitles: []string{"2024"},
+		},
+	}
+	library := []domain.Album{
+		{UUID: "u-2024", Kind: domain.KindFolder, Title: "2024"},
+		{UUID: "u-hol", Title: "05/01 Holidays", Start: may1.Add(-2 * time.Hour), ParentUUID: "u-2024", FolderTitles: []string{"2024"}},
+	}
+	asset := func(id domain.AssetID, name string, size int64, more ...domain.Resource) domain.Asset {
+		return domain.Asset{
+			ID: id, Key: domain.AssetKey{CloudAssetGUID: fmt.Sprintf("guid-%d", id), UUID: fmt.Sprintf("uuid-%d", id)},
+			Library: personal, TargetLibrary: personal, OriginalName: name, Taken: may1, Width: 4032, Height: 3024,
+			Resources:  append([]domain.Resource{{Role: domain.ResourceOriginal, Filename: name, Size: size}}, more...),
+			AlbumUUIDs: []string{"u-hol"}, Memberships: []domain.Membership{{AlbumID: holidays, FirstSeenRun: "run-1"}},
+		}
+	}
+	shot := asset(7, "IMG_0001.HEIC", 100, domain.Resource{Role: domain.ResourceRAWPair, Filename: "IMG_0001.DNG", Size: 300})
+	// A folder reads as renamed only by a file of the original role found in
+	// it, which the replaced photo of the pair is not.
+	neighbor := asset(8, "IMG_0002.HEIC", 200)
+	snapshot := func(as ...domain.Asset) domain.LibrarySnapshot {
+		s := domain.LibrarySnapshot{Albums: library}
+		for _, a := range as {
+			a.ID, a.TargetLibrary, a.Memberships = 0, "", nil
+			s.Assets = append(s.Assets, a)
+		}
+		return s
+	}
+	file := func(at string, size int64, md5 string) domain.RemoteEntry {
+		return domain.RemoteEntry{
+			Root: personal, Path: at, Size: size, MD5: md5, SHA256: "s" + md5, ETag: "e" + md5, MTime: settled,
+			Meta: domain.MediaMeta{Taken: may1, Width: 4032, Height: 3024},
+		}
+	}
+	renamed := func(e domain.RemoteEntry) domain.RemoteEntry {
+		e.Path = renamedDir + strings.TrimPrefix(e.Path, holidaysDir)
+		return e
+	}
+	photo, dng, other := file(holidaysDir+"/IMG_0001.HEIC", 100, "a1"), file(holidaysDir+"/IMG_0001.DNG", 300, "r1"), file(holidaysDir+"/IMG_0002.HEIC", 200, "b2")
+	replaced := file(renamedDir+"/IMG_0001.HEIC", 500, "n1")
+	link := func(id domain.LinkID, of domain.AssetID, e domain.RemoteEntry, role domain.LinkRole, level domain.MatchLevel) domain.Link {
+		return domain.Link{
+			ID: id, AssetID: of, Remote: "alpha", Root: e.Root, Path: e.Path, Role: role, AlbumID: holidays,
+			Size: e.Size, SHA256: e.SHA256, MD5: e.MD5, ETag: e.ETag, Level: level, Status: domain.StatusActive,
+		}
+	}
+	photoLink, rawLink := link(1, 7, photo, original, domain.LevelExact), link(2, 7, dng, raw, domain.LevelPairComponent)
+	state := domain.State{
+		Assets: []domain.Asset{shot, neighbor}, Albums: albums,
+		AlbumPairs: []domain.AlbumPair{{
+			AlbumID: holidays, Remote: "alpha", Root: personal, DirPath: holidaysDir, CreatedBy: domain.OriginICloud, NamedAfter: `["2024"] "05/01 Holidays"`,
+		}},
+		Links: []domain.Link{photoLink, rawLink, link(3, 8, other, original, domain.LevelExact)},
+	}
+	as := func(l domain.Link, status domain.LinkStatus, e domain.RemoteEntry) domain.Link {
+		l.Status, l.Root, l.Path = status, e.Root, e.Path
+		return l
+	}
+	imported := func(e domain.RemoteEntry, role domain.LinkRole) domain.Link {
+		return domain.Link{
+			Remote: "alpha", Root: e.Root, Path: e.Path, Role: role, AlbumID: holidays, Size: e.Size, SHA256: e.SHA256, MD5: e.MD5,
+			ETag: e.ETag, MTime: e.MTime, Level: domain.LevelImported, Status: domain.StatusActive,
+		}
+	}
+	pairImport := []domain.Op{{
+		Kind: domain.OpImport, Remote: "alpha", Root: personal, Src: replaced.Path, AlbumID: holidays, Rule: "R-LINK-02",
+		Links: []domain.Link{imported(replaced, original), imported(renamed(dng), raw)},
+	}}
+	replacing := []domain.RemoteEntry{renamed(dng), replaced, renamed(other)}
+
+	for _, c := range []struct {
+		name         string
+		mode         domain.Mode
+		deletes      domain.DeletesPolicy
+		snapshot     domain.LibrarySnapshot
+		scan         []domain.RemoteEntry
+		imports      []domain.Op
+		assetDeletes []string
+		kept         []domain.Link
+		gone         []domain.LinkID
+		quiet        bool
+	}{
+		{"download-only: the photo of an asset gone from the library, moved with its folder, stays linked where it lies, and the next run does not import it",
+			domain.ModeDownloadOnly, domain.DeletesPropagate, snapshot(neighbor), []domain.RemoteEntry{renamed(dng), renamed(photo), renamed(other)},
+			nil, nil, []domain.Link{as(photoLink, domain.StatusDetached, renamed(photo))}, nil, false},
+		{"under none a RAW file moved with its folder while the user deleted its photo stays linked where it lies, and the next run does not import it",
+			domain.ModeTwoWay, domain.DeletesNone, snapshot(shot, neighbor), []domain.RemoteEntry{renamed(dng), renamed(other)},
+			nil, nil, []domain.Link{as(photoLink, domain.StatusDetached, photo), as(rawLink, domain.StatusDetached, renamed(dng))}, nil, false},
+		{"under none a photo that the user replaced while moving it with its folder comes in with its RAW file as one new asset, and the old one is detached",
+			domain.ModeTwoWay, domain.DeletesNone, snapshot(shot, neighbor), replacing,
+			pairImport, nil, []domain.Link{as(photoLink, domain.StatusDetached, photo)}, []domain.LinkID{2}, true},
+		{"under quarantine a photo that the user replaced while moving it with its folder comes in with its RAW file as one new asset, and the old one goes to Recently Deleted",
+			domain.ModeTwoWay, domain.DeletesQuarantine, snapshot(shot, neighbor), replacing,
+			pairImport, []string{"R-STATUS-02"}, []domain.Link{as(photoLink, domain.StatusQuarantinedICloud, photo)}, []domain.LinkID{2}, true},
+		{"under propagate a photo that the user replaced while moving it with its folder comes in with its RAW file as one new asset, and the old one is deleted",
+			domain.ModeTwoWay, domain.DeletesPropagate, snapshot(shot, neighbor), replacing,
+			pairImport, []string{"R-STATUS-06"}, nil, []domain.LinkID{1, 2}, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			tmpl, err := template.Parse("{event_path}/{original_name}")
+			if err != nil {
+				t.Fatalf("template.Parse: %v", err)
+			}
+			p := domain.DefaultPolicies()
+			p.Deletes, p.Conflict = c.deletes, domain.ConflictRemoteWins
+			in := plan.Input{
+				State: state, Snapshot: c.snapshot, Scans: map[string][]domain.RemoteEntry{"alpha": c.scan},
+				Remotes:  []domain.RemoteSpec{{Name: "alpha", Mode: c.mode, Capabilities: domain.Capabilities{ContentHash: domain.HashMD5}}},
+				Policies: p, Template: tmpl, Fields: fieldsByKey(c.snapshot), Now: now, RunID: "run-2",
+			}
+			first, delta, err := plan.Build(in)
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			var imports []domain.Op
+			var assetDeletes []string
+			for _, o := range first.Ops {
+				switch {
+				case o.Kind == domain.OpImport:
+					imports = append(imports, o)
+				case o.Kind == domain.OpAssetDelete && o.Asset == 7:
+					assetDeletes = append(assetDeletes, o.Rule)
+				case (o.Kind == domain.OpDelete || o.Kind == domain.OpQuarantine) && (o.Asset == 7 || o.Src == renamed(dng).Path):
+					t.Errorf("the first run takes a file of the pair out of the cloud: %+v", o)
+				}
+			}
+			if !reflect.DeepEqual(imports, c.imports) {
+				t.Errorf("the first run imports %+v; want %+v", imports, c.imports)
+			}
+			if !slices.Equal(assetDeletes, c.assetDeletes) {
+				t.Errorf("the first run deletes the old asset by %q; want %q", assetDeletes, c.assetDeletes)
+			}
+			next := after(in, first, delta)
+			byID := map[domain.LinkID]domain.Link{}
+			for _, l := range next.State.Links {
+				byID[l.ID] = l
+			}
+			for _, want := range c.kept {
+				if got, ok := byID[want.ID]; !ok || !reflect.DeepEqual(got, want) {
+					t.Errorf("after the first run link %d = %+v (in the state: %t); want %+v", want.ID, got, ok, want)
+				}
+			}
+			for _, id := range c.gone {
+				if l, ok := byID[id]; ok {
+					t.Errorf("after the first run link %d stays in the state: %+v", id, l)
+				}
+			}
+			again, _, err := plan.Build(next)
+			if err != nil {
+				t.Fatalf("the next Build: %v", err)
+			}
+			for _, o := range again.Ops {
+				if o.Kind == domain.OpImport {
+					t.Errorf("the next run imports %s:%s", o.Root, o.Src)
+				}
+			}
+			if c.quiet && !reflect.DeepEqual(again, domain.Plan{}) {
+				t.Errorf("the next run plans %+v; want nothing", again)
+			}
+		})
+	}
+}

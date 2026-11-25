@@ -14,22 +14,25 @@ import (
 // the state in every remote, role and status; only those of r count. The
 // directory .photosync at the top of a root, where photosync keeps its own
 // files, and every entry under it count for nothing. files gives, by link ID,
-// the entry where the file of a link lies now, as DecideRemoteLinks takes it:
-// for an active link whose file RemoteSide finds deleted at its path, the
+// the entry where the file of a link lies now, as DecideRemoteLinks takes it.
+// An active link whose file RemoteSide finds deleted at its path takes the
 // entry where MovesByContent finds it under r.Capabilities.ContentHash, if
-// any; for such a link of a Live Photo video or a RAW file that it does not
-// find and with no directory at its path, the first entry by Root, then
-// Path, that is no directory, that no link names and nothing takes before
-// it, and that ComponentBeside finds beside the file of the original or the
-// source role that the link lies beside in the state, where that file lies
-// now once it moved, with the extension of the link in any case, if any;
-// otherwise the entry at the root and path of the link, a directory too, if
-// any. An active or detached link names the entry at its path, and a
+// any. A Live Photo video or a RAW file does not take such an entry when the
+// file of the original or the source role that it lies beside in the state is
+// found nowhere and ComponentBeside finds the component, at that entry,
+// beside an entry with the extension of that file in any case that is no
+// directory and that no link names. A Live Photo video or a RAW file that is
+// not found, with no directory at its path, takes the first entry by Root,
+// then Path, that is no directory, that no link names and nothing takes
+// before it, and that ComponentBeside finds beside that main file where it
+// lies now once it moved, with the extension of the link in any case, if
+// any. Any other link takes the entry at its root and path, a directory too,
+// if any. An active or detached link names the entry at its path, and a
 // quarantined link only when RemoteSide finds there the content of its base.
-// fresh are the entries, directories too, that no link names and that
-// neither a move nor a component takes, without the edits that match.Edited
-// tells by editedDirs, and edited are those edits: an entry that a link
-// names or a move takes is no edit.
+// fresh are the entries, directories too, that no link names and that files
+// does not give for a move or a component, without the edits that
+// match.Edited tells by editedDirs, and edited are those edits: an entry that
+// a link names or that files gives for a move is no edit.
 // notices are those of MovesByContent. fresh and edited are in the order of
 // Root, then Path, each nil when empty, and the inputs are not changed.
 func ReadScan(links []domain.Link, r domain.RemoteSpec, scan []domain.RemoteEntry, editedDirs []string) (files map[domain.LinkID]domain.RemoteEntry, fresh, edited []domain.RemoteEntry, notices []domain.Notice) {
@@ -87,6 +90,30 @@ func ReadScan(links []domain.Link, r domain.RemoteSpec, scan []domain.RemoteEntr
 					files[c.ID], named[k] = e, true
 					break
 				}
+			}
+		}
+	}
+	// A main file that the user replaced has no content of the base to be found
+	// by; a component that went along with it must come into the library with
+	// it, not stay with an asset that the run takes for deleted.
+	for _, m := range gone {
+		if _, done := files[m.ID]; done || !objectFile(m) {
+			continue
+		}
+		for _, mv := range moves {
+			if !ComponentBeside(m, mv.Link) {
+				continue
+			}
+			c := mv.Link
+			c.Root, c.Path = mv.To.Root, mv.To.Path
+			replacing := func(e domain.RemoteEntry) bool {
+				there := m
+				there.Root, there.Path = e.Root, e.Path
+				return !named[key(e.Root, e.Path)] && !e.IsDir && strings.EqualFold(path.Ext(e.Path), path.Ext(m.Path)) && ComponentBeside(there, c)
+			}
+			if slices.ContainsFunc(scan, replacing) {
+				delete(files, c.ID)
+				named[key(mv.To.Root, mv.To.Path)] = false
 			}
 		}
 	}

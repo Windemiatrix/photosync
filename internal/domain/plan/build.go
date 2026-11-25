@@ -89,7 +89,8 @@ type Input struct {
 // a decision of DecideLayout or DecideComponents with ActionMoveAsset,
 // ActionUpdateBase or ActionLink lies where DecideRemoteLinks has it now,
 // with the size, hashes, ETag and MTime of its file, and one with ActionNone,
-// ActionForget or ActionUpload is as in the state; each takes the status
+// ActionForget or ActionUpload is as in the state, except that a detached
+// link takes the root and path where its file lies now; each takes the status
 // that the run leaves it in, except that the link of an upload that
 // DecideLayout decides leaves the state, the upload making a new one. Each
 // such link that differs from the state, and each new link of matching with
@@ -326,6 +327,11 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 				l = cur[l.ID]
 				l.Size, l.SHA256, l.MD5, l.ETag, l.MTime = e.Size, e.SHA256, e.MD5, e.ETag, e.MTime
 			case domain.ActionNone, domain.ActionForget, domain.ActionUpload:
+				// A detached link names its file by its path alone: left at the old
+				// path, it would let the next run take the moved file for a new one.
+				if e, ok := files[l.ID]; ok && end == domain.StatusDetached {
+					l.Root, l.Path = e.Root, e.Path
+				}
 			default:
 				return
 			}
