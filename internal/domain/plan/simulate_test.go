@@ -759,6 +759,15 @@ func TestSimulateConverges(t *testing.T) {
 	noDeletes.Deletes, detached.Status = domain.DeletesNone, domain.StatusDetached
 	gone7, inICloud := a7, photo
 	gone7.InTrash, inICloud.Status = true, domain.StatusQuarantinedICloud
+	alphaDown, bare := spec("alpha", domain.ModeDownloadOnly), domain.RemoteSpec{Name: "alpha", Mode: domain.ModeTwoWay}
+	chosen := conflict("alpha", domain.ConflictStatusOpen)
+	chosen.Resolution = domain.ConflictRemoteWins
+	renamed9, lower := file(personal, holidaysDir+"/IMG_0009.HEIC", 100, "a1", settled), file(personal, holidaysDir+"/img_0001.HEIC", 50, "l1", settled)
+	shot1 := e1
+	shot1.Meta = domain.MediaMeta{Taken: may1, Width: 4032, Height: 3024}
+	n9, n10 := asset(9, "IMG_0001.HEIC", 200, may1.Add(time.Hour), "run-2", holidays), asset(10, "IMG_0001.HEIC", 300, may1.Add(2*time.Hour), "run-2", holidays)
+	noHolidays := snapshot(left7)
+	noHolidays.Albums = slices.DeleteFunc(slices.Clone(library), func(a domain.Album) bool { return a.UUID == "u-hol" })
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -819,6 +828,9 @@ func TestSimulateConverges(t *testing.T) {
 		{"a conflict under ask stays open, and the asset stays as the state has it",
 			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip), scans{"alpha": {partyFile, holidaysFolder}}, specs{alpha}, "", ask,
 			kinds{domain.OpAlbumCreate}, []domain.Conflict{conflict("alpha", domain.ConflictStatusOpen)}},
+		{"a conflict that the user settled for the cloud under ask takes the asset to the album of the folder of its file and closes",
+			recorded(state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), chosen), snapshot(in7Trip), scans{"alpha": {partyFile, holidaysFolder}}, specs{alpha}, "", ask,
+			kinds{domain.OpAlbumCreate, domain.OpCopy, domain.OpAlbumAdd}, nil},
 		{"a file that the user moved to the shared root takes the asset to the shared library in the state, and the file of another remote follows",
 			state(assets{a7}, pairs{alphaHolidays, alphaShared, betaHolidays}, photo, other), snapshot(a7),
 			scans{"alpha": {sharedFile}, "beta": {e1}}, specs{alpha, beta}, "", p, kinds{domain.OpMove}, nil},
@@ -848,6 +860,8 @@ func TestSimulateConverges(t *testing.T) {
 			kinds{domain.OpAlbumCreate, domain.OpImport, domain.OpAlbumAdd, domain.OpAlbumRemove}, nil},
 		{"the first placement takes a new asset into the only event of its day, where two new assets go up",
 			state(nil, pairs{alphaHolidays}), snapshot(n2, n1), nil, specs{alpha}, "", p, kinds{domain.OpPut, domain.OpPut, domain.OpAlbumAdd}, nil},
+		{"download-only: a new asset in no album joins the only event of its day and goes up nowhere",
+			state(nil, pairs{alphaHolidays}), snapshot(left7), nil, specs{alphaDown}, "", p, kinds{domain.OpAlbumAdd}, nil},
 		{"a file that the user brings back from quarantine for an asset gone from the library comes back to iCloud as a new asset under its link",
 			state(assets{a7}, pairs{alphaHolidays}, back), snapshot(), scans{"alpha": {e1}}, specs{alpha}, "", p, kinds{domain.OpImport}, nil},
 		{"a new file that an asset with a detached link matches comes into iCloud as a new asset",
@@ -1092,5 +1106,82 @@ func TestSimulateConverges(t *testing.T) {
 		t.Parallel()
 		at := traced(t, state(nil, pairs{alphaHolidays, pair(trip, "beta", personal, tripDir)}), snapshot(), scans{"alpha": {e1}, "beta": {tripFile}}, specs{alpha, beta}, p)
 		replay(t, at, 0, []string{"", "", ""}, []kinds{{domain.OpImport}, {domain.OpCopy, domain.OpCopy, domain.OpAlbumAdd}, nil})
+	})
+	t.Run("a deletion reaches on the next run a file that matching linked on the run that made the deletion", func(t *testing.T) {
+		t.Parallel()
+		for _, c := range []struct {
+			p    domain.Policies
+			kind domain.OpKind
+		}{{p, domain.OpQuarantine}, {propagate, domain.OpDelete}} {
+			at := traced(t, state(assets{a7}, pairs{alphaHolidays, betaHolidays}, photo), snapshot(a7), scans{"beta": {shot1}}, specs{alpha, beta}, c.p)
+			replay(t, at, 0, []string{"", "", ""}, []kinds{{domain.OpAssetDelete}, {c.kind}, nil})
+		}
+	})
+	t.Run("one content new in two folders comes in once, and the next run links the other file to that asset in the album of its folder", func(t *testing.T) {
+		t.Parallel()
+		at := traced(t, state(nil, pairs{alphaHolidays, alphaTrip}), snapshot(), scans{"alpha": {e1, tripFile}}, specs{alpha}, p)
+		replay(t, at, 0, []string{"", "", ""}, []kinds{{domain.OpImport}, {domain.OpAlbumAdd}, nil})
+	})
+	t.Run("an album missing from one snapshot takes the file of its asset to quarantine, and the asset goes up again once the album is back: a known limit", func(t *testing.T) {
+		t.Parallel()
+		at, _ := replay(t, traced(t, state(assets{a7}, pairs{alphaHolidays}, photo), noHolidays, scans{"alpha": {e1}}, specs{alpha}, p), 0, []string{""}, []kinds{{domain.OpQuarantine}})
+		at.Snapshot = snapshot(a7)
+		replay(t, at, 1, []string{"", ""}, []kinds{{domain.OpPut}, nil})
+	})
+	t.Run("a stop after the records of a run leaves the file of an album renamed in iCloud in the folder of its old title, where a new file makes an album of that title: a known limit", func(t *testing.T) {
+		t.Parallel()
+		at := traced(t, state(assets{a7}, pairs{alphaHolidays}, photo), inVacation(snapshot(a7)), scans{"alpha": {e1}}, specs{alpha}, p)
+		at.Now, at.RunID, at.Fields = now, "run-2", fieldsOf(at.Snapshot)
+		first, delta, err := plan.Build(at)
+		if err != nil || len(first.Pairs) != 1 || len(first.Ops) != 1 || first.Ops[0].Kind != domain.OpMove {
+			t.Fatalf("Build = %+v, %v; want the pair of the album moved and the move of its file", first, err)
+		}
+		records := first
+		records.Ops = nil
+		at.State, at.Snapshot, at.Scans = plan.Simulate(at, records, delta)
+		at, _ = replay(t, at, 1, []string{""}, []kinds{nil})
+		at.Scans["alpha"] = append(at.Scans["alpha"], stray4)
+		replay(t, at, 2, []string{""}, []kinds{{domain.OpAlbumCreate, domain.OpImport}})
+	})
+	t.Run("a Live Photo video that goes to quarantine after its photo while the asset stays keeps a link that the next run clears with a record alone: a known limit", func(t *testing.T) {
+		t.Parallel()
+		at := traced(t, state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(withVideo(left7)), scans{"alpha": {ev, renamed9}}, specs{bare}, p)
+		at, _ = replay(t, at, 0, []string{""}, []kinds{{domain.OpQuarantine, domain.OpImport}})
+		_, second := replay(t, at, 1, []string{"", ""}, []kinds{nil, nil})
+		if len(second.Links) != 1 || second.Links[0].Role != live || second.Links[0].Status != "" {
+			t.Errorf("the second plan records %+v; want the link of the video cleared", second.Links)
+		}
+	})
+	t.Run("runs with a limit of one asset put two new assets of one name at the paths of one run without it, which asset takes which being a known limit", func(t *testing.T) {
+		t.Parallel()
+		var paths [2][]string
+		for i, limit := range []int{0, 1} {
+			at := traced(t, state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n9, n10), scans{"alpha": {e1}}, specs{alpha}, p)
+			for run := range 3 {
+				at.Now, at.RunID, at.Fields = now.Add(time.Duration(run)*time.Hour), fmt.Sprintf("run-%d", run+2), fieldsOf(at.Snapshot)
+				next, delta, err := plan.Build(at)
+				if err != nil {
+					t.Fatalf("Build of %s with a limit of %d: %v", at.RunID, limit, err)
+				}
+				at.State, at.Snapshot, at.Scans = plan.Simulate(at, plan.Limit(next, limit), delta)
+			}
+			for _, e := range at.Scans["alpha"] {
+				paths[i] = append(paths[i], e.Path)
+			}
+		}
+		if !slices.Equal(paths[0], paths[1]) {
+			t.Errorf("runs with a limit of one asset leave %q; want %q", paths[1], paths[0])
+		}
+	})
+	t.Run("a file that a double holds back stays where it is on every run, each with the notice of the doubles: a known limit until the user renames one", func(t *testing.T) {
+		t.Parallel()
+		at := traced(t, state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(in7Trip), scans{"alpha": {e1, lower}}, specs{alpha}, p)
+		for run, want := range []kinds{{domain.OpImport}, nil, nil} {
+			var got domain.Plan
+			at, got = replay(t, at, run, []string{""}, []kinds{want})
+			if !slices.ContainsFunc(got.Notices, func(n domain.Notice) bool { return n.Code == "plan.doubles" }) {
+				t.Fatalf("run %d plans %+v; want the notice of the doubles", run+1, got)
+			}
+		}
 	})
 }

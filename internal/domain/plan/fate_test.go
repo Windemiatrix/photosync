@@ -275,6 +275,8 @@ func TestDecideFateTotal(t *testing.T) {
 						problem = name + " deletes the changed asset"
 					case spread && o.Action != domain.ActionDeleteAsset && o.ICloud != domain.ChangeDeleted:
 						problem = name + " misses the deletion"
+					case waits && (o.Action != domain.ActionUpdateBase || o.Rule != "R-OBJECT-09"):
+						problem = name + " waits for the replacement of alpha by no rule"
 					case o != d && !beaten && !spread && !waits:
 						problem = name + " changes by no rule"
 					}

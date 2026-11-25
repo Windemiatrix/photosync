@@ -214,6 +214,8 @@ func TestReadScans(t *testing.T) {
 		pair(holidays, "alpha", personal, movedDir, domain.OriginICloud), pair(holidays, "beta", personal, holidaysDir, domain.OriginICloud),
 		pair(holidays, "alpha", shared, holidaysDir, domain.OriginICloud),
 	}}
+	movedApart, e1Shared := movedAway, file(shared, holidaysDir+"/IMG_0001.HEIC", 100, "a1", settled)
+	movedApart.AlbumPairs = movedAway.AlbumPairs[:2]
 	v1 := file(personal, vacationDir+"/IMG_0001.HEIC", 100, "a1", settled)
 	named := func(x domain.AlbumPair) domain.AlbumPair {
 		x.NamedAfter = `["2024"] "05/01 Holidays"`
@@ -364,6 +366,9 @@ func TestReadScans(t *testing.T) {
 			delta(frozen, trashed, hidden, a7), scans{"alpha": {e34, e32, e32d, e31, e30, zoo}}, specs{alpha}, skip,
 			result{found{1: zoo, 30: e30, 31: e31, 32: e32d, 33: e32, 34: e34}, reads{"alpha": scanned(nil, nil, nil, nil)},
 				[]domain.Album{album(next, event, "05/10 Zoo")}, []domain.AlbumPair{pair(next, "alpha", personal, zooDir, byRemote)}, nil}},
+		{"a linked file that the user moved to the other root, at the path that it left behind a moved pair, counts among the files of its album there",
+			movedApart, delta(a7), scans{"alpha": {e1Shared}}, specs{alpha}, p,
+			result{found{1: e1Shared}, reads{"alpha": scanned(nil, nil, nil, nil)}, nil, []domain.AlbumPair{pair(holidays, "alpha", shared, holidaysDir, byRemote)}, nil}},
 		{"a Live video linked beside its photo does not count among the files of an album",
 			state(link(4, 14, "alpha", q14, original, 0), link(3, 13, "alpha", q13, original, 0),
 				link(2, 8, "alpha", e2v, liveVideo, 0), link(1, 8, "alpha", e2, original, 0)),

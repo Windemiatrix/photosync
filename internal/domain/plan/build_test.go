@@ -324,6 +324,15 @@ func TestBuild(t *testing.T) {
 	sharedHolidays := domain.AlbumPair{AlbumID: holidays, Remote: "alpha", Root: shared, DirPath: holidaysDir, CreatedBy: domain.OriginRemote}
 	sharedPut := put(9, holidaysDir+"/IMG_0009.HEIC", original, holidays, 900)
 	sharedPut.DstRoot, sharedPut.Links[0].Root = shared, shared
+	sharedFolder, youngShared := domain.RemoteEntry{Root: shared, Path: holidaysDir, IsDir: true, MTime: settled}, file(shared, lowHolidays+"/IMG_0005.HEIC", 50, "y7", young)
+	numbered := func(a domain.Asset, id domain.AssetID) domain.Asset {
+		a.ID = id
+		return a
+	}
+	inShared := func(n domain.Notice) domain.Notice {
+		n.Params[1] = string(shared)
+		return n
+	}
 	bareAlbums := append(slices.Clone(albums), inYear(bareDay, "u-bare", "05/01", may1.Add(-2*time.Hour)))
 	bareLibrary := append(slices.Clone(library), domain.Album{UUID: "u-bare", Title: "05/01", Start: may1.Add(-2 * time.Hour), ParentUUID: "u-2024", FolderTitles: []string{"2024"}})
 	onBareDay := func(s domain.LibrarySnapshot) domain.LibrarySnapshot {
@@ -627,6 +636,13 @@ func TestBuild(t *testing.T) {
 				Notices: []domain.Notice{doubles(holidaysDir, lowHolidays), doubles(holidaysDir+"/IMG_0001 (1).HEIC", youngTwin.Path), settling(youngTwin.Path)},
 			},
 			delta(a7, loose8), nil},
+		{"a new asset of the shared library does not go up into a folder of the shared root that differs from another in case alone, while a new asset goes up into the folder of that name under the personal root",
+			state(nil, pairs{alphaHolidays, sharedHolidays}), snapshot(h8, new9), scans{"alpha": {youngShared, sharedFolder}}, specs{alpha}, "", p, event,
+			domain.Plan{
+				Ops:     ops{put(1, holidaysDir+"/IMG_0002.HEIC", original, holidays, 200)},
+				Notices: []domain.Notice{inShared(doubles(holidaysDir, lowHolidays)), inShared(settling(youngShared.Path))},
+			},
+			delta(numbered(h8, 1), numbered(new9, 2)), nil},
 		{"under propagate a file whose path differs from another in case alone keeps its asset and its Live Photo video in the cloud, and the other file is still imported",
 			state(assets{withVideo(a7)}, pairs{alphaHolidays}, photo, video), snapshot(), scans{"alpha": {stray, ev, e1}}, specs{alpha}, "", propagate, event,
 			domain.Plan{
@@ -798,6 +814,9 @@ func TestBuild(t *testing.T) {
 		{"upload-only: new files of the cloud stay out of iCloud and an edit stays where it is, and notices count them",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {new4, e1, edit2, new3}}, specs{alphaUp}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{counted("plan.edits_left", "alpha", "1"), counted("plan.not_imported", "alpha", "2")}}, delta(a7), nil},
+		{"download-only: edits stay where they are while the policy takes edits to quarantine, and a notice counts them",
+			state(nil, nil), snapshot(), scans{"alpha": {edit3, edit2}}, specs{down}, "", edits, event,
+			domain.Plan{Notices: []domain.Notice{counted("plan.edits_left", "alpha", "2")}}, delta(), nil},
 		{"new files that one remote imports are linked in another along, while that remote imports a new file of its own, brings a changed file back by its link and sets an edit aside",
 			state(assets{a7}, pairs{alphaHolidays, betaHolidays}, other), snapshot(),
 			scans{"alpha": {new4, new3}, "beta": {new5, edit2, new4, replaced, new3}}, specs{alpha, beta}, "", edits, event,
