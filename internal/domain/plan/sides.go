@@ -59,14 +59,14 @@ func stillInAlbum(a domain.Asset, id domain.AlbumID, albums []domain.Album) bool
 }
 
 // RemoteSide returns how the file of active link l changed in the cloud
-// since the last applied run. e is the entry of the scan at the root and
-// path of l, and found reports that the scan has one. The file is deleted
+// since the last applied run. e is the entry of the scan where the file of l
+// lies, and found reports that the scan has one. The file is deleted
 // when there is none or e is a directory, unchanged when e has the content
 // of the base, else replaced. The base keeps the size, hashes and ETag that
 // the listing of the remote gave. With hash md5 or sha256 the content
 // compares by that hash when l and e both have it; otherwise, and always
-// with HashNone, by size and by an ETag that both have. A file that turns up
-// at another path is deleted here; the caller makes it a move (R-OBJECT-08).
+// with HashNone, by size and by an ETag that both have. Whether e lies at
+// the path of l is the caller's to tell, and a move is its (R-OBJECT-08).
 func RemoteSide(l domain.Link, e domain.RemoteEntry, found bool, hash domain.HashKind) domain.ChangeKind {
 	switch {
 	case !found || e.IsDir:

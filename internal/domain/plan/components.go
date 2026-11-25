@@ -51,10 +51,10 @@ var componentTable = map[componentCase]outcome{
 // same reports that a component found elsewhere already lies where the main
 // file ends up; it counts only with ActionNone and ActionMoveFile, and the
 // component then stays where it lies: the base takes its move, and new
-// content replaces the asset without a move. A move, an upload or
-// a move with a replacement puts the component beside the main file where
-// that ends up, and a copy beside the copy, at ComponentPath. ok is false for
-// a component without a base or a main file with another action.
+// content replaces the asset without a move. A move, an upload or a move
+// with a replacement puts the component beside the main file where that ends
+// up, and a copy beside the copy, at ComponentPath. ok is false for a
+// component without a base or a main file with another action.
 func ComponentAction(remote domain.ChangeKind, main domain.LinkAction, same bool) (action domain.LinkAction, rule string, ok bool) {
 	o, found := componentTable[componentCase{remote, main}]
 	switch {

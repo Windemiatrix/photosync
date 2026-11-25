@@ -73,12 +73,12 @@ func ReadScan(links []domain.Link, r domain.RemoteSpec, scan []domain.RemoteEntr
 	// A component that the user replaced has no content of the base to be found
 	// by; beside its main file it keeps the name of the shot.
 	for _, c := range gone {
-		for _, m := range links {
-			to, ok := files[m.ID]
-			if _, done := files[c.ID]; done || !ok || !objectFile(m) || to.Root == m.Root && to.Path == m.Path || !ComponentBeside(m, c) {
+		for _, mv := range moves {
+			m := mv.Link
+			if _, done := files[c.ID]; done || !objectFile(m) || !ComponentBeside(m, c) {
 				continue
 			}
-			m.Root, m.Path = to.Root, to.Path
+			m.Root, m.Path = mv.To.Root, mv.To.Path
 			for _, e := range scan {
 				there := c
 				there.Root, there.Path = e.Root, e.Path

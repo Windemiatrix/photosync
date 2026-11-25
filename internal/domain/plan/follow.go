@@ -25,9 +25,9 @@ import (
 // fates that ComponentBeside finds it beside in the state, 0 for none, whose
 // fate is then ActionDeleteFile: that of ComponentAction on how its file
 // changed, as RemoteSide says of it where it lies now, a file found elsewhere
-// with the content of the base being moved, and on that
-// fate, same holding when no placement moves that file and the component lies
-// beside it as both lie now; its iCloud side is that of the decision on that
+// with the content of the base being moved, and on that fate, same holding
+// when no placement moves that file and the component lies beside it as both
+// lie now; its iCloud side is that of the decision on that
 // file, unchanged for none. A component gone from the cloud beside a file of
 // an ActionImport decision is forgotten by R-COMPONENT-04, since the asset
 // that it would come from is not the one that the file goes to. In an
