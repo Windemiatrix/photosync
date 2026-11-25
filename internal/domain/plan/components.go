@@ -48,15 +48,20 @@ var componentTable = map[componentCase]outcome{
 // copy of it that the plan makes; ActionQuarantineFile when the plan moves it
 // to quarantine whatever the deletes policy; ActionDeleteFile when it leaves
 // the cloud under the deletes policy, deleted by the plan or by the user.
-// same reports that a moved component already lies where the main file ends
-// up; it counts only with ActionNone and ActionMoveFile. A move, an upload or
-// a move with a replacement puts the component beside the main file where
-// that ends up, and a copy beside the copy, at ComponentPath. ok is false for
-// a component without a base or a main file with another action.
+// same reports that a component found elsewhere already lies where the main
+// file ends up; it counts only with ActionNone and ActionMoveFile, and the
+// component then stays where it lies: the base takes its move, and new
+// content replaces the asset without a move. A move, an upload or a move
+// with a replacement puts the component beside the main file where that ends
+// up, and a copy beside the copy, at ComponentPath. ok is false for a
+// component without a base or a main file with another action.
 func ComponentAction(remote domain.ChangeKind, main domain.LinkAction, same bool) (action domain.LinkAction, rule string, ok bool) {
 	o, found := componentTable[componentCase{remote, main}]
-	if same && o.rule == "R-COMPONENT-02" {
+	switch {
+	case same && o.rule == "R-COMPONENT-02":
 		o = outcome{domain.ActionUpdateBase, "R-COMPONENT-04"}
+	case same && o.action == domain.ActionMoveFileReplaceAsset:
+		o.action = domain.ActionReplaceAsset
 	}
 	return o.action, o.rule, found
 }

@@ -41,6 +41,7 @@ func TestComponentAction(t *testing.T) {
 		{result{domain.ActionReplaceAsset, "R-COMPONENT-03"}, false, []cell{{replaced, mainStays}}},                                       // covers: R-COMPONENT-03
 		{result{domain.ActionMoveFile, "R-COMPONENT-04"}, false, []cell{{unchanged, mainMoves}}},                                          // covers: R-COMPONENT-04
 		{result{domain.ActionUpdateBase, "R-COMPONENT-04"}, true, []cell{{moved, mainStays}, {moved, mainMoves}}},
+		{result{domain.ActionReplaceAsset, "R-COMPONENT-03"}, true, []cell{{replaced, mainMoves}}},
 		{result{domain.ActionQuarantineFile, "R-COMPONENT-04"}, false, []cell{{unchanged, mainQuarantined}, {moved, mainQuarantined}, {replaced, mainQuarantined}}},
 		{result{domain.ActionDeleteFile, "R-COMPONENT-04"}, false, []cell{{unchanged, mainDeleted}, {moved, mainDeleted}, {replaced, mainDeleted}}},
 		{result{domain.ActionForget, "R-COMPONENT-04"}, false, []cell{{deleted, mainQuarantined}, {deleted, mainDeleted}}},

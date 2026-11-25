@@ -1109,6 +1109,24 @@ func TestSimulateConverges(t *testing.T) {
 		at := traced(t, state(nil, pairs{alphaHolidays, pair(trip, "beta", personal, tripDir)}), snapshot(), scans{"alpha": {e1}, "beta": {tripFile}}, specs{alpha, beta}, p)
 		replay(t, at, 0, []string{"", "", ""}, []kinds{{domain.OpImport}, {domain.OpCopy, domain.OpCopy, domain.OpAlbumAdd}, nil})
 	})
+	t.Run("a RAW file that the user replaced in a folder renamed in the cloud stays linked beside its photo, and its new content replaces the asset", func(t *testing.T) {
+		t.Parallel()
+		withRAW := func(a domain.Asset) domain.Asset {
+			a.Resources = append(slices.Clone(a.Resources), domain.Resource{Role: domain.ResourceRAWPair, Filename: "IMG_0001.DNG", Size: 40})
+			return a
+		}
+		raw := link(2, "alpha", file(personal, holidaysDir+"/IMG_0001.DNG", 40, "r1", settled), domain.RoleRAWPair)
+		newRAW := file(personal, vacationDir+"/IMG_0001.DNG", 45, "r2", settled)
+		at, first := replay(t, traced(t, state(assets{withRAW(a7)}, pairs{alphaHolidays}, photo, raw), snapshot(withRAW(a7)), scans{"alpha": {newRAW, vacationFile}}, specs{alpha}, p),
+			0, []string{"", ""}, []kinds{{domain.OpAlbumRename, domain.OpImport, domain.OpAlbumAdd, domain.OpAssetDelete}, nil})
+		if slices.ContainsFunc(first.Notices, func(n domain.Notice) bool { return n.Code == "plan.path_taken" }) ||
+			!slices.ContainsFunc(at.State.Links, func(l domain.Link) bool {
+				return l.Role == domain.RoleRAWPair && l.Status == domain.StatusActive && l.Path == newRAW.Path && l.MD5 == newRAW.MD5
+			}) ||
+			slices.ContainsFunc(at.State.Links, func(l domain.Link) bool { return l.Path == raw.Path && l.Status == domain.StatusActive }) {
+			t.Errorf("the first plan %+v leaves the links\n%+v\nwant no taken path and the RAW file linked where it lies, with its new content", first, at.State.Links)
+		}
+	})
 	t.Run("a deletion reaches on the next run a file that matching linked on the run that made the deletion", func(t *testing.T) {
 		t.Parallel()
 		for _, c := range []struct {

@@ -24,12 +24,13 @@ import (
 // decisions gets one decision in components, under the link ID of the file of
 // fates that ComponentBeside finds it beside in the state, 0 for none, whose
 // fate is then ActionDeleteFile: that of ComponentAction on how its file
-// changed, as RemoteSide says with a file found elsewhere moved, and on that
-// fate, same holding when no placement moves that file and the component lies
-// beside it as both lie now; its iCloud side is that of the decision on that
-// file, unchanged for none. A component gone from the cloud beside a file of
-// an ActionImport decision is forgotten by R-COMPONENT-04, since the asset
-// that it would come from is not the one that the file goes to. In an
+// changed, as RemoteSide says of it where it lies now, a file found elsewhere
+// with the content of the base being moved, and on that fate, same holding
+// when no placement moves that file and the component lies beside it as both
+// lie now; its iCloud side is that of the decision on that file, unchanged
+// for none. A component gone from the cloud beside a file of an ActionImport
+// decision is forgotten by R-COMPONENT-04, since the asset that it would come
+// from is not the one that the file goes to. In an
 // upload-only remote ActionMoveFileReplaceAsset becomes ActionMoveFile by
 // R-COMPONENT-04, its Link with the size, hashes, ETag and MTime of the entry
 // of the component, which the base takes (R-MODE-01). Any other action that
@@ -37,12 +38,12 @@ import (
 // of the component moved or has new content, else ActionNone, by R-MODE-01
 // or R-MODE-02, and then StatusDeletes applies deletes. after gives, by link
 // ID, the status that each decision leaves its link in, "" when it follows a
-// file to quarantine by a placement. copies gives, under the same key, the placement of the
-// component into the album of each copy that placements make of that file, as
-// ComponentAction gives it for ActionCopyFile, with Link where the component
-// lies now, or as in the state when gone, an upload too. The lists are in the
-// order of the link ID of the component, those of copies then in the order of
-// placements, and the inputs are not changed.
+// file to quarantine by a placement. copies gives, under the same key, the
+// placement of the component into the album of each copy that placements
+// make of that file, as ComponentAction gives it for ActionCopyFile, with
+// Link where the component lies now, or as in the state when gone, an upload
+// too. The lists are in the order of the link ID of the component, those of
+// copies then in the order of placements, and the inputs are not changed.
 func DecideComponents(decisions map[string][]domain.LinkDecision, status map[domain.LinkID]domain.LinkStatus, placements map[string][]domain.Placement, links []domain.Link, files map[domain.LinkID]domain.RemoteEntry, remotes []domain.RemoteSpec, deletes domain.DeletesPolicy) (fates map[domain.LinkID]domain.LinkAction, components map[domain.LinkID][]domain.LinkDecision, copies map[domain.LinkID][]domain.Placement, after map[domain.LinkID]domain.LinkStatus) {
 	now := func(l domain.Link) domain.Link {
 		if e, ok := files[l.ID]; ok {
@@ -90,8 +91,10 @@ func DecideComponents(decisions map[string][]domain.LinkDecision, status map[dom
 		}
 		e, there := files[c.ID]
 		at := there && e.Root == c.Root && e.Path == c.Path
-		side := RemoteSide(c, e, at, r.Capabilities.ContentHash)
-		if there && !at {
+		side := RemoteSide(c, e, there, r.Capabilities.ContentHash)
+		// A component found by its name beside its main file may hold new
+		// content, which replaces the asset rather than passing for a move.
+		if !at && side == domain.ChangeUnchanged {
 			side = domain.ChangeMoved
 		}
 		decide := func(f domain.LinkAction, same bool) (domain.LinkDecision, domain.LinkStatus) {

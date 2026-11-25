@@ -14,9 +14,10 @@ import (
 // holds it, and baseLibrary is its Library in the state. links are the links
 // of the asset in the state, in any remote, role and status; only those of r
 // count. files gives, by link ID, the entry of the scan of r where the file of
-// a link lies now: at the path of the link, or where MovesByContent found it;
-// a link that it lacks has no file. pairs are the album pairs of every remote
-// that the run keeps or makes, and albums are as ICloudSide takes them.
+// a link lies now: at the path of the link, or where ReadScan found it
+// elsewhere; a link that it lacks has no file. pairs are the album pairs of
+// every remote that the run keeps or makes, and albums are as ICloudSide
+// takes them.
 //
 // An asset that does not sync under p, or for which StatusFrozen holds in r,
 // is frozen there: it gets no decisions, and current is its links in r as the
