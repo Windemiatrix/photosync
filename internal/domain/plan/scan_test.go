@@ -69,6 +69,8 @@ func TestReadScan(t *testing.T) {
 	nested := file(personal, "2024/05-01 - Holidays/.photosync/IMG_0002.HEIC", "c4")
 	longer := file(personal, ".photosync-old/IMG_0003.HEIC", "c5")
 	edit, toEdits, inThemed := file(personal, anEdit, "c6"), file(personal, movedToEdits, "a1"), file(personal, inAlbumEdited, "a1")
+	liveTripNew, liveTripDouble := file(personal, "2024/05-02 - Trip/IMG_0001.mov", "c8"), file(personal, "2024/05-02 - Trip/img_0001.MOV", "c9")
+	xmpTrip, liveHere := file(personal, "2024/05-02 - Trip/IMG_0001.xmp", "x1"), file(personal, "2024/05-01 - Holidays/IMG_0001.mov", "c8")
 	links := func(l ...domain.Link) []domain.Link { return l }
 	entries := func(e ...domain.RemoteEntry) []domain.RemoteEntry { return e }
 	type found = map[domain.LinkID]domain.RemoteEntry
@@ -123,6 +125,16 @@ func TestReadScan(t *testing.T) {
 			nil, entries(inTrip), nil, ambiguous(atHolidays1, atHolidays)},
 		{"the video of a Live Photo moved apart from its photo", byMD5, links(live, l1), entries(liveInTrip, held),
 			found{1: held, 2: liveInTrip}, nil, nil, nil},
+		{"the video of a Live Photo that the user replaced while moving it with its photo, found by its name beside the photo", byMD5,
+			links(live, l1), entries(xmpTrip, liveTripNew, inTrip), found{1: inTrip, 2: liveTripNew}, entries(xmpTrip), nil, nil},
+		{"of two names of that video in different cases, the first by path", byMD5,
+			links(live, l1), entries(liveTripDouble, liveTripNew, inTrip), found{1: inTrip, 2: liveTripNew}, entries(liveTripDouble), nil, nil},
+		{"a sidecar beside the moved photo is not its Live Photo video", byMD5,
+			links(live, l1), entries(xmpTrip, inTrip), found{1: inTrip}, entries(xmpTrip), nil, nil},
+		{"a video of the name of a Live Photo video gone while its photo stayed is a new file, beside the photo too", byMD5,
+			links(live, l1), entries(liveHere, held), found{1: held}, entries(liveHere), nil, nil},
+		{"a video of the name of a Live Photo video left in the old folder of its moved photo is a new file", byMD5,
+			links(live, l1), entries(liveHere, inTrip), found{1: inTrip}, entries(liveHere), nil, nil},
 		{"a directory at the path of a link", byMD5, links(l1), entries(dirAtHolidays), found{1: dirAtHolidays}, nil, nil, nil},
 		{"a directory at the path of a link, its file moved elsewhere", byMD5, links(l1), entries(dirAtHolidays, inTrip),
 			found{1: inTrip}, nil, nil, nil},
