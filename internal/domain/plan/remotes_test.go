@@ -190,7 +190,8 @@ func TestPlanOnlyRemoteOnGenWorlds(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Build of alpha alone: %v", err)
 		}
-		if slices.ContainsFunc(p.Ops, func(o domain.Op) bool { return o.Remote == "beta" }) || slices.ContainsFunc(p.Links, func(l domain.Link) bool { return l.Remote == "beta" }) ||
+		if slices.ContainsFunc(p.Ops, func(o domain.Op) bool { return o.Remote == "beta" }) ||
+			slices.ContainsFunc(p.Links, func(l domain.Link) bool { return l.Remote == "beta" }) ||
 			slices.ContainsFunc(p.Pairs, func(x domain.AlbumPair) bool { return x.Remote == "beta" }) ||
 			slices.ContainsFunc(p.Conflicts, func(c domain.Conflict) bool { return c.Remote == "beta" }) {
 			t.Fatalf("the run of alpha alone plans for beta:\n%+v", p)
@@ -269,7 +270,8 @@ func TestDigestOnGenWorlds(t *testing.T) {
 }
 
 // The cases of the properties above must hold what they claim to check. Fixed
-// seeds give the same cases on every run.
+// seeds give the same cases on every run, and the bounds are about half of
+// what they give, so a change of the generator that halves them fails here.
 func TestRemoteCasesNotVacuous(t *testing.T) {
 	t.Parallel()
 	const cases = 100
