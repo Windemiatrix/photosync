@@ -92,8 +92,11 @@ func Read(w gen.World) (World, error) {
 }
 
 // New returns the model of now after base, or the first way in which base
-// or now is outside the simplified world, after "base: " or "now: ". New
-// reads now without its truth and leaves now as it was.
+// or now is outside the simplified world, after "base: " or "now: ". An
+// album of base that now holds under another title is outside: a sync keeps
+// the directory of a renamed album, and the model, which knows an album only
+// by its place, would put what comes to that directory under the old title.
+// New reads now without its truth and leaves now as it was.
 func New(base, now gen.World) (Model, error) {
 	b, err := Read(base)
 	if err != nil {
@@ -103,6 +106,15 @@ func New(base, now gen.World) (Model, error) {
 	n, err := Read(now)
 	if err != nil {
 		return Model{}, fmt.Errorf("now: %w", err)
+	}
+	titles := map[string]string{}
+	for _, a := range base.Snapshot.Albums {
+		titles[a.UUID] = a.Title
+	}
+	for _, a := range now.Snapshot.Albums {
+		if was, ok := titles[a.UUID]; ok && was != a.Title {
+			return Model{}, fmt.Errorf("now: album %q is %q, not %q as in base; want no renames", a.UUID, a.Title, was)
+		}
 	}
 	return Model{Base: b, Now: n}, nil
 }
