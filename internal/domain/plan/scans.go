@@ -19,8 +19,9 @@ import (
 // ReadScan gives it, Settling holds the assets that the run must leave as
 // they are in the remote, a file of theirs there not having settled or lying
 // outside the templates, as ReadScans tells, Renamed holds the albums and
-// the folders of albums that take the titles of their directories there, and
-// Refiled the albums that take their folders.
+// the folders of albums that take the titles of their directories there,
+// Refiled the albums that take their folders, and Moved the pairs that
+// MovePairs moves there, as they were before.
 type RemoteScan struct {
 	Linked   []domain.LinkDecision
 	Join     map[domain.AssetID][]domain.AlbumChange
@@ -29,6 +30,7 @@ type RemoteScan struct {
 	Settling map[domain.AssetID]bool
 	Renamed  []domain.Album
 	Refiled  []domain.Album
+	Moved    []domain.AlbumPair
 }
 
 // ReadScans reads the scans of remotes, in the order of their names, before a
@@ -53,29 +55,39 @@ type RemoteScan struct {
 // has no entry and whose content an entry outside the templates has.
 // ReadScan reads the rest with p.EditedDirs. Its fresh lose those that share
 // the root, the directory and the export.StemKey of the name with an entry
-// that has not settled, which wait with it, and MatchFresh matches the fresh left with delta.Assets, new link IDs running
-// on from the highest link ID of state. For the personal root,
-// then the shared one, RenamedDirs runs with the albums of delta, each as the
-// last RenamedDirs gave it or, inside a folder that it renamed, under the
-// new title of that folder, and those added before, the pairs of state and
-// those made before, the highest AlbumID of state, the links of state, the
-// files of ReadScan and the scan that it reads, and then PairDirs with the
-// albums and pairs as they are by then and that AlbumID; the dirs and files of
-// PairDirs hold the files of the original or the source role of the new links
-// and of the active links of the remote, where ReadScan finds them, whose
-// asset is in delta outside Recently Deleted, Syncs under p, is not in
+// that has not settled, which wait with it. MatchFresh matches the fresh left
+// with delta.Assets, new link IDs running on from the highest link ID of
+// state.
+//
+// For the personal root, then the shared one, RenamedDirs runs with the
+// albums of delta, each as the last RenamedDirs gave it or, inside a folder
+// that it renamed, under the new title of that folder, and those added
+// before, the pairs of state and those made before and the highest AlbumID of
+// state; each pair it moves takes the place of its old one. PairDirs then
+// pairs the directories with the albums and pairs as they are by then. Its
+// dirs and files hold the files of the original or the source role of the new
+// links and of the active links of the remote, where ReadScan finds them,
+// whose asset is in delta outside Recently Deleted, Syncs under p, is not in
 // Settling and is not one that StatusFrozen holds for, but for a file still at
-// the path of its link outside the directory that the pair of the remote holds
-// for its album and root, which a moved pair left behind, and in dirs alone
-// the main files of the new files; a file goes in files under each album of
-// the Memberships of its asset. JoinFresh runs with the pairs of state and
-// those made, and DecideDerived with the fresh left and p.DerivedCopy. files
-// is the union of what ReadScan gives, added and made are what RenamedDirs and
-// PairDirs add and make, in the order of the calls, the Renamed and the
-// Refiled of a remote hold what RenamedDirs renames and refiles there, and
-// notices hold, for each remote in turn, those of settling and skipping, in
-// the order of the root and the path of their entries, then those of
-// ReadScan, MatchFresh and DecideDerived. An entry under the directory
+// the path of its link outside the directory that the pair of the remote in
+// state holds for its album and root, which a moved pair left behind; dirs
+// alone hold the main files of the new files too, and a file goes in files
+// under each album of the Memberships of its asset. MovePairs then moves the
+// pairs with the whole scan of the remote. layout.FirstPairs gives the
+// albums, not folders, the directories that those moved pairs leave, by the
+// files of PairDirs; the pairs it makes there are made with the remote and
+// the root. JoinFresh runs with the pairs of state, those that RenamedDirs
+// moves in place of their old ones and those that PairDirs makes, and
+// DecideDerived with the fresh left and p.DerivedCopy.
+//
+// files is the union of what ReadScan gives. added and made are what
+// RenamedDirs, PairDirs, MovePairs and layout.FirstPairs add and make, in the
+// order of the calls. The Renamed and the Refiled of a remote hold what
+// RenamedDirs renames and refiles there, and its Moved the pairs that
+// MovePairs moves there as they were before. notices hold, for each remote
+// in turn, those of settling and skipping, in the order of the root and the
+// path of their entries, then those of ReadScan, MatchFresh and
+// DecideDerived. An entry under the directory
 // .photosync at the top of a root, which ReadScan leaves out, has settled
 // whatever its MTime. The inputs are not changed.
 func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string][]domain.RemoteEntry, remotes []domain.RemoteSpec, p domain.Policies, now time.Time) (files map[domain.LinkID]domain.RemoteEntry, read map[string]RemoteScan, added []domain.Album, made []domain.AlbumPair, notices []domain.Notice) {
@@ -213,7 +225,13 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 		for _, c := range left {
 			count(domain.Link{Root: c.Main.Root, Path: c.Main.Path})
 		}
+		same := func(x domain.AlbumPair) func(domain.AlbumPair) bool {
+			return func(y domain.AlbumPair) bool {
+				return y.AlbumID == x.AlbumID && y.Remote == x.Remote && y.Root == x.Root
+			}
+		}
 		var renamed, refiled []domain.Album
+		var before []domain.AlbumPair
 		for _, root := range []domain.LibraryKind{domain.LibraryPersonal, domain.LibraryShared} {
 			moved, titled, filed, folders := RenamedDirs(albums, pairs, lastAlbum, state.Links, fs, scan, r, root, p)
 			for _, a := range slices.Concat(titled, filed) {
@@ -221,15 +239,41 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 					albums[slices.IndexFunc(albums, func(c domain.Album) bool { return c.ID == b.ID })] = b
 				}
 			}
-			made, pairs, renamed, refiled = append(made, moved...), append(pairs, moved...), append(renamed, titled...), append(refiled, filed...)
+			// MovePairs must not take the old place of a pair that the user moved
+			// for one more pair of its album.
+			for _, x := range moved {
+				pairs[slices.IndexFunc(pairs, same(x))] = x
+			}
+			made, renamed, refiled = append(made, moved...), append(renamed, titled...), append(refiled, filed...)
 			added, albums = append(added, folders...), append(albums, folders...)
 			newPairs, newAlbums := PairDirs(albums, pairs, lastAlbum, r, root, dirs[root], paths[root], p)
 			made, added = append(made, newPairs...), append(added, newAlbums...)
 			pairs, albums = append(pairs, newPairs...), append(albums, newAlbums...)
+			// The pairs that follow their albums keep their old places for
+			// JoinFresh, so that a new file there goes into the album that it was
+			// put in. Those places go only to albums that the run has: an album
+			// made for one would take that file instead. Pairing them now keeps an
+			// album that lies there from waiting for the next run.
+			after := slices.DeleteFunc(slices.Clone(pairs), func(x domain.AlbumPair) bool { return x.Remote != r.Name || x.Root != root })
+			freed := map[string]bool{}
+			for _, x := range MovePairs(albums, pairs, scans[r.Name], r, root, p) {
+				i := slices.IndexFunc(after, same(x))
+				before, freed[after[i].DirPath] = append(before, after[i]), true
+				after[i], made = x, append(made, x)
+			}
+			owners := slices.DeleteFunc(slices.Clone(albums), func(a domain.Album) bool { return a.Kind == domain.KindFolder })
+			for _, x := range layout.FirstPairs(owners, after, freed, paths[root], p) {
+				if freed[x.DirPath] {
+					x.Remote, x.Root = r.Name, root
+					made = append(made, x)
+				}
+			}
 		}
 		linked, join, newFiles := JoinFresh(matched, left, pairs, r, p)
 		decided, ds := DecideDerived(linked, delta.Assets, fresh, r.Mode, p.DerivedCopy)
-		read[r.Name] = RemoteScan{Linked: decided, Join: join, NewFiles: newFiles, Edited: edited, Settling: settling, Renamed: renamed, Refiled: refiled}
+		read[r.Name] = RemoteScan{
+			Linked: decided, Join: join, NewFiles: newFiles, Edited: edited, Settling: settling, Renamed: renamed, Refiled: refiled, Moved: before,
+		}
 		notices = slices.Concat(notices, ns, ms, ds)
 	}
 	return files, read, added, made, notices

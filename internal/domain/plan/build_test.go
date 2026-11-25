@@ -891,7 +891,7 @@ func TestBuild(t *testing.T) {
 			state(assets{a7, s9}, pairs{alphaHolidays}, photo, link9), inVacation(snapshot(a7, s9)), scans{"alpha": {file9, e1}}, specs{alpha}, "", p, event,
 			domain.Plan{
 				Ops:   ops{moved(photo, personal, vacationDir+"/IMG_0001.HEIC", holidays, "R-LAYOUT-11")},
-				Pairs: pairs{{AlbumID: holidays, Remote: "alpha", Root: shared, DirPath: holidaysDir, CreatedBy: domain.OriginRemote}, vacationPair},
+				Pairs: pairs{vacationPair, {AlbumID: holidays, Remote: "alpha", Root: shared, DirPath: holidaysDir, CreatedBy: domain.OriginRemote}},
 			},
 			domain.SnapshotDelta{Assets: assets{a7, s9}, Albums: vacationAlbums}, nil},
 		{"a folder of an album that the user renamed in the cloud renames the album in iCloud and takes its pair along, and a new asset of the album goes up there, while new assets of another album and of the shared root go to the folders of their pairs",
@@ -1277,6 +1277,155 @@ func TestBuildRAWPairInRenamedFolder(t *testing.T) {
 				}
 			}
 			if c.quiet && !reflect.DeepEqual(again, domain.Plan{}) {
+				t.Errorf("the next run plans %+v; want nothing", again)
+			}
+		})
+	}
+}
+
+// Each row is the world of a run where an album renamed in iCloud takes its
+// pair to the directory of its new title: with or without another album of
+// the old title whose file lies in the old directory, or while another remote
+// renames the directory of the album once more. Then comes the world of the
+// next run, as the first leaves it once every operation succeeds. The
+// expected pairs and operations follow the rules on album pairs, not the
+// code.
+func TestBuildPairsDirectoryLeftByFollowedPair(t *testing.T) {
+	t.Parallel()
+	const (
+		personal       = domain.LibraryPersonal
+		oldDir, newDir = "2019/01-04 - Holidays", "2019/01-04 - Holidays 2"
+		oldKey, newKey = `["2019"] "01/04 Holidays"`, `["2019"] "01/04 Holidays 2"`
+
+		year, first, second domain.AlbumID = 1, 2, 3
+	)
+	now := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	settled, jan4 := now.Add(-time.Hour), time.Date(2019, 1, 4, 12, 0, 0, 0, time.UTC)
+	folder := domain.Album{ID: year, UUID: "u-2019", Key: `[] "2019"`, KeySource: domain.KeyPath, Kind: domain.KindFolder, Title: "2019"}
+	event := func(id domain.AlbumID, uuid string) domain.Album {
+		return domain.Album{
+			ID: id, UUID: uuid, Key: oldKey, KeySource: domain.KeyPath, Kind: domain.KindEvent, Title: "01/04 Holidays",
+			Start: jan4.Add(-2 * time.Hour), ParentID: year, ParentUUID: "u-2019", FolderTitles: []string{"2019"},
+		}
+	}
+	listed := func(a domain.Album) domain.Album {
+		a.ID, a.Key, a.KeySource, a.ParentID = 0, "", "", 0
+		if a.Kind != domain.KindFolder {
+			a.Kind = ""
+		}
+		return a
+	}
+	asset := func(id domain.AssetID, name string, album domain.AlbumID, uuid string) domain.Asset {
+		return domain.Asset{
+			ID: id, Key: domain.AssetKey{CloudAssetGUID: fmt.Sprintf("guid-%d", id), UUID: fmt.Sprintf("uuid-%d", id)},
+			Library: personal, TargetLibrary: personal, OriginalName: name, Taken: jan4, Width: 4032, Height: 3024,
+			Resources:  []domain.Resource{{Role: domain.ResourceOriginal, Filename: name, Size: 100}},
+			AlbumUUIDs: []string{uuid}, Memberships: []domain.Membership{{AlbumID: album, FirstSeenRun: "run-1"}},
+		}
+	}
+	file := func(name, md5 string) domain.RemoteEntry {
+		return domain.RemoteEntry{Root: personal, Path: oldDir + "/" + name, Size: 100, MD5: md5, SHA256: "s" + md5, ETag: "e" + md5, MTime: settled}
+	}
+	link := func(id domain.LinkID, of domain.AssetID, e domain.RemoteEntry, album domain.AlbumID) domain.Link {
+		return domain.Link{
+			ID: id, AssetID: of, Remote: "alpha", Root: e.Root, Path: e.Path, Role: domain.RoleOriginal, AlbumID: album,
+			Size: e.Size, SHA256: e.SHA256, MD5: e.MD5, ETag: e.ETag, Level: domain.LevelExact, Status: domain.StatusActive,
+		}
+	}
+	a1, a2 := asset(1, "IMG_0001.HEIC", first, "u-first"), asset(2, "IMG_0002.HEIC", second, "u-second")
+	e1, e2 := file("IMG_0001.HEIC", "a1"), file("IMG_0002.HEIC", "b2")
+	pair := func(id domain.AlbumID, remote, dir string, by domain.PairOrigin, named string) domain.AlbumPair {
+		return domain.AlbumPair{AlbumID: id, Remote: remote, Root: personal, DirPath: dir, CreatedBy: by, NamedAfter: named}
+	}
+	stale := pair(first, "alpha", oldDir, domain.OriginICloud, oldKey)
+	followed, left := pair(first, "alpha", newDir, domain.OriginICloud, newKey), pair(second, "alpha", oldDir, domain.OriginRemote, oldKey)
+	moving := func(dir string) string {
+		return fmt.Sprintf("%s %s:%s -> %s:%s %s", domain.OpMove, personal, e1.Path, personal, dir+"/IMG_0001.HEIC", "R-LAYOUT-11")
+	}
+	// The pair of alpha stayed behind the rename in iCloud while a run synced
+	// beta alone, where the user renames the directory of the album once more.
+	lastDir, lastKey := "2019/01-04 - Holidays 3", `["2019"] "01/04 Holidays 3"`
+	retitled := event(first, "u-first")
+	retitled.Title, retitled.Key = "01/04 Holidays 2", newKey
+	atNew, atLast := e1, e1
+	atNew.Path, atLast.Path = newDir+"/IMG_0001.HEIC", lastDir+"/IMG_0001.HEIC"
+	inBeta := link(2, 1, atNew, first)
+	inBeta.Remote = "beta"
+	renaming := fmt.Sprintf("%s : -> :%s %s", domain.OpAlbumRename, "01/04 Holidays 3", "R-LAYOUT-12")
+
+	for _, c := range []struct {
+		name   string
+		albums []domain.Album
+		assets []domain.Asset
+		links  []domain.Link
+		had    []domain.AlbumPair
+		scans  map[string][]domain.RemoteEntry
+		ops    []string
+		pairs  []domain.AlbumPair
+	}{
+		{"the directory that the pair of a renamed album leaves goes in the same run to the album of the old title whose file lies there",
+			[]domain.Album{folder, event(first, "u-first"), event(second, "u-second")}, []domain.Asset{a1, a2},
+			[]domain.Link{link(1, 1, e1, first), link(2, 2, e2, second)}, []domain.AlbumPair{stale},
+			map[string][]domain.RemoteEntry{"alpha": {e2, e1}}, []string{moving(newDir)}, []domain.AlbumPair{followed, left}},
+		{"the directory that the pair of a renamed album leaves with its own files makes no album of the old title",
+			[]domain.Album{folder, event(first, "u-first")}, []domain.Asset{a1}, []domain.Link{link(1, 1, e1, first)}, []domain.AlbumPair{stale},
+			map[string][]domain.RemoteEntry{"alpha": {e1}}, []string{moving(newDir)}, []domain.AlbumPair{followed}},
+		{"a pair that follows its album renamed in iCloud follows it again to the title that a later remote reads from a renamed directory, and stays one pair",
+			[]domain.Album{folder, retitled}, []domain.Asset{a1}, []domain.Link{link(1, 1, e1, first), inBeta},
+			[]domain.AlbumPair{stale, pair(first, "beta", newDir, domain.OriginICloud, newKey)},
+			map[string][]domain.RemoteEntry{"alpha": {e1}, "beta": {atLast}}, []string{renaming, moving(lastDir)},
+			[]domain.AlbumPair{pair(first, "alpha", lastDir, domain.OriginICloud, lastKey), pair(first, "beta", lastDir, domain.OriginICloud, lastKey)}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			tmpl, err := template.Parse("{event_path}/{original_name}")
+			if err != nil {
+				t.Fatalf("template.Parse: %v", err)
+			}
+			var snapshot domain.LibrarySnapshot
+			for _, a := range c.albums {
+				if a = listed(a); a.UUID == "u-first" {
+					a.Title = "01/04 Holidays 2"
+				}
+				snapshot.Albums = append(snapshot.Albums, a)
+			}
+			for _, a := range c.assets {
+				a.ID, a.TargetLibrary, a.Memberships = 0, "", nil
+				snapshot.Assets = append(snapshot.Assets, a)
+			}
+			var remotes []domain.RemoteSpec
+			for _, name := range []string{"alpha", "beta"} {
+				if _, ok := c.scans[name]; ok {
+					remotes = append(remotes, domain.RemoteSpec{Name: name, Mode: domain.ModeTwoWay, Capabilities: domain.Capabilities{ContentHash: domain.HashMD5}})
+				}
+			}
+			in := plan.Input{
+				State:    domain.State{Assets: c.assets, Albums: c.albums, Links: c.links, AlbumPairs: c.had},
+				Snapshot: snapshot, Scans: c.scans, Remotes: remotes,
+				Policies: domain.DefaultPolicies(), Template: tmpl, Fields: fieldsByKey(snapshot), Now: now, RunID: "run-2",
+			}
+			got, delta, err := plan.Build(in)
+			if err != nil {
+				t.Fatalf("Build: %v", err)
+			}
+			var ops []string
+			for _, o := range got.Ops {
+				ops = append(ops, fmt.Sprintf("%s %s:%s -> %s:%s %s", o.Kind, o.Root, o.Src, o.DstRoot, o.Dst, o.Rule))
+			}
+			if !slices.Equal(ops, c.ops) {
+				t.Errorf("the first run plans %q; want %q", ops, c.ops)
+			}
+			if len(got.Albums) > 0 {
+				t.Errorf("the first run adds albums %+v; want none", got.Albums)
+			}
+			if !slices.Equal(got.Pairs, c.pairs) {
+				t.Errorf("the first run makes pairs %+v; want %+v", got.Pairs, c.pairs)
+			}
+			again, _, err := plan.Build(after(in, got, delta))
+			if err != nil {
+				t.Fatalf("the next Build: %v", err)
+			}
+			if !reflect.DeepEqual(again, domain.Plan{}) {
 				t.Errorf("the next run plans %+v; want nothing", again)
 			}
 		})

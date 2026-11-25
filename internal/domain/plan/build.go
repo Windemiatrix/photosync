@@ -50,10 +50,11 @@ type Input struct {
 // or, inside a folder of Renamed, under the new title of that folder, and
 // those that ReadScans adds; its pairs are those of the state for an album,
 // remote and root for which ReadScans makes none, then those that ReadScans
-// makes. MovePairs moves the pairs of each remote, by name, in the personal
-// root, then the shared one, with the albums and pairs of the run so far and
-// its whole scan: each moved pair takes the place of its old one among the
-// pairs of the run and goes to Pairs, and DecideLayout takes the old ones.
+// makes. MovePairs then moves the pairs of each remote, by name, in the
+// personal root, then the shared one, with the albums and pairs of the run
+// and its whole scan; a moved pair takes the place of its old one among the
+// pairs of the run and in Pairs, and DecideLayout takes the old ones with the
+// Moved of ReadScans.
 // Then each asset of the delta, and each asset that the delta lacks and a
 // link of the state names, found false, is decided on in the order of ID. In
 // a remote that the run does not sync, or whose scan holds the asset as
@@ -195,12 +196,21 @@ func Build(in Input) (domain.Plan, domain.SnapshotDelta, error) {
 	}
 	var moved []domain.AlbumPair
 	for _, r := range byName {
+		moved = append(moved, read[r.Name].Moved...)
 		for _, root := range []domain.LibraryKind{domain.LibraryPersonal, domain.LibraryShared} {
 			for _, x := range MovePairs(albums, pairs, in.Scans[r.Name], r, root, in.Policies) {
-				i := slices.IndexFunc(pairs, func(y domain.AlbumPair) bool {
+				same := func(y domain.AlbumPair) bool {
 					return y.AlbumID == x.AlbumID && y.Remote == x.Remote && y.Root == x.Root
-				})
-				moved, pairs[i], out.Pairs = append(moved, pairs[i]), x, append(out.Pairs, x)
+				}
+				i := slices.IndexFunc(pairs, same)
+				moved, pairs[i] = append(moved, pairs[i]), x
+				// A pair that ReadScans moved already may move once more: the state
+				// takes one pair of an album in a root of a remote.
+				if j := slices.IndexFunc(out.Pairs, same); j >= 0 {
+					out.Pairs[j] = x
+				} else {
+					out.Pairs = append(out.Pairs, x)
+				}
 			}
 		}
 	}
