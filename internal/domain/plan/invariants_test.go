@@ -383,7 +383,10 @@ func checkPlan(t rapid.TB, in plan.Input, p domain.Plan) {
 // main files, and to a state that the next run reconciles to itself. An
 // asset that waits for the user in a remote keeps its links there as they
 // were; so does a component of an asset whose main file lies in a directory
-// where the plan found a name taken, a known limit of the plan.
+// where the plan found a name taken, a known limit of the plan. A link at a
+// path that the run names among doubles keeps that path as it was, file or
+// none: the run leaves its asset in that remote alone, even where the double
+// is a name that its own operation would give.
 func checkApplied(t rapid.TB, p domain.Plan, next plan.Input) {
 	t.Helper()
 	entries, modes, waits := map[domain.Link]domain.RemoteEntry{}, map[string]domain.Mode{}, map[domain.Conflict]bool{}
@@ -398,10 +401,15 @@ func checkApplied(t rapid.TB, p domain.Plan, next plan.Input) {
 	for _, c := range next.State.Conflicts {
 		waits[domain.Conflict{AssetID: c.AssetID, Remote: c.Remote}] = true
 	}
-	taken := map[domain.Link]bool{}
+	taken, doubled := map[domain.Link]bool{}, map[domain.Link]bool{}
 	for _, n := range p.Notices {
-		if n.Code == "plan.path_taken" {
+		switch n.Code {
+		case "plan.path_taken":
 			taken[domain.Link{Remote: n.Params[0], Root: domain.LibraryKind(n.Params[1]), Path: path.Dir(n.Params[2])}] = true
+		case "plan.doubles":
+			for _, q := range n.Params[2:] {
+				doubled[domain.Link{Remote: n.Params[0], Root: domain.LibraryKind(n.Params[1]), Path: q}] = true
+			}
 		}
 	}
 	mainOf := func(m, l domain.Link) bool {
@@ -418,7 +426,7 @@ func checkApplied(t rapid.TB, p domain.Plan, next plan.Input) {
 			}
 			places[at] = true
 		}
-		if l.Status != domain.StatusActive || waits[domain.Conflict{AssetID: l.AssetID, Remote: l.Remote}] {
+		if l.Status != domain.StatusActive || waits[domain.Conflict{AssetID: l.AssetID, Remote: l.Remote}] || doubled[at] {
 			continue
 		}
 		e, ok := entries[at]
