@@ -20,9 +20,10 @@ import (
 // one name in a directory, as the model numbers no names.
 const modelPerturb = converging &^ (gen.PerturbLive | gen.PerturbRAWPair | gen.PerturbSidecar | gen.PerturbDuplicate | gen.PerturbSameName)
 
-// modelPolicies are the pairs that the reference model is tested under: a
-// strict pair settles every conflict and removes what a side deleted, the
-// others leave files and assets to the user.
+// modelPolicies are the pairs that the reference model is tested under: under
+// quarantine with remote_wins and propagate with icloud_wins the sync settles
+// every conflict and removes what a side deleted, the others leave files and
+// assets to the user.
 var modelPolicies = []struct {
 	deletes  domain.DeletesPolicy
 	conflict domain.ConflictPolicy
@@ -74,16 +75,17 @@ func modelSynced(b refmodel.World) bool {
 
 // A run after the first sync of a world of package gen and the actions of a
 // user leaves what the reference model expects of a correct sync, wherever
-// the model takes the world. Fixed seeds rather than rapid: few worlds lie
-// inside the model, fewer than rapid.Skip would bear.
+// the model takes the world. Fixed seeds rather than rapid: the share of
+// worlds inside the model is a fixed number, which the test holds at a floor
+// of about half of it.
 func TestPlanMatchesModelOnGenWorlds(t *testing.T) {
 	t.Parallel()
-	const seeds = 200
+	const seeds, floor = 200, 37
 	tmpl, err := template.Parse("{event_path}/{original_name}")
 	if err != nil {
 		t.Fatalf("template.Parse: %v", err)
 	}
-	inside, unsynced := 0, 0
+	inside := 0
 	for seed := range seeds {
 		w := gen.Worlds(gen.Config{Frames: 1 + seed%6, Perturb: modelPerturb}).Example(seed)
 		kind := []domain.HashKind{domain.HashMD5, domain.HashSHA256}[seed/6%2]
@@ -110,7 +112,7 @@ func TestPlanMatchesModelOnGenWorlds(t *testing.T) {
 				continue
 			}
 			if !modelSynced(m.Base) {
-				unsynced++
+				t.Errorf("seed %d, %s %s: the first sync leaves a file or an asset without a link", seed, c.deletes, c.conflict)
 				continue
 			}
 			want, err := m.Expected(c.deletes, c.conflict)
@@ -138,8 +140,8 @@ func TestPlanMatchesModelOnGenWorlds(t *testing.T) {
 			inside++
 		}
 	}
-	t.Logf("%d of %d seeds lie inside the model; under %d pairs of a seed and policies the first sync leaves a file or an asset without a link", inside, seeds, unsynced)
-	if inside < 37 {
-		t.Errorf("fewer than 37 of the seeds 0 to %d lie inside the model (%d do)", seeds-1, inside)
+	t.Logf("%d of %d seeds lie inside the model", inside, seeds)
+	if inside < floor {
+		t.Errorf("fewer than %d of the seeds 0 to %d lie inside the model (%d do)", floor, seeds-1, inside)
 	}
 }
