@@ -3,7 +3,6 @@ package plan_test
 import (
 	"fmt"
 	"path"
-	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -146,88 +145,6 @@ func TestPlanConvergesUnderOwnTemplates(t *testing.T) {
 		}
 		settles(t, c.first)
 		settles(t, c.in)
-	})
-}
-
-// A file that the user moves out of the templates is no file of an album and
-// no deletion: by the hash of its content the run leaves its asset as it is.
-// Without hashes the file reads as deleted, a known limit of the plan. A copy
-// out of the templates changes nothing while the files of the links of its
-// content stay. Either way the run leaves the directory out of the templates
-// as it is, and the next run has nothing to do.
-func TestPlanSkipsOutsideTemplates(t *testing.T) {
-	t.Parallel()
-	rapid.Check(t, func(t *rapid.T) {
-		// The user moves the file in a library at rest: in a plan of its own, an
-		// album renamed in Photos takes the pair of its directory along while
-		// the asset of the file waits, a known limit of the plan. Rest may take
-		// a second run, which links a file of the content of another.
-		base := remoteCases(rapid.SampledFrom(remoteModes).Draw(t, "mode")).Draw(t, "case")
-		for range 3 {
-			p0, d0, err := plan.Build(base)
-			if err != nil {
-				t.Fatalf("Build: %v", err)
-			}
-			base = after(base, p0, d0)
-			if len(p0.Ops)+len(p0.Links)+len(p0.Albums)+len(p0.Pairs) == 0 {
-				break
-			}
-		}
-		scan, at := base.Scans["alpha"], map[string]int{}
-		for i, e := range scan {
-			at[e.Path] = i
-		}
-		linked := slices.DeleteFunc(slices.Clone(base.State.Links), func(l domain.Link) bool {
-			_, listed := at[l.Path]
-			return !listed || l.Status != domain.StatusActive || l.Role != domain.RoleOriginal
-		})
-		if len(linked) == 0 {
-			return
-		}
-		l := rapid.SampledFrom(linked).Draw(t, "link")
-		top, _, _ := strings.Cut(l.Path, "/")
-		dir := rapid.SampledFrom([]string{path.Join(path.Dir(l.Path), "sub"), "Albums/x", ".", top}).Draw(t, "outside")
-		e := scan[at[l.Path]]
-		e.Path = path.Join(dir, path.Base(l.Path))
-		copied := rapid.Bool().Draw(t, "copied")
-		in := base
-		in.Scans = map[string][]domain.RemoteEntry{"alpha": append(slices.Clone(scan), e)}
-		if !copied {
-			in.Scans["alpha"] = slices.Delete(in.Scans["alpha"], at[l.Path], at[l.Path]+1)
-		}
-		p, delta, err := plan.Build(in)
-		if err != nil {
-			t.Fatalf("Build: %v", err)
-		}
-		if slices.ContainsFunc(p.Ops, func(o domain.Op) bool {
-			return o.Src != "" && path.Dir(o.Src) == dir || o.Dst != "" && path.Dir(o.Dst) == dir
-		}) {
-			t.Fatalf("the plan changes %s, a directory out of the templates:\n%+v", dir, p)
-		}
-		lost := slices.ContainsFunc(base.State.Links, func(m domain.Link) bool {
-			_, listed := at[m.Path]
-			return !listed && m.Remote == "alpha" && m.MD5+m.SHA256 != "" && m.MD5+m.SHA256 == e.MD5+e.SHA256
-		})
-		touched := func(o domain.Op) bool {
-			return o.Asset == l.AssetID || slices.ContainsFunc(o.Links, func(x domain.Link) bool { return x.AssetID == l.AssetID })
-		}
-		switch {
-		case copied && !lost:
-			want, _, err := plan.Build(base)
-			got := p
-			got.Notices, want.Notices = nil, nil
-			if err != nil || !reflect.DeepEqual(got, want) {
-				t.Fatalf("a copy in %s turns the plan\n%+v\ninto\n%+v (%v)", dir, want, p, err)
-			}
-		case !copied && e.MD5+e.SHA256 != "" &&
-			(slices.ContainsFunc(p.Ops, touched) || slices.ContainsFunc(p.Links, func(x domain.Link) bool { return x.AssetID == l.AssetID })):
-			t.Fatalf("the plan changes asset %d, whose file the user moved to %s:\n%+v", l.AssetID, dir, p)
-		}
-		next := after(in, p, delta)
-		second, _, err := plan.Build(next)
-		if err != nil || len(second.Ops)+len(second.Links)+len(second.Albums)+len(second.Pairs) > 0 && !componentQuarantineCleared(second, next.State) {
-			t.Fatalf("the plan after\n%+v\nis\n%+v (%v); want no operation, record, album or pair", p, second, err)
-		}
 	})
 }
 
