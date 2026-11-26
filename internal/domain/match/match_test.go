@@ -326,6 +326,7 @@ func checkMatch(w gen.World, assets []domain.Asset, cands []match.Candidate, pai
 	return nil
 }
 
+// covers: INV-4
 // covers: INV-9
 func TestMatchProperties(t *testing.T) {
 	t.Parallel()
