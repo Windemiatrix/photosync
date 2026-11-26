@@ -92,6 +92,8 @@ func TestMatch(t *testing.T) {
 
 // The rules of Parse must leave Match one way to read every level that
 // Render writes, whatever the template and the description.
+//
+// covers: INV-19
 func TestRenderMatch(t *testing.T) {
 	t.Parallel()
 	rapid.Check(t, func(t *rapid.T) {
