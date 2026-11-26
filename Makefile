@@ -29,24 +29,27 @@ vet: ## go vet, the fixtures_verify build tag included
 
 # In percent. Not "?=": the environment must not lower it. Each package of
 # internal/domain needs 95% on its own (the grep in cover): the total would
-# hide a domain package with few tests.
+# hide a domain package with few tests. The per-package run is -short: the
+# scale tests already ran in the race run, which their ceilings are calibrated
+# on, whose timeout is above the default 10 minutes for the same reason.
 COVERAGE_MIN := 80
 
 .PHONY: cover
 cover: ## Tests with the race detector and the coverage thresholds
-	go test -race -shuffle=on -count=1 -cpu 1,4 -covermode=atomic -coverprofile=coverage.out ./...
+	go test -race -timeout 30m -shuffle=on -count=1 -cpu 1,4 -covermode=atomic -coverprofile=coverage.out ./...
 	@pct=$$(go tool cover -func=coverage.out | tail -n 1 | tr -dc '0-9.'); \
 	echo "coverage: $$pct% (minimum $(COVERAGE_MIN)%)"; \
 	test "$${pct%.*}" -ge $(COVERAGE_MIN)
-	! go test -cover ./internal/domain/... | grep -v -E 'coverage: (9[5-9]|100)\.[0-9]% of statements'
+	! go test -short -cover ./internal/domain/... | grep -v -E 'coverage: (9[5-9]|100)\.[0-9]% of statements'
 
 # Offsets that break code which assumes whole hours or at most 12 hours from
-# UTC: +14:00, -3:30 with daylight saving, +5:45.
+# UTC: +14:00, -3:30 with daylight saving, +5:45. -short: the scale tests
+# (minutes each) already ran in cover and do not depend on the zone.
 .PHONY: test-tz
 test-tz: ## Domain tests in time zones with unusual UTC offsets
-	TZ=Pacific/Kiritimati go test -shuffle=on -count=1 ./internal/domain/...
-	TZ=America/St_Johns go test -shuffle=on -count=1 ./internal/domain/...
-	TZ=Asia/Kathmandu go test -shuffle=on -count=1 ./internal/domain/...
+	TZ=Pacific/Kiritimati go test -short -shuffle=on -count=1 ./internal/domain/...
+	TZ=America/St_Johns go test -short -shuffle=on -count=1 ./internal/domain/...
+	TZ=Asia/Kathmandu go test -short -shuffle=on -count=1 ./internal/domain/...
 
 .PHONY: lint
 lint: ## Run golangci-lint
