@@ -64,6 +64,14 @@ linters:
             - {pkg: github.com/Windemiatrix/go-libs/osxphotos/albuminfo, desc: "app reaches the photo library through the PhotoLibrary interface"}
             - {pkg: github.com/Windemiatrix/go-libs/osxphotos/query, desc: "app reaches the photo library through the PhotoLibrary interface"}
             - {pkg: github.com/Windemiatrix/go-libs/osxphotos/photokit, desc: "app reaches the photo library through the PhotoLibrary interface"}
+        rapid:
+          list-mode: lax
+          files:
+            - "$all"
+            - "!$test"
+            - "!**/internal/testkit/**"
+          deny:
+            - {pkg: pgregory.net/rapid, desc: "rapid is MPL-2.0 and test-only: import it from tests and internal/testkit"}
         outer:
           list-mode: lax
           files:
