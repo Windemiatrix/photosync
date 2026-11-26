@@ -378,6 +378,23 @@ func TestBuild(t *testing.T) {
 	themedAlbums[2], themedLibrary[2].Title = themed, "Holidays"
 	themedSnapshot := snapshot()
 	themedSnapshot.Albums = themedLibrary
+	themedWith := func(as ...domain.Asset) domain.LibrarySnapshot {
+		s := snapshot(as...)
+		s.Albums = themedLibrary
+		return s
+	}
+	binnedAlbums, binnedLibrary := slices.Clone(themedAlbums), slices.Clone(themedLibrary)
+	binnedAlbums[2].InTrash, binnedLibrary[2].InTrash = true, true
+	binnedShot := snapshot(a7)
+	binnedShot.Albums = binnedLibrary
+	retitledAlbums := append(slices.Clone(themedAlbums), inYear(15, "u-new", "05/01 Holidays", may1.Add(-2*time.Hour)))
+	retitledShot := snapshot(a7)
+	retitledShot.Albums = append(slices.Clone(themedLibrary),
+		domain.Album{UUID: "u-new", Title: "05/01 Holidays", Start: may1.Add(-2 * time.Hour), ParentUUID: "u-2024", FolderTitles: []string{"2024"}})
+	dotted := p
+	dotted.Templates.Cloud = []string{"{YYYY}", "{MM}.{DD} {Description}"}
+	quarantined7 := domain.Op{Kind: domain.OpQuarantine, Remote: "alpha", Root: personal, Src: e1.Path, DstRoot: personal, Dst: dropped.QuarantinePath,
+		Asset: 7, Rule: "R-OBJECT-04", Links: []domain.Link{dropped}}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -1016,9 +1033,23 @@ func TestBuild(t *testing.T) {
 		{"upload-only: a file of the user that matching finds for an asset in no event stays where it is, without a link, and is reported",
 			state(nil, pairs{alphaHolidays}), snapshot(alone2), scans{"alpha": {lone2}}, specs{alphaUp}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{counted("plan.not_imported", "alpha", "1")}}, delta(alone2), nil},
-		{"a new file in the directory of the pair of an album that left the templates goes into that album",
+		{"a new file in the directory of the pair of an album that left the templates waits there",
 			state(nil, pairs{alphaHolidays}), themedSnapshot, scans{"alpha": {new3}}, specs{alpha}, "", p, event,
-			domain.Plan{Ops: ops{importNew("alpha", new3)}}, domain.SnapshotDelta{Albums: themedAlbums}, nil},
+			domain.Plan{Notices: []domain.Notice{skippedDir(holidaysDir)}}, domain.SnapshotDelta{Albums: themedAlbums}, nil},
+		{"an album renamed past the Photos template keeps its files where they are",
+			state(assets{a7}, pairs{alphaHolidays}, photo), themedWith(a7), scans{"alpha": {e1}}, specs{alpha}, "", p, event,
+			domain.Plan{Notices: []domain.Notice{skippedDir(holidaysDir)}}, domain.SnapshotDelta{Assets: assets{a7}, Albums: themedAlbums}, nil},
+		{"a new cloud template keeps the directories of pairs",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n8), scans{"alpha": {e1}}, specs{alpha}, "", dotted, event,
+			domain.Plan{Ops: ops{put(8, holidaysDir+"/IMG_0001 (1).HEIC", original, holidays, 200), put(8, holidaysDir+"/IMG_0001 (1).mov", live, holidays, 30)}},
+			delta(a7, n8), nil},
+		{"an album renamed past the Photos template keeps its pair, which neither moves nor goes to a new event of its old title",
+			domain.State{Assets: assets{a7}, Albums: retitledAlbums, AlbumPairs: pairs{alphaHolidays}, Links: []domain.Link{photo}}, retitledShot,
+			scans{"alpha": {e1}}, specs{alpha}, "", p, event,
+			domain.Plan{Notices: []domain.Notice{skippedDir(holidaysDir)}}, domain.SnapshotDelta{Assets: assets{a7}, Albums: retitledAlbums}, nil},
+		{"an album renamed past the Photos template and then deleted takes its files to quarantine", // covers: R-OBJECT-04
+			state(assets{a7}, pairs{alphaHolidays}, photo), binnedShot, scans{"alpha": {e1}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{quarantined7}}, domain.SnapshotDelta{Assets: assets{a7}, Albums: binnedAlbums}, nil},
 		{"an asset that the state holds after its links have left gets no first placement",
 			state(assets{n1}, pairs{alphaHolidays}), snapshot(n1), nil, specs{alpha}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{skippedAsset("IMG_0001.HEIC", "uuid-1")}}, delta(n1), nil},
