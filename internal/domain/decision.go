@@ -65,8 +65,8 @@ type LinkDecision struct {
 
 // Placement is a change that makes the files of an asset in a remote lie in
 // the directories of its albums: ActionMoveFile, ActionCopyFile or
-// ActionUpload into the directory of the album AlbumID, zero for the day
-// folder, or ActionQuarantineFile. Link is the file moved, copied or
+// ActionUpload into the directory of the album AlbumID, or
+// ActionQuarantineFile with AlbumID zero. Link is the file moved, copied or
 // quarantined as the remote has it now. An upload of the asset has a zero
 // Link, and one of a Live Photo video or a RAW file beside a copy has the
 // link of that file as the state has it, whose role names the resource that

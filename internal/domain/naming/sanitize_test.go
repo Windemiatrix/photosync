@@ -95,6 +95,7 @@ func TestSanitizePartLimits(t *testing.T) {
 	}
 }
 
+// covers: INV-12
 func TestSanitizePartProperties(t *testing.T) {
 	t.Parallel()
 
