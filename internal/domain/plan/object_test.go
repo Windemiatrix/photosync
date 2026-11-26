@@ -197,7 +197,7 @@ func TestDecidePlacement(t *testing.T) {
 func TestDecideObject(t *testing.T) {
 	t.Parallel()
 	const (
-		holidays, trip, party domain.AlbumID = 10, 11, 12
+		holidays, trip, party, fair domain.AlbumID = 10, 11, 12, 13
 
 		personal, shared          = domain.LibraryPersonal, domain.LibraryShared
 		unchanged, moved, deleted = domain.ChangeUnchanged, domain.ChangeMoved, domain.ChangeDeleted
@@ -212,6 +212,7 @@ func TestDecideObject(t *testing.T) {
 		{ID: holidays, UUID: "album-10", Kind: domain.KindEvent, Title: "05/01 Holidays", ParentID: 1, FolderTitles: []string{"2024"}},
 		{ID: trip, UUID: "album-11", Kind: domain.KindEvent, Title: "05/02 Trip", ParentID: 1, FolderTitles: []string{"2024"}},
 		{ID: party, UUID: "album-12", Kind: domain.KindEvent, Title: "05/03 Party", ParentID: 1, FolderTitles: []string{"2024"}},
+		{ID: fair, UUID: "album-13", Kind: domain.KindEvent, Title: "05/04 Fair", ParentID: 1, FolderTitles: []string{"2024"}},
 	}
 	asset := func(library, target domain.LibraryKind, ids ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{
@@ -356,7 +357,16 @@ func TestDecideObject(t *testing.T) {
 			[]row{{1, updateBase, "R-LINK-13"}}, nil, nil},
 		{"both moved to different events: a conflict with the albums of the cloud", in(trip), // covers: R-LINK-07
 			decisions(decided(e1, moved, moved)), links(at(e1, personal, party, toParty)),
-			[]row{{1, conflict, "R-LINK-07"}}, []change{{party, "R-LINK-07"}}, []change{{holidays, "R-LINK-07"}}},
+			[]row{{1, conflict, "R-LINK-07"}}, []change{{party, "R-LINK-07"}}, []change{{holidays, "R-LINK-07"}, {trip, "R-LINK-07"}}},
+		{"a conflict leaves the events moved to in Photos, not one that holds a file", in(trip, fair),
+			decisions(decided(e1, moved, moved), decided(e2, unchanged, unchanged)), links(at(e1, personal, party, toParty), e2),
+			[]row{{1, conflict, "R-LINK-07"}, {2, none, ""}}, []change{{party, "R-LINK-07"}}, []change{{holidays, "R-LINK-07"}, {fair, "R-LINK-07"}}},
+		{"a conflict into a directory without a pair leaves no event of Photos", in(trip),
+			decisions(decided(e1, moved, moved)), links(at(e1, personal, 0, day.Path)),
+			[]row{{1, conflict, "R-LINK-07"}}, nil, []change{{holidays, "R-LINK-07"}}},
+		{"a file moved in the cloud while its asset joined another event: no conflict, the event stays", in(holidays, trip),
+			decisions(decided(e1, unchanged, moved)), links(at(e1, personal, party, toParty)),
+			[]row{{1, moveAsset, "R-LINK-05"}}, []change{{party, "R-LINK-05"}}, []change{{holidays, "R-LINK-05"}}},
 		{"shared in Photos and renamed in the personal root: a conflict", asset(shared, shared, holidays),
 			decisions(decided(e1, moved, moved)), links(at(e1, personal, holidays, renamed)),
 			[]row{{1, conflict, "R-LINK-07"}}, nil, nil},
