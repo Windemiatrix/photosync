@@ -4,9 +4,9 @@
 
 [![CI](https://github.com/Windemiatrix/photosync/actions/workflows/ci.yml/badge.svg)](https://github.com/Windemiatrix/photosync/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Your Mac Photos library as plain folders on Yandex Disk, and back.**
+**Your Mac Photos albums as plain folders on Yandex Disk, and back.**
 
-For people who keep their photos in Photos on a Mac (iCloud Photos included) and want a second copy they can open without Apple: in a browser, or in the Disk app on Windows or Android. photosync is a macOS command-line tool. It will lay photos and videos out as folders such as `2024/05-01 - Holidays/IMG_0001.HEIC` and carry new items both ways: new items from the Mac go to the Disk, items added to the Disk go into Photos. Files already on the Disk are not uploaded again. The tool shows a plan first and deletes nothing without your consent.
+For people who keep their photos in Photos on a Mac (iCloud Photos included) and want a second copy they can open without Apple: in a browser, or in the Disk app on Windows or Android. photosync is a macOS command-line tool. It will lay photos and videos from event albums out as folders such as `2024/05-01 - Holidays/IMG_0001.HEIC` and carry new items both ways: new items from the Mac go to the Disk, items added to the Disk go into Photos. Files already on the Disk are not uploaded again. The tool shows a plan first and deletes nothing without your consent.
 
 **Early development: sync does not work yet** (see Status).
 
@@ -26,11 +26,11 @@ Questions and ideas go to [Discussions](https://github.com/Windemiatrix/photosyn
 
 ## How the tool protects your photos (as designed)
 
-- **Plan first.** `photosync plan` shows what would happen and changes nothing. Changes happen only with `--apply`.
+- **Plan first.** `photosync plan` shows the plan and changes nothing; `sync` carries it out after confirmation.
 - **The Photos database is read from a copy**, read-only. The tool will change the library only through the system Photos interface.
 - **Deletions are your choice.** You pick a policy during setup (`init`); until you do, the tool changes nothing. `none` — deletions are not carried over; `quarantine` (recommended) — a Disk file goes to `.photosync/quarantine` for 90 days, a Photos item to Recently Deleted; `propagate` — straight to the Disk trash. Deletions from Photos are confirmed in a macOS system dialog (one per batch).
 - **A human confirms risky changes.** Before irreversible operations you type how many there are in the terminal; bulk changes (over 50 items or 5%) need the same or the `--allow-mass-changes` flag. `--yes` does not work here.
-- **Undo.** Every run writes a journal; `photosync undo --apply` rolls back the last run, except irreversible operations, which the plan lists up front.
+- **Undo.** Every run writes a journal; `photosync undo` rolls back the last run after confirmation, except irreversible operations, which the plan lists up front.
 - **Originals are synchronized**, Live Photos and RAW pairs included.
 - **Disk access and privacy.** The tool never sees your Yandex password: you sign in with a code at https://ya.ru/device. The app gets permission to read and write files on your Disk (`cloud_api:disk.read`, `cloud_api:disk.write`). Network access goes only to the Yandex Disk API, its file-transfer hosts and Yandex sign-in: no telemetry, update checks or crash reports. The token is a `0600` file in `~/.config/photosync/tokens/`; programs running under your account can read it. Revoke access with `photosync remote logout <name>` or in Yandex ID settings.
 - **Open source (MIT).** Test data is anonymized and checked by a leak scanner; tests that modify Photos run only under a separate macOS test account.
@@ -45,11 +45,9 @@ Details: [Data-loss protection](docs/architecture.en.md#5-protection-against-dat
   2024/
     05-01 - Holidays/       ← the album "05/01 Holidays" in the "2024" folder in Photos
       IMG_0001.HEIC
-    05-14/                  ← items without such an album go by date
-      IMG_0002.JPG
 ```
 
-An event album is an album of the form `MM/DD Title` inside a year folder in Photos; a file added to such a directory on the Disk goes into that album.
+Only items from event albums reach the Disk: albums of the form "MM/DD Title" in a year folder; the folder layout is configurable. An item added to such a folder on the Disk goes into that album. Everything else the tool skips and lists in the plan report.
 
 ## What it will look like
 
@@ -58,7 +56,7 @@ The commands do not exist yet; this is the plan:
 ```text
 photosync init           # setup: the Disk folder, Yandex sign-in by code, what to do with deletions
 photosync plan           # what would be done — changes nothing
-photosync sync --apply   # carry out the plan
+photosync sync           # carry out the plan
 ```
 
 The output of `plan` will appear together with the command: it will show what is going to be uploaded to the Disk, imported into Photos, moved and deleted, and the totals.

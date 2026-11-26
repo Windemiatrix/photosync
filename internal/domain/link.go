@@ -5,7 +5,7 @@ import "time"
 // Link is a file of a remote root that stands for an asset, with the base of
 // the three-way comparison: the file and its album as the last applied run
 // left them. AlbumID is zero when the file lies outside the directory of an
-// album, as in a day folder. Hashes are lowercase hex, empty when unknown.
+// album. Hashes are lowercase hex, empty when unknown.
 type Link struct {
 	ID      LinkID
 	AssetID AssetID
