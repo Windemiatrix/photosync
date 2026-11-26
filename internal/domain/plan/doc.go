@@ -14,7 +14,10 @@
 // there, or has moved there as the content hash of the remote tells, stays
 // as it is in that remote, so that no run takes such a file for new or for
 // deleted; without that hash the move cannot be told, and the link of the
-// moved file reads as deleted. An edit that no link names, a file named as an edited photo or
-// lying in a directory of edits, follows the edited_files policy wherever it
-// lies.
+// moved file reads as deleted. A directory paired with an album follows that
+// album rather than the cloud template: it is read while the album is an
+// event and left alone while the album is thematic outside Recently Deleted,
+// until it is an event again. An edit that no link names, a file named as an
+// edited photo or lying in a directory of edits, follows the edited_files
+// policy wherever it lies.
 package plan

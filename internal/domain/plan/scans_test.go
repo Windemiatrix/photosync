@@ -25,6 +25,7 @@ func TestReadScans(t *testing.T) {
 		original, liveVideo        = domain.RoleOriginal, domain.RoleLiveVideo
 		exact, sameShot, component = domain.LevelExact, domain.LevelSameShot, domain.LevelPairComponent
 		folder, event              = domain.KindFolder, domain.KindEvent
+		thematic                   = domain.KindThematic
 		byRemote                   = domain.OriginRemote
 		pairRule                   = "R-LINK-03"
 
@@ -256,6 +257,17 @@ func TestReadScans(t *testing.T) {
 	ownSettled := file(personal, ".photosync/quarantine/2026-08-14/IMG_0055.HEIC", 550, "r5", settled)
 	rawDir := holidaysDir + "/raw"
 	petsEdit := file(personal, "Albums/Pets/IMG_0001_edited.HEIC", 100, "a1", settled)
+	themedLib := slices.Clone(lib)
+	themedLib[1] = album(holidays, thematic, "Holidays")
+	binnedLib := slices.Clone(themedLib)
+	binnedLib[1].InTrash = true
+	tripsDir := "Trips/2024-05-02"
+	inTrips, newInTrips := file(personal, tripsDir+"/IMG_0002.HEIC", 200, "b2", settled), file(personal, tripsDir+"/IMG_0020.HEIC", 2000, "u0", settled)
+	tripsPaired := domain.State{Albums: stateAlbums, Links: []domain.Link{link(1, 8, "alpha", inTrips, original, trip)},
+		AlbumPairs: []domain.AlbumPair{pair(trip, "alpha", personal, tripsDir, domain.OriginICloud)}}
+	alphaPaired := domain.State{Albums: stateAlbums,
+		Links:      []domain.Link{link(1, 7, "alpha", e1, original, holidays), link(5, 7, "alpha", e1Shared, original, holidays)},
+		AlbumPairs: []domain.AlbumPair{pair(holidays, "alpha", personal, holidaysDir, domain.OriginICloud)}}
 
 	same := func(x, y result) bool {
 		sameScan := func(a, b plan.RemoteScan) bool {
@@ -463,6 +475,21 @@ func TestReadScans(t *testing.T) {
 		{"a linked file named as an edit outside the templates keeps its asset as the state has it, and its file is not read", // covers: R-LAYOUT-03
 			state(link(1, 7, "alpha", petsEdit, original, 0)), delta(a7), scans{"alpha": {petsEdit}}, specs{alpha}, p,
 			result{nil, reads{"alpha": scanned(nil, nil, nil, nil, 7)}, nil, nil, []domain.Notice{skipped("alpha", "Albums/Pets")}}},
+		{"an album renamed past the Photos template pauses the directory of its pair", // covers: R-LAYOUT-03
+			stateTwo, domain.SnapshotDelta{Assets: []domain.Asset{a7}, Albums: themedLib}, scans{"alpha": {e3, e1}, "beta": {e3, e1}}, specs{beta, alpha}, p,
+			result{nil, reads{"alpha": scanned(nil, nil, nil, nil, 7), "beta": scanned(nil, nil, nil, nil, 7)}, nil, nil,
+				[]domain.Notice{skipped("alpha", holidaysDir), skipped("beta", holidaysDir)}}},
+		{"a pair directory that the cloud template no longer reads stays its event's", // covers: R-LAYOUT-03
+			tripsPaired, delta(a8), scans{"alpha": {newInTrips, inTrips}}, specs{alpha}, p,
+			result{found{1: inTrips}, reads{"alpha": scanned(nil, nil, news{imported(newInTrips, trip)}, nil)}, nil, nil, nil}},
+		{"a thematic album in Recently Deleted pauses nothing",
+			stateTwo, domain.SnapshotDelta{Assets: []domain.Asset{a7}, Albums: binnedLib}, scans{"alpha": {e1}, "beta": {e1}}, specs{beta, alpha}, p,
+			result{found{1: e1, 6: e1}, reads{"alpha": scanned(nil, nil, nil, nil), "beta": scanned(nil, nil, nil, nil)}, nil, nil, nil}},
+		{"a pair pauses its directory only in its own remote and root",
+			alphaPaired, domain.SnapshotDelta{Assets: []domain.Asset{a7}, Albums: themedLib}, scans{"alpha": {e1Shared, e1}, "beta": {h5}}, specs{beta, alpha}, p,
+			result{found{5: e1Shared}, reads{"alpha": scanned(nil, nil, nil, nil, 7), "beta": scanned(nil, nil, news{imported(h5, next)}, nil)},
+				[]domain.Album{album(next, event, "05/01 Holidays")}, []domain.AlbumPair{pair(next, "beta", personal, holidaysDir, byRemote)},
+				[]domain.Notice{skipped("alpha", holidaysDir)}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

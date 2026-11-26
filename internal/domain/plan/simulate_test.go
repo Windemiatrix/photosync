@@ -770,6 +770,14 @@ func TestSimulateConverges(t *testing.T) {
 	n9, n10 := asset(9, "IMG_0001.HEIC", 200, may1.Add(time.Hour), "run-2", holidays), asset(10, "IMG_0001.HEIC", 300, may1.Add(2*time.Hour), "run-2", holidays)
 	noHolidays := snapshot(left7)
 	noHolidays.Albums = slices.DeleteFunc(slices.Clone(library), func(a domain.Album) bool { return a.UUID == "u-hol" })
+	themedLibrary := slices.Clone(library)
+	themedLibrary[2].Title = "Holidays"
+	themed := func(s domain.LibrarySnapshot) domain.LibrarySnapshot {
+		s.Albums = themedLibrary
+		return s
+	}
+	dotted := p
+	dotted.Templates.Cloud = []string{"{YYYY}", "{MM}.{DD} {Description}"}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -946,6 +954,12 @@ func TestSimulateConverges(t *testing.T) {
 			domain.State{Albums: slashAlbums}, slashed, nil, specs{alpha}, "", p, kinds{domain.OpPut}, nil},
 		{"the cloud template of the user",
 			state(nil, nil), snapshot(n8), nil, specs{alpha}, "", own, kinds{domain.OpPut, domain.OpPut}, nil},
+		{"an album renamed past the Photos template keeps its files while it is out, and a new asset of another event goes up",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), themed(snapshot(a7, asset(8, "IMG_0002.HEIC", 200, may2, "run-2", trip))),
+			scans{"alpha": {e1}}, specs{alpha}, "", p, kinds{domain.OpPut}, nil},
+		{"a new cloud template keeps the pairs of events",
+			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n8), scans{"alpha": {e1}}, specs{alpha}, "", dotted,
+			kinds{domain.OpPut, domain.OpPut}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -1147,6 +1161,12 @@ func TestSimulateConverges(t *testing.T) {
 		at, _ := replay(t, traced(t, state(assets{a7}, pairs{alphaHolidays}, photo), noHolidays, scans{"alpha": {e1}}, specs{alpha}, p), 0, []string{""}, []kinds{{domain.OpQuarantine}})
 		at.Snapshot = snapshot(a7)
 		replay(t, at, 1, []string{"", ""}, []kinds{{domain.OpPut}, nil})
+	})
+	t.Run("an album renamed past the Photos template and back keeps its files meanwhile, and a new asset that joined it goes up to the directory of its pair", func(t *testing.T) {
+		t.Parallel()
+		at, _ := replay(t, traced(t, state(assets{a7}, pairs{alphaHolidays}, photo), themed(snapshot(a7, n8)), scans{"alpha": {e1}}, specs{alpha}, p), 0, []string{""}, []kinds{nil})
+		at.Snapshot.Albums = slices.Clone(library)
+		replay(t, at, 1, []string{"", ""}, []kinds{{domain.OpPut, domain.OpPut}, nil})
 	})
 	t.Run("a stop after the records of a run leaves the file of an album renamed in iCloud in the folder of its old title, where a new file makes an album of that title: a known limit", func(t *testing.T) {
 		t.Parallel()

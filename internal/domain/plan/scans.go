@@ -45,11 +45,14 @@ type RemoteScan struct {
 // Capabilities.ContentHash of the remote. An entry that has settled, is no
 // directory and is not under .photosync at the top of a root lies outside
 // the templates when layout.AlbumFor with p reads its directory, as path.Dir
-// gives it, as no album or as a folder. Unless match.Edited with
-// p.EditedDirs takes it for an edit and no link of the remote lies at its
-// root and path, the scan leaves it out too, and notices hold "plan.skipped"
-// with "dir", the remote, the root and that directory, once for each remote,
-// root and directory. A link of the remote at the root and path of an entry
+// gives it, as no album or as a folder. A directory that a pair of the remote
+// in state holds at its root decides first: it lies inside the templates
+// while delta holds the album of the pair as an event, in Recently Deleted or
+// not, and outside them while delta holds that album as thematic outside
+// Recently Deleted. Unless match.Edited with p.EditedDirs takes it for an
+// edit and no link of the remote lies at its root and path, the scan leaves
+// it out too, and notices hold "plan.skipped" with "dir", the remote, the root
+// and that directory, once for each remote, root and directory. A link of the remote at the root and path of an entry
 // left out is not given to ReadScan, and Settling holds its asset, as it
 // holds the asset of a link of the remote at whose root and path the listing
 // has no entry and whose content an entry outside the templates has.
@@ -127,6 +130,21 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 		_, edits := match.Edited([]domain.RemoteEntry{e}, p.EditedDirs)
 		return edits != nil
 	}
+	// The pair of an album, not the cloud template, says what its directory
+	// holds: a new cloud template must not freeze the events, and an album
+	// that left the templates of Photos keeps its files until it comes back.
+	albumOf := map[domain.AlbumID]domain.Album{}
+	for _, a := range delta.Albums {
+		albumOf[a.ID] = a
+	}
+	paired := map[[3]string]bool{}
+	for _, x := range state.AlbumPairs {
+		a, ok := albumOf[x.AlbumID]
+		if ok && (a.Kind == domain.KindEvent || a.Kind == domain.KindThematic && !a.InTrash) {
+			k := [3]string{x.Remote, string(x.Root), x.DirPath}
+			paired[k] = paired[k] || a.Kind == domain.KindEvent
+		}
+	}
 	for _, r := range slices.SortedFunc(slices.Values(remotes), func(x, y domain.RemoteSpec) int { return cmp.Compare(x.Name, y.Name) }) {
 		hash := r.Capabilities.ContentHash
 		young, held, shots := map[[2]string]bool{}, map[string]bool{}, map[[3]string]bool{}
@@ -143,6 +161,7 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 		}) {
 			k, dir := [2]string{string(e.Root), e.Path}, path.Dir(e.Path)
 			present[k] = true
+			event, isPair := paired[[3]string{r.Name, string(e.Root), dir}]
 			top, _, _ := strings.Cut(e.Path, "/")
 			switch {
 			// What photosync wrote itself, such as a file it has just quarantined,
@@ -155,7 +174,7 @@ func ReadScans(state domain.State, delta domain.SnapshotDelta, scans map[string]
 					held[h] = true
 				}
 				notices = append(notices, domain.Notice{Code: "plan.settling", Params: []string{r.Name, string(e.Root), e.Path}})
-			case inEvent(dir):
+			case event || !isPair && inEvent(dir):
 				scan = append(scan, e)
 			default:
 				if h := moveKey(e.MD5, e.SHA256, hash); h != "" {
