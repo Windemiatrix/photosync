@@ -4,16 +4,16 @@
 
 Contents: [Terms](#terms) · [1. The application and the library](#1-the-application-and-the-library) · [2. Components](#2-components) · [3. Data and state](#3-data-and-state) · [4. How synchronization works](#4-how-synchronization-works) · [5. Protection against data loss](#5-protection-against-data-loss) · [6. Testing](#6-testing) · [7. Build](#7-build) · [8. Release](#8-release) · [9. Installation and updates](#9-installation-and-updates)
 
-This document is for readers who want to see how the tool is built; to learn what it does, the [README](../README.en.md) is enough. There is no sync yet: this document describes the intended behavior. Points that depend on facts about macOS, PhotoKit and iCloud that are not yet verified are marked as unconfirmed. The `R-*` (plan rules) and `INV-*` (invariants) identifiers and the configuration keys (`targets.*`, `remote_priority`, `sync.*`, the `conflict` and `deletes` policies and others) are working names: a reference for them will appear together with the code.
+This document is for readers who want to see how the tool is built; to learn what it does, the [README](../README.en.md) is enough. There is no sync yet: this document describes the intended behavior. Points that depend on facts about macOS, PhotoKit and iCloud that are not yet verified are marked as unconfirmed. The `R-*` (plan rules) and `INV-*` (invariants) identifiers and the configuration keys (`targets.*`, `remote_priority`, `sync.*`, the `conflict` and `deletes` policies and others) are working names. A reference for them will appear together with the code.
 
-In short: the tool reads a copy of the Photos database, walks the chosen folders on the Disk and compares three states: what was there at the previous run, what is in Photos now and what is on the Disk. The plan is built from the difference; it is applied only with `--apply`.
+In short: the tool reads a copy of the Photos database, walks the chosen directories on the Disk and compares three states: what was there at the previous run, what is in Photos now and what is on the Disk. The plan is built from the difference: `sync` applies it after confirmation, `sync --dry-run` only shows it.
 
 ```mermaid
 flowchart LR
   photos["Photos"] -->|snapshot| compare["three-state comparison"]
   disk["Yandex Disk"] -->|scan| compare
   last["previous run"] --> compare
-  compare --> plan["plan"] -->|"--apply"| ops["operations"]
+  compare --> plan["plan"] -->|"sync"| ops["operations"]
 ```
 
 ## Terms
@@ -22,7 +22,7 @@ flowchart LR
 - **Item**: a Photos entry, that is a photo, a video, a Live Photo or a RAW pair.
 - **Snapshot**: the state of the Photos library (items and albums) read into memory for the duration of a run.
 - **Link**: a record that an item corresponds to a file in a storage (path, size, hashes).
-- **Event**: a Photos album of the form `MM/DD Title` inside a year folder; it corresponds to the directory `MM-DD - Title`. **Thematic album**: any other album.
+- **Event**: a Photos album whose path matches the Photos template (section 4); it corresponds to a directory built by the cloud template. **Thematic album**: an album outside the template; it is not synchronized.
 - **Quarantine**: the `.photosync/quarantine` directory in the cloud; instead of being deleted, a file is moved there.
 
 ## 1. The application and the library
@@ -59,14 +59,14 @@ Main commands:
 | `remote auth`, `remote logout` | sign-in by a code for https://ya.ru/device; sign-out deletes the token file and revokes access |
 | `doctor` | checks the environment, permissions and storage reachability |
 | `status` | shows the current synchronization state |
-| `plan` | builds and shows the plan without changing any data |
-| `sync` | builds the plan and, with `--apply`, carries it out |
+| `plan` | builds and shows the plan without changing any data; the same as `sync --dry-run` |
+| `sync` | builds the plan and carries it out after confirmation; with `--dry-run` only shows it |
 | `conflicts` | lists open conflicts; `conflicts resolve` records a decision |
 | `albums diff` | differences between Photos albums and cloud directories |
-| `undo` | rolls back the last applied run (with `--apply`) |
+| `undo` | rolls back the last applied run after confirmation; with `--dry-run` only shows it |
 | `explain` | shows which `R-*` rule produced a decision |
 | `relink` | manually fixes the link between an item and a file |
-| `import-state` | loads links from the materials of a previous manual sync; with `--apply` it writes them to the state, and the plan then contains no transfers for files that are already linked |
+| `import-state` | loads links from the materials of a previous manual sync after confirmation; with `--dry-run` only shows them; the plan then contains no transfers for files that are already linked |
 
 Utility commands (configuration check, viewing storages and the log, version) are not listed here: their list will appear with the reference.
 
@@ -79,21 +79,21 @@ Utility commands (configuration check, viewing storages and the log, version) ar
 - **`links` is the base of the three-way comparison:** for an "item, storage" pair it holds the path, size, hashes, `etag`, role, match level and status (`active`, `quarantined_*`, `detached`).
 - `conflicts`, `runs`, `journal` (with prior values for undo), `probe_cache`.
 
-Only five commands change the state tables other than `runs` and `probe_cache`: `sync --apply`, `undo --apply`, `import-state --apply`, `relink` and `conflicts resolve`; `plan`, `status`, `explain`, `doctor` and `albums diff` write only a `runs` row, report files and the cloud-metadata cache `probe_cache`. The cloud scan is not stored in the state: it lives in memory for one run. Whatever is derived from the snapshot is written in phase 0 of `sync --apply` in a single transaction (the phases are described in section 4). An item is identified by its cloud GUID (present on every item and unique; whether it survives re-creation is still to be checked with iCloud), then its UUID, then the replacement history; an album by its cloud GUID (present and unique), otherwise by `PHCloudIdentifier` or path plus title.
+Only five commands change the state tables other than `runs` and `probe_cache`: `sync`, `undo` and `import-state` without `--dry-run`, `relink` and `conflicts resolve`; `plan`, `status`, `explain`, `doctor` and `albums diff` write only a `runs` row, report files and the cloud-metadata cache `probe_cache`. The cloud scan is not stored in the state: it lives in memory for one run. Whatever is derived from the snapshot is written in phase 0 of applying `sync` in a single transaction (the phases are described in section 4). An item is identified by its cloud GUID (present on every item and unique; whether it survives re-creation is still to be checked with iCloud), then its UUID, then the replacement history; an album by its cloud GUID (present and unique), otherwise by `PHCloudIdentifier` or path plus title.
 
 ## 4. How synchronization works
 
-Cloud layout: `Year/MM-DD - Title` for events, `Year/MM-DD` for items without an event. The event name format is fixed; an event without a title gets the text from the `sync.untitled_event` key (written by `init`). Other (thematic) albums are synchronized where an item has a link in the album's directory. Multi-valued template fields yield a single value (the primary placement). Changing `path_template` affects new files only. The iCloud Shared Library and the personal library are laid out under different storage roots (`targets.shared` and `targets.personal`). Importing directly into the Shared Library is not yet confirmed (needs checking with iCloud): if it does not work, the item lands in the personal library and waits for a manual move based on the report.
+Two templates set the layout: the Photos template names an event's folders and album, the cloud template its directories. By default an event is the album `MM/DD Title` in a year folder and the cloud directory `Year/MM-DD - Title`. Each template holds the year, month and day once each, and the title once, last. Without a title, the separator before it is dropped too (`05-01`); "/" in a title is written to the directory as "∕" (U+2215, a look-alike division sign). Skipped: thematic albums (outside the Photos template), items without an event, cloud directories outside the template and event subdirectories. The plan report lists what was skipped separately. A separate template names the file; changing any template does not move items already synchronized, only new ones follow the new template. The Shared Library and the personal library go under different storage roots; direct import into the Shared Library is unconfirmed. On failure the item lands in the personal library and waits for a manual move based on the report.
 
 A single `plan` or `sync` run has seven steps:
 
-1. **Photos snapshot** in memory. Shared albums (not to be confused with the Shared Library) and unsaved items from "Shared with You" are dropped; hidden items and non-selected burst frames follow policies; non-selected frames go to the event folder of the burst's key frame. Whether PhotoKit can fetch hidden items and non-selected burst frames is still unconfirmed.
+1. **Photos snapshot** in memory. Shared albums (not to be confused with the Shared Library) and unsaved items from "Shared with You" are dropped; hidden items and non-selected burst frames follow policies; non-selected frames go to the event of the burst's key frame (its album and directory). Whether PhotoKit can fetch hidden items and non-selected burst frames is still unconfirmed.
 2. **Cloud scan** across all storages: on every run the configured folders are walked recursively and in parallel. Any traversal error is fatal: a partial scan is never read as "files were deleted". Files younger than `sync.settle_minutes` minutes are left alone. Directories listed in `sync.edited_dirs` and files matching `*_edited.*` count as edits and follow the `edited_files` policy.
 3. **Enrichment:** dates of unlinked files are read via Range requests; if the storage provides no hash, the file is downloaded and hashed.
 4. **Matching new items.** Levels from strong to weak: `exact`, `same_shot`, `same_shot_weak`, `same_time_size`, `probable`, `pair_component` (a Live or RAW pair component). Assignment is one-to-one, greedy, with a total order of candidates; a name alone never creates a link. A pair with different content (a recompressed copy, an export to another format) becomes a `derived_copy`: the better file has more pixels, then RAW over non-RAW, then the larger size in bytes.
 5. **Three-way comparison** of base, Photos and cloud. Identical changes on both sides are not a conflict, and "modified versus deleted" is resolved in favor of the modification. Changes from all storages are merged into one target state for Photos (when storages disagree, the one with higher priority in `remote_priority` wins), then operations are built per storage. The `conflict` policy resolves conflicts (`remote_wins` is recommended; `ask` and `skip` exclude the item and give exit code 2). Rules carry `R-*` identifiers for `explain`.
 6. **Report:** a summary, plan files, `plan_digest` in `runs`. The snapshot and links are not modified.
-7. **Apply** (`--apply` only): the plan is rebuilt and compared by `plan_digest` with the one that was reviewed. It runs in phases 0-6.
+7. **Apply** (except under `--dry-run`): the plan is rebuilt and compared by `plan_digest` with the one that was reviewed. It runs in phases 0-6.
 
 Apply phases: **0** write the snapshot and links, `owner.json` in the cloud; **1** directories, moves, copies, quarantine, deleting files and empty directories in the cloud (under `deletes: propagate`; files go to the Yandex Disk trash), folders and albums in Photos; **2** Photos to cloud (original to disk, hash, atomic upload to each storage; transfers run in parallel, the number of parallel transfers in both directions is set by `limits.parallel` (256 by default; lower it for a slow link; the cloud scan is not bounded by it)); **3** cloud to Photos (download, parse, convert if needed, import with albums; the MP4 produced by the `convert_mp4` policy, which converts unsupported video formats with `ffmpeg`, also goes to the other storages); **4** album membership, item updates; **5** deleting Photos items in one batch through the macOS system dialog, replacements; **6** cleanup.
 
@@ -110,7 +110,7 @@ Retries: up to 6 attempts with exponential backoff; after three consecutive fail
   - on a first sync more than 1% of pairs are probable matches (`same_time_size`, `probable`): you must review a sample and confirm separately, or pass `--confirm-probable`.
 - **Deletions.** The `deletes` policy is mandatory and has no default: `none` (do not propagate), `quarantine` (recommended) or `propagate`. Cloud quarantine is `.photosync/quarantine/<date>`, kept 90 days by default (`sync.quarantine_keep_days`). Under `propagate`, a cloud deletion is irreversible as far as photosync is concerned: the file goes to the Yandex Disk trash, `undo` does not bring it back from there, it can be restored by hand until the trash is emptied, and until then it counts against the quota. Expired quarantine and `.photosync/tmp` are deleted permanently, bypassing the trash. A deletion in Photos goes to Recently Deleted and is confirmed by the system dialog.
 - **Cloud.** Moves and copies never overwrite an occupied destination, except for moves into quarantine inside `.photosync/`. The REST API has no conditional operations, so before deleting, quarantining or replacing, `Stat` checks size and `etag` against the link record in `links`. Directories outside `.photosync/` are never deleted recursively, and the storage root is untouchable. Paths from the cloud are untrusted: `path.Clean`, prefix check, NFC. Uploads are atomic: write to `.photosync/tmp`, then move without overwrite.
-- **Undo.** `undo --apply` rolls back only the last applied run, strictly in order, from a journal of prior values; a target that changed after the run is skipped and reported. What cannot be undone is listed up front.
+- **Undo.** `undo` rolls back only the last applied run, strictly in order, from a journal of prior values; a target that changed after the run is skipped and reported. `undo` lists what cannot be undone before confirmation.
 - **Resuming.** Operations are idempotent, a link is written right after each transfer, and before retrying an import the item is looked up by the traits recorded in the journal. A failure at any boundary cannot cause a double import.
 - **One run, one Mac.** Mutating commands take the `state_dir/lock` lock; `<root>/.photosync/owner.json` ties the cloud to one state, and a foreign state is refused. Several Macs against one cloud are not supported. Apply refuses if the library is not the system one or not the recorded one.
 - **Secrets, network, input.** There are no passwords: sign-in uses a device code. OAuth tokens live in the file `~/.config/photosync/tokens/<remote>.json` (`0600` in a `0700` directory, written atomically; a file wider than `0600`, a directory wider than `0700`, a symlink or a foreign owner is refused, and `doctor` names the fix), not in the Keychain, and never reach arguments, output or logs. The OAuth application credentials are embedded in release builds and are public (extractable from the binary); only the user's tokens are secret. A build without them (`go install`, a local build) cannot sign in to Yandex and says so. Only `https://` (`http://` is allowed solely for loopback addresses in tests; certificate checks cannot be disabled). Network connections go only to the Yandex Disk API, its file-transfer hosts (the token is not sent to them) and Yandex OAuth. Response sizes are bounded, `ffmpeg` runs with an allowlist of demuxers, and cloud names are escaped in the terminal and CSV.

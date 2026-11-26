@@ -9,7 +9,8 @@ import (
 // and %w, which print the value and which go vet rejects on a Secret;
 // encoding/json shows it as "***", but not as a map key. A conversion, an index
 // or a range gives the value, and only an adapter at the edge of I/O may write
-// that. A struct field of type Secret must be exported: fmt prints an
+// that. A struct field that holds a Secret, also inside a struct, an array, a
+// slice or a map, must be exported: fmt prints what it reaches through an
 // unexported field without calling its methods.
 type Secret string
 
