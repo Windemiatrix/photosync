@@ -418,9 +418,9 @@ func TestDecideTargetLayout(t *testing.T) {
 			{"beta", uploadOnly, file(2, "beta"), file(2, "beta"), unchanged, unchanged},
 			{"gamma", downloadOnly, file(3, "gamma"), file(3, "gamma"), unchanged, unchanged},
 		}, map[string][]place{"beta": {{domain.ActionMoveFile, 2, trip, "R-OBJECT-05"}}}},
-		{"a conflict won by the cloud copies the file into the event the asset moved to in iCloud", in(trip), domain.ConflictRemoteWins, []side{ // covers: R-LINK-07
+		{"a conflict won by the cloud leaves the file where it is, the asset in the event of its file alone", in(trip), domain.ConflictRemoteWins, []side{ // covers: R-LINK-07
 			{"disk", twoWay, file(1, "disk"), at(file(1, "disk"), personal, party, atParty), moved, moved},
-		}, map[string][]place{"disk": {{domain.ActionCopyFile, 1, trip, "R-OBJECT-03"}}}},
+		}, nil},
 		{"a conflict won by iCloud moves the file into the event of the asset", in(trip), domain.ConflictICloudWins, []side{
 			{"disk", twoWay, file(1, "disk"), at(file(1, "disk"), personal, party, atParty), moved, moved},
 		}, map[string][]place{"disk": {{domain.ActionMoveFile, 1, trip, "R-OBJECT-05"}}}},

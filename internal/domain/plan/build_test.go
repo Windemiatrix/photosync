@@ -284,8 +284,11 @@ func TestBuild(t *testing.T) {
 	history5 := domain.AssetHistory{AssetID: 7, Key: restored5.Key}
 	replacedTrip, movTrip := file(personal, tripDir+"/IMG_0001.HEIC", 120, "b1", settled), file(personal, tripDir+"/IMG_0001.mov", 30, "v1", settled)
 	changedMov := file(personal, holidaysDir+"/IMG_0001.MOV", 35, "v2", settled)
-	iCloudWins, partyOther := p, other
+	iCloudWins, remoteWins, partyOther := p, p, other
 	iCloudWins.Conflict, partyOther.Path, partyOther.AlbumID = domain.ConflictICloudWins, partyDir+"/IMG_0001.HEIC", party
+	remoteWins.Conflict = domain.ConflictRemoteWins
+	tripCopy := took(paired, file(personal, tripDir+"/IMG_0002.HEIC", 200, "b2", settled), trip)
+	tripCopy.ID = 0
 	new3, new4 := file(personal, holidaysDir+"/IMG_0003.HEIC", 300, "c3", settled), file(personal, holidaysDir+"/IMG_0004.HEIC", 400, "c4", settled)
 	new5, trip2 := file(personal, holidaysDir+"/IMG_0005.HEIC", 500, "c5", settled), file(personal, tripDir+"/IMG_0002.HEIC", 200, "b2", settled)
 	h8, kept8 := asset(8, "IMG_0002.HEIC", 200, may1, "run-2", holidays), paired
@@ -828,6 +831,41 @@ func TestBuild(t *testing.T) {
 				Notices: []domain.Notice{{Code: "plan.conflict_settled", Params: []string{"beta", "IMG_0001.HEIC", "uuid-7", "icloud_wins"}}},
 			},
 			delta(in7Trip), nil},
+		{"a conflict that the state does not keep is settled by the conflict policy with a notice: under remote_wins the asset ends in the event of its file alone",
+			state(assets{a7}, pairs{betaHolidays, betaTrip}, other), snapshot(in7Trip), scans{"beta": {partyFile, holidaysFolder}}, specs{beta}, "", remoteWins, event,
+			domain.Plan{
+				Ops: ops{
+					creating(party),
+					holding(album(domain.OpAlbumAdd, 7, party, "R-LINK-07"), took(other, partyFile, party)),
+					album(domain.OpAlbumRemove, 7, trip, "R-LINK-07"),
+				},
+				Albums:  []domain.Album{partyAlbum},
+				Pairs:   pairs{pair(party, "beta", personal, partyDir, domain.OriginRemote)},
+				Notices: []domain.Notice{{Code: "plan.conflict_settled", Params: []string{"beta", "IMG_0001.HEIC", "uuid-7", "remote_wins"}}},
+			},
+			delta(in7Trip), nil},
+		{"under remote_wins the file of a second remote follows to the event of the cloud",
+			state(assets{a7}, pairs{alphaHolidays, betaHolidays, betaTrip}, photo, other), snapshot(in7Trip),
+			scans{"alpha": {e1}, "beta": {partyFile, holidaysFolder}}, specs{alpha, beta}, "", remoteWins, event,
+			domain.Plan{
+				Ops: ops{
+					creating(party),
+					moved(photo, personal, partyDir+"/IMG_0001.HEIC", party, "R-OBJECT-05"),
+					holding(album(domain.OpAlbumAdd, 7, party, "R-LINK-07"), took(other, partyFile, party)),
+					album(domain.OpAlbumRemove, 7, trip, "R-LINK-07"),
+				},
+				Albums:  []domain.Album{partyAlbum},
+				Pairs:   pairs{pair(party, "beta", personal, partyDir, domain.OriginRemote), pair(party, "alpha", personal, partyDir, domain.OriginICloud)},
+				Notices: []domain.Notice{{Code: "plan.conflict_settled", Params: []string{"beta", "IMG_0001.HEIC", "uuid-7", "remote_wins"}}},
+			},
+			delta(in7Trip), nil},
+		{"first sync: a file in the directory of another event joins that event and the asset keeps its own",
+			state(assets{a7}, pairs{alphaHolidays, alphaTrip}, photo), snapshot(a7, m8trip), scans{"alpha": {e2, e1}}, specs{alpha}, "", p, event,
+			domain.Plan{Ops: ops{
+				{Kind: domain.OpCopy, Remote: "alpha", Root: personal, Src: e2.Path, DstRoot: personal, Dst: tripCopy.Path, Asset: 8, Rule: "R-OBJECT-03", Links: []domain.Link{tripCopy}},
+				holding(album(domain.OpAlbumAdd, 8, holidays, "R-LINK-03"), paired),
+			}},
+			delta(a7, m8trip), nil},
 		{"upload-only: new files of the cloud stay out of iCloud and an edit stays where it is, and notices count them",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7), scans{"alpha": {new4, e1, edit2, new3}}, specs{alphaUp}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{counted("plan.edits_left", "alpha", "1"), counted("plan.not_imported", "alpha", "2")}}, delta(a7), nil},

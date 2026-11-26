@@ -105,11 +105,15 @@ func objectMoveRule(l domain.Link, root domain.LibraryKind) string {
 // A moved file makes asset leave the album of its old directory and join
 // that of its new one, under the rule of its decision; a conflict whose file
 // lies where DecidePlacement keeps a file of asset is the same move on both
-// sides, the file having moved to the place the asset moved to. asset leaves
-// no album that still holds a file of it in remote, and AlbumID 0 is no
-// album. Join and Leave may name albums that asset is already in or out of;
-// they are in the order of album ID and then rule, without repeats, and
-// Links in the order of link ID. Other decisions are as given.
+// sides, the file having moved to the place the asset moved to. Any other
+// conflict whose file lies in the directory of an album also makes asset
+// leave, by its rule, each of its event albums that holds no file of it in
+// remote, so that, settled for the cloud, the asset ends in the event of its
+// file alone. asset leaves no album that still holds a file of it in remote,
+// and AlbumID 0 is no album. Join and Leave may name albums that asset is
+// already in or out of; they are in the order of album ID and then rule,
+// without repeats, and Links in the order of link ID. Other decisions are as
+// given.
 func DecideObject(asset domain.Asset, decisions []domain.LinkDecision, links []domain.Link, remote string, albums []domain.Album) domain.ObjectDecision {
 	want := objectAlbums(asset, albums)
 	files := slices.DeleteFunc(slices.Clone(links), func(l domain.Link) bool { return l.Remote != remote || !objectFile(l) })
@@ -128,6 +132,15 @@ func DecideObject(asset domain.Asset, decisions []domain.LinkDecision, links []d
 			d.Action, d.Rule = same.Action, same.Rule
 		case d.Action == domain.ActionMoveAsset || d.Action == domain.ActionConflict:
 			to = files[i].AlbumID
+			if d.Action == domain.ActionConflict && to != 0 {
+				// Settled for the cloud, the asset ends in the event of its file
+				// alone; the events it was moved to in Photos hold no file of it here.
+				for _, id := range want {
+					if !slices.ContainsFunc(files, func(l domain.Link) bool { return l.AlbumID == id }) {
+						out.Leave = append(out.Leave, domain.AlbumChange{AlbumID: id, Rule: d.Rule})
+					}
+				}
+			}
 		}
 		if from != to && from != 0 && !slices.ContainsFunc(files, func(l domain.Link) bool { return l.AlbumID == from }) {
 			out.Leave = append(out.Leave, domain.AlbumChange{AlbumID: from, Rule: d.Rule})
