@@ -25,10 +25,11 @@ import (
 // lies to quarantine on day now (OpQuarantine), and its link, taking that
 // place, stays quarantined_remote. A placement, in its order, goes to the
 // directory that pathtemplate.EventPath gives the album AlbumID with pairs,
-// and made pairs an album that has none there with
-// that directory by
-// domain.OriginICloud, unless a pair of r there, among pairs or made before,
-// holds that directory: the files go there all the same. ActionMoveFile and
+// or, while a pair among pairs of an album that is no event holds that
+// directory, to the first name that Names.Free gives it in its parent
+// directory instead; made pairs an album that has none there with that
+// directory by domain.OriginICloud, unless a pair of r there, among pairs or
+// made before, holds it: the files go there all the same. ActionMoveFile and
 // ActionCopyFile take the file from where it lies to that directory and root,
 // named by Names.Free (OpMove, OpCopy); ActionUpload puts the original of
 // target at each path of
@@ -156,6 +157,18 @@ func FileOps(names *Names, r domain.RemoteSpec, target domain.Asset, decisions [
 		}
 		album, _ := albumByID(albums, pl.AlbumID)
 		dir := pathtemplate.EventPath(album, pairs, p)
+		// A directory that no event pairs is paused or on its way out, and a file
+		// put there would wait with it; an event shares its own, one pair a
+		// directory.
+		for slices.ContainsFunc(pairs, func(x domain.AlbumPair) bool {
+			if x.DirPath != dir {
+				return false
+			}
+			a, _ := albumByID(albums, x.AlbumID)
+			return a.Kind != domain.KindEvent
+		}) {
+			dir = names.Free(root, path.Dir(dir), path.Base(dir))
+		}
 		taken := func(x domain.AlbumPair) bool { return x.AlbumID == album.ID || x.DirPath == dir }
 		if album.ID != 0 && !slices.ContainsFunc(pairs, taken) && !slices.ContainsFunc(made, taken) {
 			made = append(made, domain.AlbumPair{AlbumID: album.ID, Remote: r.Name, Root: root, DirPath: dir, CreatedBy: domain.OriginICloud})
