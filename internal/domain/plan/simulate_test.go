@@ -644,7 +644,7 @@ func TestSimulateConverges(t *testing.T) {
 		}
 		library = append(library, a)
 	}
-	uuidOf := map[domain.AlbumID]string{cats: "u-cats", holidays: "u-hol", trip: "u-trip", slash: "u-slash"}
+	uuidOf := map[domain.AlbumID]string{cats: "u-cats", holidays: "u-hol", trip: "u-trip", slash: "u-slash", 15: "u-new", 16: "u-twin"}
 	asset := func(id domain.AssetID, name string, size int64, taken time.Time, run string, in ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{
 			ID: id, Key: domain.AssetKey{CloudAssetGUID: fmt.Sprintf("guid-%d", id), UUID: fmt.Sprintf("uuid-%d", id)},
@@ -778,6 +778,16 @@ func TestSimulateConverges(t *testing.T) {
 	}
 	dotted := p
 	dotted.Templates.Cloud = []string{"{YYYY}", "{MM}.{DD} {Description}"}
+	retitledAlbums := append(slices.Clone(albums), inYear(15, "u-new", "05/01 Holidays", may1.Add(-2*time.Hour)))
+	retitledAlbums[2] = inYear(holidays, "u-hol", "Holidays", may1.Add(-2*time.Hour))
+	retitledAlbums[2].Kind = domain.KindThematic
+	newEvent := snapshot(a7, asset(8, "IMG_0009.HEIC", 900, may1, "run-2", 15))
+	newEvent.Albums = append(slices.Clone(themedLibrary),
+		domain.Album{UUID: "u-new", Title: "05/01 Holidays", Start: may1.Add(-2 * time.Hour), ParentUUID: "u-2024", FolderTitles: []string{"2024"}})
+	twinAlbums := append(slices.Clone(slashAlbums), inYear(16, "u-twin", "05/01 A∕B", may1.Add(-2*time.Hour)))
+	twinShot := snapshot(asset(9, "IMG_0009.HEIC", 100, may1, "run-2", 16))
+	twinShot.Albums = append(slices.Clone(slashLibrary),
+		domain.Album{UUID: "u-twin", Title: "05/01 A∕B", Start: may1.Add(-2 * time.Hour), ParentUUID: "u-2024", FolderTitles: []string{"2024"}})
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
 		return func(k domain.AssetKey) template.Photo {
 			for _, a := range s.Assets {
@@ -964,6 +974,12 @@ func TestSimulateConverges(t *testing.T) {
 		{"a new cloud template keeps the pairs of events",
 			state(assets{a7}, pairs{alphaHolidays}, photo), snapshot(a7, n8), scans{"alpha": {e1}}, specs{alpha}, "", dotted,
 			kinds{domain.OpPut, domain.OpPut}, nil},
+		{"an album renamed past the Photos template keeps its pair, and a new event of its old title goes up beside it into a directory of its own",
+			domain.State{Assets: assets{a7}, Albums: retitledAlbums, AlbumPairs: pairs{alphaHolidays}, Links: []domain.Link{photo}}, newEvent,
+			scans{"alpha": {e1}}, specs{alpha}, "", p, kinds{domain.OpPut}, nil},
+		{"a new asset of an event named as a paired one goes up into the directory of that pair and stays there",
+			domain.State{Albums: twinAlbums, AlbumPairs: pairs{pair(slash, "alpha", personal, "2024/05-01 - A∕B")}}, twinShot, nil, specs{alpha}, "", p,
+			kinds{domain.OpPut}, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()

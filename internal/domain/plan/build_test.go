@@ -69,7 +69,7 @@ func TestBuild(t *testing.T) {
 		}
 		library = append(library, a)
 	}
-	uuidOf := map[domain.AlbumID]string{cats: "u-cats", holidays: "u-hol", trip: "u-trip", bareDay: "u-bare", slash: "u-slash"}
+	uuidOf := map[domain.AlbumID]string{cats: "u-cats", holidays: "u-hol", trip: "u-trip", bareDay: "u-bare", slash: "u-slash", 15: "u-new"}
 	asset := func(id domain.AssetID, name string, size int64, taken time.Time, run string, in ...domain.AlbumID) domain.Asset {
 		a := domain.Asset{
 			ID: id, Key: domain.AssetKey{CloudAssetGUID: fmt.Sprintf("guid-%d", id), UUID: fmt.Sprintf("uuid-%d", id)},
@@ -396,6 +396,12 @@ func TestBuild(t *testing.T) {
 		domain.Album{UUID: "u-new", Title: "05/01 Holidays", Start: may1.Add(-2 * time.Hour), ParentUUID: "u-2024", FolderTitles: []string{"2024"}})
 	dotted := p
 	dotted.Templates.Cloud = []string{"{YYYY}", "{MM}.{DD} {Description}"}
+	ofNewEvent, onlyOfNewEvent := asset(8, "IMG_0009.HEIC", 900, may1, "run-2", 15), asset(1, "IMG_0009.HEIC", 900, may1, "run-2", 15)
+	newEventShot, dottedEventShot := snapshot(a7, ofNewEvent), snapshot(onlyOfNewEvent)
+	newEventShot.Albums, dottedEventShot.Albums = retitledShot.Albums, retitledShot.Albums
+	dottedHolidays := alphaHolidays
+	dottedHolidays.DirPath = "2024/05.01 Holidays"
+	dottedFile := file(personal, dottedHolidays.DirPath+"/IMG_0003.HEIC", 300, "c3", settled)
 	quarantined7 := domain.Op{Kind: domain.OpQuarantine, Remote: "alpha", Root: personal, Src: e1.Path, DstRoot: personal, Dst: dropped.QuarantinePath,
 		Asset: 7, Rule: "R-OBJECT-04", Links: []domain.Link{dropped}}
 	fieldsOf := func(s domain.LibrarySnapshot) func(domain.AssetKey) template.Photo {
@@ -1085,6 +1091,24 @@ func TestBuild(t *testing.T) {
 			domain.State{Assets: assets{a7}, Albums: retitledAlbums, AlbumPairs: pairs{alphaHolidays}, Links: []domain.Link{photo}}, retitledShot,
 			scans{"alpha": {e1}}, specs{alpha}, "", p, event,
 			domain.Plan{Notices: []domain.Notice{skippedDir(holidaysDir)}}, domain.SnapshotDelta{Assets: assets{a7}, Albums: retitledAlbums}, nil},
+		{"a new event of the old title of an album renamed past the Photos template goes up beside its pair, into a numbered directory of its own",
+			domain.State{Assets: assets{a7}, Albums: retitledAlbums, AlbumPairs: pairs{alphaHolidays}, Links: []domain.Link{photo}}, newEventShot,
+			scans{"alpha": {e1}}, specs{alpha}, "", p, event,
+			domain.Plan{
+				Ops:     ops{put(8, holidaysDir+" (1)/IMG_0009.HEIC", original, 15, 900)},
+				Pairs:   pairs{pair(15, "alpha", personal, holidaysDir+" (1)", domain.OriginICloud)},
+				Notices: []domain.Notice{skippedDir(holidaysDir)},
+			},
+			domain.SnapshotDelta{Assets: assets{a7, ofNewEvent}, Albums: retitledAlbums}, nil},
+		{"under a cloud template with a dot the number of the directory of a new event goes before the last dot",
+			domain.State{Albums: retitledAlbums, AlbumPairs: pairs{dottedHolidays}}, dottedEventShot,
+			scans{"alpha": {dottedFile}}, specs{alpha}, "", dotted, event,
+			domain.Plan{
+				Ops:     ops{put(1, "2024/05 (1).01 Holidays/IMG_0009.HEIC", original, 15, 900)},
+				Pairs:   pairs{pair(15, "alpha", personal, "2024/05 (1).01 Holidays", domain.OriginICloud)},
+				Notices: []domain.Notice{skippedDir(dottedHolidays.DirPath)},
+			},
+			domain.SnapshotDelta{Assets: assets{onlyOfNewEvent}, Albums: retitledAlbums}, nil},
 		{"an album renamed past the Photos template and then deleted takes its files to quarantine", // covers: R-OBJECT-04
 			state(assets{a7}, pairs{alphaHolidays}, photo), binnedShot, scans{"alpha": {e1}}, specs{alpha}, "", p, event,
 			domain.Plan{Ops: ops{quarantined7}}, domain.SnapshotDelta{Assets: assets{a7}, Albums: binnedAlbums}, nil},

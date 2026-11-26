@@ -32,6 +32,7 @@ func TestFileOps(t *testing.T) {
 		holidays, trip            = "2024/05-01 - Holidays", "2024/05-02 - Trip"
 		party, cats               = "2024/05-03 - Party time", "Albums/Cats"
 		zoo, partyEvent           = "2024/05-05 - Zoo", "2024/05-03 - Party"
+		beach                     = "2024/05-06 - Beach"
 		inQuarantine              = ".photosync/quarantine/2026-11-13/"
 		event, everyAlbum         = "{event_path}/IMG_0001", "{album}/IMG_0001"
 		twoWay                    = domain.ModeTwoWay
@@ -66,12 +67,15 @@ func TestFileOps(t *testing.T) {
 		{ID: 13, Kind: domain.KindThematic, Title: "Cats"},
 		{ID: 15, Kind: domain.KindEvent, Title: "05/03 Party time", FolderTitles: []string{"2024"}},
 		{ID: 16, Kind: domain.KindEvent, Title: "05/01 Holidays", FolderTitles: []string{"2024"}},
+		{ID: 17, Kind: domain.KindThematic, Title: "Beach"},
+		{ID: 18, Kind: domain.KindEvent, Title: "05/06 Beach", FolderTitles: []string{"2024"}},
 	}
 	pairs := []domain.AlbumPair{
 		{AlbumID: 11, Remote: "beta", Root: personal, DirPath: "Elsewhere/Trip", CreatedBy: domain.OriginRemote},
 		{AlbumID: 11, Remote: "alpha", Root: shared, DirPath: "Shared/Trip", CreatedBy: domain.OriginRemote},
 		{AlbumID: 12, Remote: "alpha", Root: personal, DirPath: party, CreatedBy: domain.OriginRemote},
 		{AlbumID: 13, Remote: "alpha", Root: personal, DirPath: cats, CreatedBy: domain.OriginRemote},
+		{AlbumID: 17, Remote: "alpha", Root: personal, DirPath: beach, CreatedBy: domain.OriginICloud},
 	}
 	link := func(id domain.LinkID, root domain.LibraryKind, at string, album domain.AlbumID, md5 string) domain.Link {
 		return domain.Link{
@@ -117,6 +121,7 @@ func TestFileOps(t *testing.T) {
 		{Root: personal, Path: "Misc/IMG_0001.jpeg", Size: 40, MD5: "c21"},
 		{Root: shared, Path: "Misc/IMG_0001.HEIC", Size: 100, MD5: "m1"},
 		{Root: shared, Path: "Moved/IMG_0001.HEIC", Size: 100, MD5: "m1"},
+		{Root: personal, Path: beach + " (1)", IsDir: true},
 	}
 	dec := func(l domain.Link, icloud, remote domain.ChangeKind, a domain.LinkAction, rule string) domain.LinkDecision {
 		return domain.LinkDecision{Link: l, ICloud: icloud, Remote: remote, Action: a, Rule: rule}
@@ -375,6 +380,11 @@ func TestFileOps(t *testing.T) {
 			[]domain.Op{op(domain.OpMove, personal, "Misc/IMG_0002.HEIC", personal, party+"/IMG_0002 (1).HEIC", "R-OBJECT-05",
 				relinked(stray, 2, personal, party+"/IMG_0002 (1).HEIC", 15))},
 			nil, "", nil},
+		{"an event whose directory the pair of an album that is no event holds takes the next directory free of the cloud, and pairs with it", twoWay, event, asset, nil,
+			[]domain.Placement{place(domain.ActionMoveFile, stray, 18, "R-OBJECT-05")}, nil,
+			[]domain.Op{op(domain.OpMove, personal, "Misc/IMG_0002.HEIC", personal, beach+" (2)/IMG_0002.HEIC", "R-OBJECT-05",
+				relinked(stray, 2, personal, beach+" (2)/IMG_0002.HEIC", 18))},
+			[]domain.AlbumPair{paired(18, personal, beach+" (2)")}, "", nil},
 		{"two albums of one directory without a pair make one pair, for the first of them, and the files of both go there", twoWay, event, asset, nil,
 			[]domain.Placement{place(domain.ActionMoveFile, stray, 10, "R-OBJECT-05"), place(domain.ActionCopyFile, stray, 16, "R-OBJECT-03")}, nil,
 			[]domain.Op{
