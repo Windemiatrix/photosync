@@ -26,12 +26,6 @@ jobs:
     timeout-minutes: 350
     permissions:
       contents: read
-    env:
-      # Nothing listens on port 9: a test that reaches the internet through an
-      # HTTP client that reads HTTP(S)_PROXY fails at once. The modules are
-      # downloaded before, without it.
-      HTTP_PROXY: http://127.0.0.1:9
-      HTTPS_PROXY: http://127.0.0.1:9
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,21 +35,31 @@ jobs:
           go-version-file: go.mod
           cache: false
       - name: Modules
-        env:
-          HTTP_PROXY: ""
-          HTTPS_PROXY: ""
+        id: modules
         run: go mod download
+      # Nothing listens on port 9: a test that reaches the internet through an
+      # HTTP client that reads HTTP(S)_PROXY fails at once. The setup steps above
+      # (checkout, Go, modules) need the network, so only the test steps have it
+      # cut.
+      #
       # The scale tests run in their own step, once.
       - name: Tests, repeated
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
         run: >-
           go test -race -shuffle=on -count=7 -timeout 1h
           -skip 'TestPlanScale|TestMatchScale' ./internal/...
       # -rapid.checks is accepted only by the packages that import rapid, so
       # their repeat is a second step. They run side by side, and the longest
       # one (plan) sets the time. The timeout keeps room for a runner slower
-      # than the one measured.
+      # than the one measured. A failed step before does not hide the result of
+      # this one, but there is nothing to test without the modules.
       - name: Properties, repeated
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.modules.outcome == 'success' }}
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
         run: >-
           go test -race -shuffle=on -count=7 -timeout 4h
           -skip 'TestPlanScale|TestMatchScale'
@@ -70,7 +74,10 @@ jobs:
       # and TestMatchScale, so that a slowdown fails on a ceiling with its
       # numbers instead of "test timed out".
       - name: Scale tests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.modules.outcome == 'success' }}
+        env:
+          HTTP_PROXY: http://127.0.0.1:9
+          HTTPS_PROXY: http://127.0.0.1:9
         run: >-
           go test -race -p 1 -shuffle=on -count=1 -cpu 1,4 -timeout 40m
           -run 'TestPlanScale|TestMatchScale'
