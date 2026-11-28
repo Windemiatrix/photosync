@@ -72,6 +72,13 @@ linters:
             - "!**/internal/testkit/**"
           deny:
             - {pkg: pgregory.net/rapid, desc: "rapid is MPL-2.0 and test-only: import it from tests and internal/testkit"}
+        yaml:
+          list-mode: lax
+          files:
+            - "$all"
+            - "!**/internal/config/**"
+          deny:
+            - {pkg: go.yaml.in/yaml/v3, desc: "only internal/config reads YAML; YAML output goes through go-libs/cliout"}
         outer:
           list-mode: lax
           files:
