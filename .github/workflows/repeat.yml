@@ -21,8 +21,8 @@ jobs:
   repeat:
     # The runner of the scale ceilings: they were calibrated on macos-15.
     runs-on: macos-15
-    # The go test timeouts of the three steps added up, plus the setup; the
-    # limit of a job is 6 h. Recalculate together with the timeouts.
+    # The per-package go test timeouts of the three steps added up, plus the
+    # setup; the limit of a job is 6 h. Recalculate together with the timeouts.
     timeout-minutes: 350
     permissions:
       contents: read
@@ -48,12 +48,13 @@ jobs:
           HTTP_PROXY: http://127.0.0.1:9
           HTTPS_PROXY: http://127.0.0.1:9
         run: >-
-          go test -race -shuffle=on -count=7 -timeout 1h
+          go test -race -shuffle=on -count=10 -timeout 20m
           -skip 'TestPlanScale|TestMatchScale' ./internal/...
       # -rapid.checks is accepted only by the packages that import rapid, so
-      # their repeat is a second step. They run side by side, and the longest
-      # one (plan) sets the time. The timeout keeps room for a runner slower
-      # than the one measured. A failed step before does not hide the result of
+      # their repeat is a second step. go test runs them in parallel up to -p,
+      # and the longest one (plan) sets the time: about 16 min a repetition on macos-15. The
+      # count fills the job limit with the timeout 1.7 times the expected time,
+      # for a slower runner. A failed step before does not hide the result of
       # this one, but there is nothing to test without the modules.
       - name: Properties, repeated
         if: ${{ !cancelled() && steps.modules.outcome == 'success' }}
@@ -61,7 +62,7 @@ jobs:
           HTTP_PROXY: http://127.0.0.1:9
           HTTPS_PROXY: http://127.0.0.1:9
         run: >-
-          go test -race -shuffle=on -count=7 -timeout 4h
+          go test -race -shuffle=on -count=10 -timeout 280m
           -skip 'TestPlanScale|TestMatchScale'
           ./internal/domain/naming/ ./internal/domain/layout/
           ./internal/domain/match/ ./internal/domain/plan/
