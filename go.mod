@@ -6,6 +6,7 @@ toolchain go1.27.2
 
 require (
 	github.com/Windemiatrix/go-libs/osxphotos v0.91.2
+	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/text v0.43.0
 	pgregory.net/rapid v1.3.0
 )

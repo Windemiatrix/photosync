@@ -1,0 +1,27 @@
+# Each value differs from its default so that a key the parse drops fails the
+# test.
+library: /Users/Shared/Example.photoslibrary
+lang: en
+state_dir: /Users/Shared/Example/state
+sync:
+  path_template: "{event_path}/originals/{original_name}"
+  exclude: [Photos/Personal, "*.tmp"]
+  remote_priority: [backup, disk]
+  settle_minutes: 5
+  quarantine_keep_days: 30
+  edited_dirs: [retouched]
+  templates:
+    photos: ["{YYYY}", "{MM}-{DD} {Description}"]
+    cloud: [Events, "{YYYY}-{MM}-{DD} {Description}"]
+    names: en
+  policies:
+    conflict: icloud_wins
+    deletes: quarantine
+    derived_copy: keep_both
+    multi_album: closest_date_keep_others
+    unsupported_formats: remote_only
+    edited_files: quarantine
+    hidden: skip
+    burst: selected_only
+    delete_empty_albums: true
+    albums_for_personal: false
